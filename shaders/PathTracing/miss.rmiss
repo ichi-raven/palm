@@ -1,9 +1,11 @@
 #version 460
 #extension GL_EXT_ray_tracing : enable
 
-#include "common.glsl"
+#include "types.glsl"
+#include "constants.glsl"
+#include "bindings.glsl"
 
-layout(location = 0) rayPayloadInEXT HitInfo hitInfo;
+layout(location = 0) rayPayloadInEXT Payload payload;
 
 float sgn(float x)
 {
@@ -20,6 +22,10 @@ void main()
   const float phi = sgn(y) * acos(x / sqrt(x * x + y * y));
   const float theta = acos(z / length(worldRayDirection));
 
-  hitInfo.color = texture(envmap, vec2(phi / M_PI2, theta / M_PI)).xyz;
-  hitInfo.endTrace = true;
+  payload.Le = vec3(0.03);
+  payload.intersected = false;
+
+  // account for infinite lights if ray has no intersection (missed)
+  //payload.Le = texture(envmap, vec2(phi / M_PI2, theta / M_PI)).xyz;
+  //payload.end = true;
 }

@@ -4,12 +4,20 @@
 #extension GL_EXT_scalar_block_layout : enable
 #extension GL_EXT_shader_explicit_arithmetic_types : enable
 #extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_control_flow_attributes : enable
 
 hitAttributeEXT vec3 attribs;
 
-#include "common.glsl"
+#include "types.glsl"
+#include "constants.glsl"
+#include "bindings.glsl"
+#include "randoms.glsl"
+#include "BSDFs.glsl"
+#include "lights.glsl"
 
-layout(location = 0) rayPayloadInEXT HitInfo hitInfo;
+#include "DisneyBSDF.glsl"
+
+layout(location = 0) rayPayloadInEXT Payload payload;
 
 layout(buffer_reference, buffer_reference_align = 4, scalar) readonly buffer VertexBuffer 
 {
@@ -46,29 +54,94 @@ Vertex FetchVertexInterleaved(
 
 void main() 
 {
+
   const vec3 barys = vec3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
   const InstanceMapping mapping = instanceMappings[gl_InstanceID];
-  const Material material = materials[nonuniformEXT(mapping.materialIndex)];
   const Vertex vtx = FetchVertexInterleaved(barys, mapping.vertexBuffer, mapping.indexBuffer);
 
-  const vec3 red = vec3(0.7, 0.2, 0.2);
-  const vec3 green = vec3(0.2, 0.7, 0.2);
-  const vec3 blue = vec3(0.2, 0.2, 0.7);
-
-  vec3 worldNormal = mat3(gl_ObjectToWorldEXT) * vtx.normal;
-  vec3 vtxColor = material.albedo.xyz;
+  Material material = materials[nonuniformEXT(mapping.materialIndex)];
   if (material.texIndex != -1)
   {
-    vtxColor = texture(texSamplers[nonuniformEXT(material.texIndex)], vtx.texCoord).xyz;
+    material.albedo = texture(texSamplers[nonuniformEXT(material.texIndex)], vtx.texCoord);
   }
 
-  hitInfo.color = vtxColor;
-  hitInfo.worldPosition = mat3(gl_ObjectToWorldEXT) * vtx.position;
-  hitInfo.worldNormal = mat3(gl_ObjectToWorldEXT) * vtx.normal;
-  hitInfo.endTrace = false;
-  hitInfo.alpha = material.alpha;
-  hitInfo.IOR = material.IOR;
-  hitInfo.matType = material.matType;
+  const vec3 worldPos    = (gl_ObjectToWorldEXT * vec4(vtx.position, 1.0)).xyz;
+  const vec3 worldNormal = normalize(mat3(gl_ObjectToWorldEXT) * vtx.normal);
 
+  payload.x = worldPos;
+  payload.normal = setFaceNormal(-gl_WorldRayDirectionEXT, worldNormal);
+  payload.Le = material.emissive.xyz;
+  payload.intersected = true;
+  payload.bsdf = sampleBSDF(material, -gl_WorldRayDirectionEXT, worldNormal, payload.prngState);
+  
+  // for simple BSDF
+  //return;
+
+  // test Disney BSDF
+  
+  DisneyMaterial disneyMat;
+  disneyMat.baseColor = material.albedo.xyz;
+  disneyMat.metallic = 0.8;
+  disneyMat.roughness = 0.1;
+  disneyMat.flatness = 1.0;
+  if (length(material.emissive) <= 0.1)
+  {
+    disneyMat.emissive = vec3(0.0, 1.0, 0.0);
+  }
+  else
+  {
+    disneyMat.emissive = material.emissive.xyz;
+  }
+  
+  disneyMat.specularTint = 0.5;
+  disneyMat.specTrans = 0.0;
+  disneyMat.diffTrans = 0.0;
+  disneyMat.ior = material.IOR;
+  disneyMat.relativeIOR = payload.state.lastIOR / material.IOR;
+  disneyMat.absorption = 0.0;
+
+  disneyMat.sheen = 0.1;
+  disneyMat.sheenTint = vec3(0.0);
+  disneyMat.anisotropic = 0.0;
+
+  disneyMat.clearcoat = 0.01;
+  disneyMat.clearcoatGloss = 0.1;
+
+  switch(material.matType)
+  {
+    // case MAT_LAMBERT:
+    //   disneyMat.roughness = 1.0;
+    // break;
+    case MAT_CONDUCTOR:
+      disneyMat.roughness = 0.15;
+      //const float rate = 0.6;//float((sceneParams.frame / 20) % 10) / 10.0;
+      //disneyMat.anisotropic = mix(-1.0, 1.0, rate);
+      disneyMat.anisotropic = 0.5;
+      disneyMat.metallic = 1.0;
+      disneyMat.clearcoat = 0.1;
+      disneyMat.clearcoatGloss = 0.1;
+    break;
+    case MAT_DIELECTRIC:
+      disneyMat.roughness = 0.001;
+      disneyMat.metallic = 0.01;
+      disneyMat.specTrans = 1.0;
+      disneyMat.diffTrans = 1.0;
+      disneyMat.anisotropic = 0.0;
+    break;
+    default:
+    // ERROR
+    break;
+  }
+
+  //BSDFSample sampleDisneyBSDF(const DisneyMaterial mat, const vec3 x, const vec3 normal, bool thin, inout DisneyBSDFState state, inout uint prngState)
+
+  payload.bsdf = sampleDisneyBSDF(disneyMat, -gl_WorldRayDirectionEXT, worldNormal, false, payload.state, payload.prngState);
+  payload.state.lastIOR = material.IOR;
+  payload.mat = disneyMat;
+
+  // DEBUG
+  //payload.Le = payload.bsdf.f;
+  //payload.intersected = false;
   return;
+  
 }

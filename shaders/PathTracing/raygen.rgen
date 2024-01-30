@@ -1,124 +1,181 @@
 #version 460
 #extension GL_EXT_ray_tracing : enable
+#extension GL_EXT_buffer_reference : enable
+#extension GL_EXT_scalar_block_layout : enable
+#extension GL_EXT_shader_explicit_arithmetic_types : enable
+#extension GL_EXT_control_flow_attributes : enable
 
-#include "common.glsl"
+#include "types.glsl"
+#include "constants.glsl"
+#include "bindings.glsl"
+#include "randoms.glsl"
+#include "BSDFs.glsl"
+#include "lights.glsl"
 
-layout(location = 0) rayPayloadEXT HitInfo hitInfo;
+#include "DisneyBSDF.glsl"
 
-vec3 getRayDirection(inout uint randState)
+layout(location = 0) rayPayloadEXT Payload payload;
+layout(location = 1) rayPayloadEXT bool shadowed;
+
+
+Ray getCameraRay(inout uint prngState)
 {
   const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
   const vec2 screenPos = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
   
-  const vec2 offset = vec2(stepAndOutputRNGFloat(randState), stepAndOutputRNGFloat(randState)) / vec2(gl_LaunchSizeEXT.xy);
+  const vec2 offset = vec2(stepAndOutputRNGFloat(prngState), stepAndOutputRNGFloat(prngState)) / vec2(gl_LaunchSizeEXT.xy);
   const vec2 d = (screenPos + offset) * 2.0 - 1.0;
   const vec4 target = sceneParams.mtxProjInv * vec4(d.x, d.y, 1, 1);
-  vec3 direction = (sceneParams.mtxViewInv * vec4(target.xyz, 0)).xyz;
-  return normalize(direction);
+  const vec3 direction = (sceneParams.mtxViewInv * vec4(target.xyz, 0)).xyz;
+
+  Ray ray;
+  ray.origin = (sceneParams.mtxViewInv * vec4(0, 0, 0, 1)).xyz;
+  ray.direction = normalize(direction);
+  return ray;
 }
 
-vec3 lambertScatter(vec3 normal, inout uint randState, out float pdf)
+bool zero(const vec3 v)
 {
-  vec3 dir = normalize(normal + randomUnitVector(randState));
-  pdf = dot(normal, dir) / M_PI;
-  return dir;
+  return v.x <= EPS && v.y <= EPS && v.z <= EPS;
 }
 
-vec3 conductorScatter(vec3 inDirection, vec3 normal, float alpha, inout uint randState, inout float pdf)
+vec3 sampleLi(const uint sampleIndex)
 {
-  // TODO:
-  pdf = 1.0;
-  return reflect(inDirection, normalize(normal)) + alpha * randomUnitVector(randState);
-}
+  const uint flags       = gl_RayFlagsOpaqueEXT;
+  const uint shadowFlags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
 
-vec3 dielectricScatter(vec3 inDirection, vec3 normal, float IOR, inout uint randState, inout float pdf)
-{
-  float nr = dot(normal, inDirection);
-  float eta = 1.0 / IOR;
+  // for debug (if true, do NEE)
+  const bool NEE = true;
 
-  if(nr >= 0.0) // back
-  {  
-    eta = IOR;
-    normal = -normal;
+  vec3 L = vec3(0.0);
+  vec3 beta = vec3(1.0);
+  uint depth = 0;
+  bool specularBounce = true;
+
+  // initialize payload
+  payload.x = vec3(0.0);
+  payload.normal = vec3(0.0);
+  payload.Le = vec3(0.0);
+  payload.prngState = tea(tea(sceneParams.frame, sampleIndex), uint(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x));
+  payload.intersected = true;
+
+  // for Disney BSDF
+  payload.state.isRefracted = false;
+  payload.state.hasBeenRefracted = false;
+  payload.state.lastIOR = 1.0;
+
+  // set primary ray
+  const Ray primaryRay = getCameraRay(payload.prngState);
+  vec3 wo = primaryRay.direction;
+
+  // trace primary ray
+  traceRayEXT(TLAS, flags, 0xFF, 0, 0, 0, primaryRay.origin, tmin, primaryRay.direction, tmax, 0);
+
+  while (payload.intersected)
+  {    
+    // account emissive surface if prev surface was specular
+    if (!NEE || specularBounce)
+    {
+      L += beta * payload.Le;
+      payload.Le = vec3(0.0);
+    }
+    // NEE if bsdf has nonspecular 
+    if (NEE && isNonSpecular(payload.bsdf.flags))
+    {
+      LightSample ls = sampleLight(payload.x, payload.prngState);
+      // cast shadow ray
+      shadowed = true;
+      const float dist = length(ls.to);
+      traceRayEXT(TLAS, shadowFlags, 0xFF, 0, 0, 1, payload.x, tmin, normalize(ls.to), dist - EPS, 1);
+
+      if (!shadowed)
+      {
+        //const vec3 f = payload.bsdf.f * abs(dot(ls.to, payload.normal));
+        float forwardPdf, reversePdf;
+        const vec3 f = EvaluateDisneyBSDF(payload.mat, -wo, ls.to, payload.normal, false, forwardPdf, reversePdf);
+        L += beta * f * ls.L / ls.pdf;
+      }
+    }
+
+    // russian roulette
+    const float prr = max(max(beta.x, beta.y), beta.z);
+    if (stepAndOutputRNGFloat(payload.prngState) >= prr)
+    {
+      break;
+    }
+
+    if (depth > MAX_DEPTH || payload.bsdf.flags == BSDF_FLAGS_FAILED)
+    {
+      break;//or return BLACK
+    }
+
+    // update
+    ++depth;
+    wo = payload.bsdf.wi;
+    specularBounce = isSpecular(payload.bsdf.flags);
+    const float invPrr = 1. / prr;
+    beta *= invPrr * payload.bsdf.f;// / payload.bsdf.forwardPdfW;
+    if (payload.state.hasBeenRefracted && !payload.state.isRefracted) 
+    {
+      payload.state.lastIOR = 1.;
+    }
+
+    // trace next ray
+    traceRayEXT(TLAS, flags, 0xFF, 0, 0, 0, payload.x, tmin, payload.bsdf.wi, tmax, 0);
   }
 
-  const float cosine = min(dot(-normalize(inDirection), normal), 1.0);
-  const float sine = sqrt(1.0 - cosine * cosine);
-  const float reflectProb = schlick(cosine, eta);
+  L += beta * payload.Le;
 
-  if (eta * sine > 1.0 || stepAndOutputRNGFloat(randState) < reflectProb) 
+  return L;
+}
+
+vec3 correct(const vec3 v)
+{
+  // NaN
+  if (v.x != v.x || v.y != v.y || v.z != v.z)
   {
-    return reflect(inDirection, normalize(normal));
+    return vec3(0.0);
   }
 
-  // TODO:
-  pdf = 1.0;
-  return refract(inDirection, normal, eta);
+  // inf
+  //clamp(v, vec3(-INFTY), vec3(INFTY));
 
+  // const float pos_infinity = uintBitsToFloat(0x7F800000);
+  // const float neg_infinity = uintBitsToFloat(0xFF800000);
+  // if (v.x >= pos_infinity || v.y >= pos_infinity || v.z >= pos_infinity)
+  // {
+  //   return vec3(0.0);
+  // }
+
+  // if (v.x <= neg_infinity || v.y <= neg_infinity || v.z <= neg_infinity)
+  // {
+  //   return vec3(0.0);
+  // }
+
+  return v;
 }
 
 void main() 
 {
-  const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
-  const vec2 screenPos = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
-  vec2 d = screenPos * 2.0 - 1.0;
+  const ivec2 imageUV = ivec2(gl_LaunchIDEXT.xy);
 
-  vec3 origin = (sceneParams.mtxViewInv * vec4(0, 0, 0, 1)).xyz;
-  vec4 target = sceneParams.mtxProjInv * vec4(d.x, -d.y, 1, 1);
-
-  uint flags = gl_RayFlagsOpaqueEXT;
-
-  const float tmin = 0.00;
-  const float tmax = 10000.0;
-  const float offset = 0.001;
-  const uint spp = sceneParams.spp;
-  const uint maxRecursive = 4;
-  
-  vec3 colorSum = vec3(0.);
-  // init randState
-  uint randState = uint(gl_LaunchIDEXT.x * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.y);
-  if (sceneParams.seedMode != 0)
+  vec3 L = vec3(0.);
+  for (int i = 0; i < sceneParams.spp; ++i)
   {
-    randState *= uint(sceneParams.time * 1000);
+    L += correct(sampleLi(i + sceneParams.untilSPP));
   }
 
-  for (int i = 0; i < spp; ++i)
+  L /= float(sceneParams.spp);
+
+  const vec4 prev = imageLoad(poolImage, imageUV);
+  float rate = float(sceneParams.spp) / float(sceneParams.spp + sceneParams.untilSPP);
+  if (sceneParams.untilSPP == 0)
   {
-    vec3 color = vec3(1.0);
-    float pdf = 1.0;
-    float scatterPDF = 1.0;
-    
-    // primary ray
-    vec3 inDirection = getRayDirection(randState);
-    traceRayEXT(topLevelAS, flags, 0xFF, 0, 0, 0, origin, tmin, inDirection, tmax, 0);
-    color *= hitInfo.color;
-
-    for(int recursiveNum = 0; recursiveNum < maxRecursive && !hitInfo.endTrace; ++recursiveNum)
-    {
-      vec3 direction = vec3(1.);
-      if (hitInfo.matType == MAT_LAMBERT)
-      {
-        direction = lambertScatter(hitInfo.worldNormal, randState, pdf);
-      }
-      else if (hitInfo.matType == MAT_CONDUCTOR)
-      {
-        direction = conductorScatter(inDirection, hitInfo.worldNormal, hitInfo.alpha, randState, pdf);
-      }
-      else if (hitInfo.matType == MAT_DIELECTRIC)
-      {
-        direction = dielectricScatter(inDirection, hitInfo.worldNormal, hitInfo.IOR, randState, pdf);
-      }
-
-      traceRayEXT(topLevelAS, flags, 0xFF, 0, 0, 0, hitInfo.worldPosition, tmin + offset, direction, tmax, 0);
-      color *= hitInfo.color;
-      inDirection = direction;
-    }
-
-    colorSum += color;
+    rate = 1.0;
   }
 
-  colorSum /= float(spp);
-  colorSum = sqrt(colorSum);
+  const vec4 final = mix(prev, vec4(L, 1.0), rate);
+  imageStore(poolImage, imageUV, final);
 
-  imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(colorSum, 1.0));
+  imageStore(image, imageUV, sqrt(final));
 }
