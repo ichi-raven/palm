@@ -1,0 +1,6 @@
+[submodule "ThirdParty/vk2s"]
+	path = ThirdParty/vk2s
+	url = git@github.com:ichi-raven/vk2s.git
+[submodule "ThirdParty/EC2S"]
+	path = ThirdParty/EC2S
+	url = git@github.com:ichi-raven/EC2S.git

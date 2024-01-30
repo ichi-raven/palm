@@ -1,0 +1,118 @@
+#version 460
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(set = 0, binding = 0, rgba8)
+uniform readonly image2D srcImage;
+
+layout(set = 0, binding = 1, r32f)
+uniform image2D eventImage;
+
+layout(set = 0, binding = 2)
+uniform Parameters{
+    float sigma;
+    float h;
+    uint filterMode;
+    int kernel;
+    int window;
+    float threshold;
+    float padding[2];
+} params;
+
+layout(set = 0, binding = 3, rgba8)
+uniform image2D dstImage;
+
+float plus(float x)
+{
+    return x >= 0 ? 1.0 : 0.0;
+}
+
+float linLog(float x, float th)
+{
+    x = max(x * 255.0, 1.0e-8);
+
+    const float f = (1. / th) * log(th);
+
+    const float y = x <= th ? x * f : log(x);
+
+    return y;
+}
+
+float toGray(const vec3 c)
+{
+    return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
+}
+
+const float M_PI = 3.1415926535897932384626433832795;
+
+float distribute(float norm) 
+{
+    const float var = params.sigma * params.sigma;
+    return exp(-max(0.0, norm - (2.0 * var)) / (params.h * params.h));
+    //const float arg = -max(0.0, (x - dev) * (x - dev) - 2.0 * sigma * sigma);
+    //return exp(arg / (h * h));
+}
+
+float comparePatches(ivec2 patch_, ivec2 original) 
+{
+    float w = 0.0;
+    for(int i = -params.window; i < params.window; i++) {
+        for(int j = -params.window; j < params.window; j++) {
+            ivec2 offset = ivec2(i, j);
+            vec3 diff = imageLoad(srcImage, patch_ + offset).rgb - imageLoad(srcImage, original + offset).rgb;
+            w += dot(diff, diff);
+        }
+    }
+
+    return distribute(w);
+}
+
+vec3 nlmeans(ivec2 coords) 
+{
+    vec3 processed = vec3(0.0);
+    float weights = 0.0;
+    for(int i = -params.kernel; i < params.kernel; i++) {
+        for(int j = -params.kernel; j < params.kernel; j++) {
+            const ivec2 patchCoord = coords + ivec2(i, j);
+            const float w = comparePatches(patchCoord, coords);
+            processed += w * imageLoad(srcImage, patchCoord).rgb;
+            weights += w;
+        }
+    }
+    return processed / weights;
+}
+
+
+void main()
+{
+    ivec2 size = imageSize(srcImage);
+    const ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+    if (pos.x >= size.x || pos.y >= size.y)
+    { 
+        return;
+    }
+
+    const bool applyFilter = params.filterMode % 2 == 1;
+    const bool eventCamera = params.filterMode > 1;
+
+    const vec3 p = applyFilter ? nlmeans(pos) : imageLoad(srcImage, pos).xyz;
+
+    if (!eventCamera)
+    {
+        imageStore(dstImage, pos, vec4(p, 1.0));
+        return;
+    }
+
+    const float event = imageLoad(eventImage, pos).r;
+    
+    const float llg = linLog(toGray(p), params.threshold);
+    const float diff = llg - event;
+    if (abs(diff) > params.threshold)
+    {
+        imageStore(eventImage, pos, vec4(llg));
+        imageStore(dstImage, pos, vec4(1.0) * plus(diff));
+        return;
+    }
+    
+    imageStore(dstImage, pos, vec4(0.5, 0.5, 0.5, 1.0));
+}

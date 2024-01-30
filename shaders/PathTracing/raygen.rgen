@@ -1,0 +1,124 @@
+#version 460
+#extension GL_EXT_ray_tracing : enable
+
+#include "common.glsl"
+
+layout(location = 0) rayPayloadEXT HitInfo hitInfo;
+
+vec3 getRayDirection(inout uint randState)
+{
+  const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
+  const vec2 screenPos = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
+  
+  const vec2 offset = vec2(stepAndOutputRNGFloat(randState), stepAndOutputRNGFloat(randState)) / vec2(gl_LaunchSizeEXT.xy);
+  const vec2 d = (screenPos + offset) * 2.0 - 1.0;
+  const vec4 target = sceneParams.mtxProjInv * vec4(d.x, d.y, 1, 1);
+  vec3 direction = (sceneParams.mtxViewInv * vec4(target.xyz, 0)).xyz;
+  return normalize(direction);
+}
+
+vec3 lambertScatter(vec3 normal, inout uint randState, out float pdf)
+{
+  vec3 dir = normalize(normal + randomUnitVector(randState));
+  pdf = dot(normal, dir) / M_PI;
+  return dir;
+}
+
+vec3 conductorScatter(vec3 inDirection, vec3 normal, float alpha, inout uint randState, inout float pdf)
+{
+  // TODO:
+  pdf = 1.0;
+  return reflect(inDirection, normalize(normal)) + alpha * randomUnitVector(randState);
+}
+
+vec3 dielectricScatter(vec3 inDirection, vec3 normal, float IOR, inout uint randState, inout float pdf)
+{
+  float nr = dot(normal, inDirection);
+  float eta = 1.0 / IOR;
+
+  if(nr >= 0.0) // back
+  {  
+    eta = IOR;
+    normal = -normal;
+  }
+
+  const float cosine = min(dot(-normalize(inDirection), normal), 1.0);
+  const float sine = sqrt(1.0 - cosine * cosine);
+  const float reflectProb = schlick(cosine, eta);
+
+  if (eta * sine > 1.0 || stepAndOutputRNGFloat(randState) < reflectProb) 
+  {
+    return reflect(inDirection, normalize(normal));
+  }
+
+  // TODO:
+  pdf = 1.0;
+  return refract(inDirection, normal, eta);
+
+}
+
+void main() 
+{
+  const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
+  const vec2 screenPos = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
+  vec2 d = screenPos * 2.0 - 1.0;
+
+  vec3 origin = (sceneParams.mtxViewInv * vec4(0, 0, 0, 1)).xyz;
+  vec4 target = sceneParams.mtxProjInv * vec4(d.x, -d.y, 1, 1);
+
+  uint flags = gl_RayFlagsOpaqueEXT;
+
+  const float tmin = 0.00;
+  const float tmax = 10000.0;
+  const float offset = 0.001;
+  const uint spp = sceneParams.spp;
+  const uint maxRecursive = 4;
+  
+  vec3 colorSum = vec3(0.);
+  // init randState
+  uint randState = uint(gl_LaunchIDEXT.x * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.y);
+  if (sceneParams.seedMode != 0)
+  {
+    randState *= uint(sceneParams.time * 1000);
+  }
+
+  for (int i = 0; i < spp; ++i)
+  {
+    vec3 color = vec3(1.0);
+    float pdf = 1.0;
+    float scatterPDF = 1.0;
+    
+    // primary ray
+    vec3 inDirection = getRayDirection(randState);
+    traceRayEXT(topLevelAS, flags, 0xFF, 0, 0, 0, origin, tmin, inDirection, tmax, 0);
+    color *= hitInfo.color;
+
+    for(int recursiveNum = 0; recursiveNum < maxRecursive && !hitInfo.endTrace; ++recursiveNum)
+    {
+      vec3 direction = vec3(1.);
+      if (hitInfo.matType == MAT_LAMBERT)
+      {
+        direction = lambertScatter(hitInfo.worldNormal, randState, pdf);
+      }
+      else if (hitInfo.matType == MAT_CONDUCTOR)
+      {
+        direction = conductorScatter(inDirection, hitInfo.worldNormal, hitInfo.alpha, randState, pdf);
+      }
+      else if (hitInfo.matType == MAT_DIELECTRIC)
+      {
+        direction = dielectricScatter(inDirection, hitInfo.worldNormal, hitInfo.IOR, randState, pdf);
+      }
+
+      traceRayEXT(topLevelAS, flags, 0xFF, 0, 0, 0, hitInfo.worldPosition, tmin + offset, direction, tmax, 0);
+      color *= hitInfo.color;
+      inDirection = direction;
+    }
+
+    colorSum += color;
+  }
+
+  colorSum /= float(spp);
+  colorSum = sqrt(colorSum);
+
+  imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(colorSum, 1.0));
+}

@@ -1,0 +1,191 @@
+#version 460
+#extension GL_EXT_ray_tracing : enable
+
+#include "common.glsl"
+
+layout(location = 0) rayPayloadEXT HitInfo hitInfo;
+
+Ray getCameraRay(inout uint randState)
+{
+  const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
+  const vec2 screenPos = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
+  
+  const vec2 offset = vec2(stepAndOutputRNGFloat(randState), stepAndOutputRNGFloat(randState)) / vec2(gl_LaunchSizeEXT.xy);
+  const vec2 d = (screenPos + offset) * 2.0 - 1.0;
+  const vec4 target = sceneParams.mtxProjInv * vec4(d.x, d.y, 1, 1);
+  const vec3 direction = (sceneParams.mtxViewInv * vec4(target.xyz, 0)).xyz;
+
+  Ray ray;
+  ray.origin = (sceneParams.mtxViewInv * vec4(0, 0, 0, 1)).xyz;
+  ray.direction = normalize(direction);
+  return ray;
+}
+
+vec3 lambertScatter(vec3 normal, inout uint randState, out float pdf)
+{
+  ONB onb = buildFromW(normal);
+  vec3 dir = local(onb, randomCosDirection(randState));
+  pdf = dot(onb.w, dir) / M_PI;
+  return normalize(dir);
+  // dir = normalize(normal + randomUnitVector(randState));
+  // pdf = 1.0;
+  // return dir;
+}
+
+vec3 conductorScatter(vec3 wo, vec3 normal, float alpha, inout uint randState, inout float pdf)
+{
+  // TODO:
+  pdf = 1.0;
+
+  return reflect(-wo, normalize(normal)) + alpha * randomUnitVector(randState);
+}
+
+vec3 dielectricScatter(vec3 wo, vec3 normal, bool frontFace, float IOR, inout uint randState, inout float pdf)
+{
+  float eta = frontFace ? 1.0 / IOR : IOR;
+
+  const vec3 unitDir = -normalize(wo);
+
+  const float cosine = min(dot(-unitDir, normal), 1.0);
+  const float sine = sqrt(1.0 - cosine * cosine);
+  const float reflectProb = schlick(cosine, eta);
+
+  if (eta * sine > 1.0 || stepAndOutputRNGFloat(randState) < reflectProb) 
+  {
+    return reflect(unitDir, normalize(normal));
+  }
+
+  // TODO:
+  pdf = 1.0;
+  return refract(unitDir, normal, eta);
+
+}
+
+BSDFSample sampleBSDF(vec3 albedo, vec3 wo, vec3 normal, int matType, float alpha, float IOR, inout uint randState)
+{
+  BSDFSample ret;
+  ret.f = albedo;
+  ret.pdf = 1.0;
+  ret.flags = 0;
+  ret.eta = 1.0;
+  ret.pdfIsProportional = false;
+
+  vec3 faceNormal = setFaceNormal(-wo, normal);
+  bool front = faceNormal == normal;
+
+  if (matType == MAT_LAMBERT)
+  {
+    ret.flags = BSDF_FLAGS_DIFFUSE | BSDF_FLAGS_REFLECTION;
+    ret.wi = lambertScatter(faceNormal, randState, ret.pdf);
+    ret.f *= M_INVPI * abs(dot(ret.wi, normal));
+  }
+  else if (matType == MAT_CONDUCTOR)
+  {
+    // HACK:
+    ret.flags = alpha< 0.1 ? BSDF_FLAGS_SPECULAR : BSDF_FLAGS_GLOSSY;
+    ret.flags |= BSDF_FLAGS_REFLECTION;
+    ret.wi = conductorScatter(wo, faceNormal, alpha, randState, ret.pdf);
+  }
+  else if (matType == MAT_DIELECTRIC)
+  {
+    ret.flags = BSDF_FLAGS_TRANSMISSION;
+    // HACK:
+    ret.flags |= IOR == 1.0 ? BSDF_FLAGS_REFLECTION : 0;
+    ret.wi = dielectricScatter(wo, faceNormal, front, IOR, randState, ret.pdf);
+  }
+  else
+  {
+    // ERROR
+  }
+
+  return ret;
+}
+
+vec3 Li(Ray primaryRay, inout uint randState)
+{
+    const uint flags = gl_RayFlagsOpaqueEXT;
+
+    vec3 L = vec3(0.);
+    vec3 beta = vec3(1.0);
+    bool specularBounce = true;
+    Ray ray = primaryRay;
+    BSDFSample sampled;
+
+    for(int recursiveNum = 0; recursiveNum < MAX_DEPTH; ++recursiveNum)
+    {
+      // intersect ray with scene
+      hitInfo.endTrace = true;
+      traceRayEXT(topLevelAS, flags, 0xFF, 0, 0, 0, ray.origin, tmin + offset, ray.direction, tmax, 0);
+
+      // account for infinite lights if ray has no intersection (missed)
+      if (hitInfo.endTrace)
+      {
+        L += beta * hitInfo.emitted;
+        break;
+      }
+
+      // account for emissive surface if light was not sampled
+      L += beta * hitInfo.emitted;
+
+      // skip participating media (TODO:?)
+      // do nothing
+
+      // sample direct illumination
+      // TODO:
+
+      // sample outgoing direction to continue path (uniform sample)
+      vec3 wo = -(ray.direction);
+      
+      // HACK: BSDFSample have to be returned by (closest) hit shader
+      BSDFSample sampled = sampleBSDF(hitInfo.albedo, wo, hitInfo.worldNormal, hitInfo.matType, hitInfo.alpha, hitInfo.IOR, randState);
+
+      // update
+      ray.origin = hitInfo.worldPosition;
+      ray.direction = sampled.wi;
+      specularBounce = isSpecular(sampled.flags);
+      beta *= sampled.f / sampled.pdf;
+    }
+
+    return L;
+}
+
+void main() 
+{
+  const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
+  const vec2 screenPos = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
+  const ivec2 imageUV = ivec2(gl_LaunchIDEXT.xy);
+  vec2 d = screenPos * 2.0 - 1.0;
+
+
+  const uint spp = sceneParams.spp;
+  const uint sppSum = spp + sceneParams.untilSPP;
+  
+  // init randState
+  uint randState = uint(gl_LaunchIDEXT.x * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.y);
+  randState *= uint(sceneParams.seed);
+
+  vec3 sum = vec3(0.);
+  for (int i = 0; i < spp; ++i)
+  {
+    const vec3 L = Li(getCameraRay(randState), randState);
+
+    sum += correctNaN(L);
+  }
+
+  sum /= float(spp);
+
+  // vec4 prev = imageLoad(poolImage, imageUV);
+  // float rate = float(spp) / float(sppSum);
+  // if (sceneParams.untilSPP == 0)
+  // {
+  //   prev = vec4(0.0);
+  //   rate = 1.0;
+  // }
+
+  // vec4 final = mix(prev, vec4(sum, 1.0), rate);
+  // imageStore(poolImage, imageUV, final);
+
+  vec4 final = vec4(sum, 1.0);
+
+  imageStore(image, imageUV, sqrt(final));
+}
