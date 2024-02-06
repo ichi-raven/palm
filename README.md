@@ -1,2 +1,2 @@
-# vkpt
-Vulkan Path Tracer (playground)
+# palm
+phsycally-based(?) toy renderer
