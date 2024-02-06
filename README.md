@@ -1,2 +1,2 @@
 # palm
-phsycally-based(?) toy renderer
+physically-based(?) toy renderer
