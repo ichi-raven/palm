@@ -30,10 +30,7 @@ add_executable(${MAIN_EXE})
 target_sources(${MAIN_EXE}
 PUBLIC
 main.cpp
-Scene.cpp
-Integrator.cpp
-MaterialTable.cpp
-Film.cpp
+States/Editor.cpp
 )
 
 # link libraries
