@@ -17,7 +17,7 @@ layout(location = 0) out vec4 outColor;
 
 void main()
 {
-    outColor = vec4(inNormal, 1.0);
+    outColor = vec4(inPos, 1.0);
 
     // vec4 albedo = material.albedo;
 

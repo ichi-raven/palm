@@ -152,7 +152,7 @@ namespace palm
         }
     }
 
-    void Editor::init()
+    void Editor::initVulkan()
     {
         auto& device = getCommonRegion()->device;
         auto& window = getCommonRegion()->window;
@@ -235,7 +235,7 @@ namespace palm
             mBindGroup->bind(0, 0, vk::DescriptorType::eUniformBufferDynamic, mSceneBuffer.get());
 
             // create commands and sync objects
-            
+
             mCommands.resize(frameCount);
             mImageAvailableSems.resize(frameCount);
             mRenderCompletedSems.resize(frameCount);
@@ -251,12 +251,16 @@ namespace palm
             mCamera = vk2s::Camera(60., 1. * windowWidth / windowHeight);
             mCamera.setPos(glm::vec3(0.0, 0.8, 3.0));
             mCamera.setLookAt(glm::vec3(0.0, 0.8, -2.0));
-
         }
         catch (std::exception& e)
         {
             std::cerr << e.what() << "\n";
         }
+    }
+
+    void Editor::init()
+    {
+        initVulkan();
 
         mLastTime = glfwGetTime();
         mNow = 0;
@@ -264,9 +268,10 @@ namespace palm
 
     void Editor::update()
     {
-        static const auto colorClearValue   = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 1.0f });
-        static const auto depthClearValue   = vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0));
-        static const std::array clearValues = { colorClearValue, depthClearValue };
+        constexpr auto colorClearValue   = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 1.0f });
+        constexpr auto depthClearValue   = vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0));
+        constexpr std::array clearValues = { colorClearValue, depthClearValue };
+        
         auto& device = getCommonRegion()->device;
         auto& window = getCommonRegion()->window;
         
@@ -320,7 +325,7 @@ namespace palm
         }
 
         // acquire next image from swapchain(window)
-        const uint32_t imageIndex = window->acquireNextImage(mImageAvailableSems[mNow].get());
+        const auto [imageIndex, resized] = window->acquireNextImage(mImageAvailableSems[mNow].get());
 
         auto& command = mCommands[mNow];
         // start writing command
