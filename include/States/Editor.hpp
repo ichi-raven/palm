@@ -69,6 +69,8 @@ namespace palm
 
         void initVulkan();
 
+        void renderImGui();
+
     private:
         vk2s::Camera mCamera;
 

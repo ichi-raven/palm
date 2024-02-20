@@ -1,4 +1,4 @@
-/*****************************************************************//**
+/*****************************************************************/ /**
  * @file   Editor.cpp
  * @brief  source file of Editor class
  * 
@@ -16,10 +16,6 @@
 
 #include <iostream>
 
-
-
-
-
 inline vk::TransformMatrixKHR convert(const glm::mat4x3& m)
 {
     vk::TransformMatrixKHR mtx;
@@ -30,7 +26,6 @@ inline vk::TransformMatrixKHR convert(const glm::mat4x3& m)
 
     return mtx;
 };
-
 
 namespace palm
 {
@@ -263,7 +258,91 @@ namespace palm
         initVulkan();
 
         mLastTime = glfwGetTime();
-        mNow = 0;
+        mNow      = 0;
+    }
+
+    void Editor::renderImGui()
+    {
+        auto& device = getCommonRegion()->device;
+        auto& window = getCommonRegion()->window;
+
+        const auto [windowWidth, windowHeight] = window->getWindowSize();
+
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2(windowWidth, 20));  // Unityのメニューバーのサイズに合わせる
+        ImGui::Begin("MenuBar", NULL, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+
+        if (ImGui::BeginMenuBar())
+        {
+            if (ImGui::BeginMenu("File"))
+            {
+                ImGui::MenuItem("New", NULL);
+                ImGui::MenuItem("Open", NULL);
+                ImGui::MenuItem("Save", NULL);
+                ImGui::MenuItem("Save As", NULL);
+                ImGui::MenuItem("Exit", NULL);
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("Edit"))
+            {
+                ImGui::MenuItem("Cut", NULL);
+                ImGui::MenuItem("Copy", NULL);
+                ImGui::MenuItem("Paste", NULL);
+                ImGui::EndMenu();
+            }
+
+            ImGui::EndMenuBar();
+        }
+        ImGui::End();
+
+        ImGui::SetNextWindowPos(ImVec2(0, 20));     // メニューバーウィンドウの高さ分下に配置
+        ImGui::SetNextWindowSize(ImVec2(80, windowHeight - 180));  // Unityのツールバーのサイズに合わせる
+        ImGui::Begin("ToolBar", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+
+        ImGui::Text("Toolbar:");
+        if (ImGui::Button("Play"))
+        {
+            // Playボタンが押されたときの処理
+        }
+        if (ImGui::Button("Stop"))
+        {
+            // Stopボタンが押されたときの処理
+        }
+
+        ImGui::End();
+
+        ImGui::SetNextWindowPos(ImVec2(0, windowHeight - 180));     // 画面下部に配置
+        ImGui::SetNextWindowSize(ImVec2(windowWidth, 180));  // ファイルエクスプローラのサイズ
+        ImGui::Begin("FileExplorer", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+
+        ImGui::Text("File Explorer");
+
+        ImGui::End();
+
+        ImGui::SetNextWindowPos(ImVec2(880, 20));    // 右側に配置
+        ImGui::SetNextWindowSize(ImVec2(320, windowHeight - 180));  // シーンエディタのサイズ
+        ImGui::Begin("SceneEditor", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+
+        ImGui::Text("Scene Editor");
+
+        ImGui::End();
+
+        //ImGui::Begin("configuration");
+        //ImGui::Text("device = %s", device.getPhysicalDeviceName().data());
+        ////ImGui::Text("fps = %lf", 1. / deltaTime);
+        //const auto& pos    = mCamera.getPos();
+        //const auto& lookAt = mCamera.getLookAt();
+        //ImGui::Text("pos = (%lf, %lf, %lf)", pos.x, pos.y, pos.z);
+        //ImGui::Text("lookat = (%lf, %lf, %lf)", lookAt.x, lookAt.y, lookAt.z);
+
+        //ImGui::End();
+
+        ImGui::Render();
     }
 
     void Editor::update()
@@ -271,13 +350,12 @@ namespace palm
         constexpr auto colorClearValue   = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 1.0f });
         constexpr auto depthClearValue   = vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0));
         constexpr std::array clearValues = { colorClearValue, depthClearValue };
-        
+
         auto& device = getCommonRegion()->device;
         auto& window = getCommonRegion()->window;
-        
+
         const auto [windowWidth, windowHeight] = window->getWindowSize();
         const auto frameCount                  = window->getFrameCount();
-
 
         if (!window->update() || window->getKey(GLFW_KEY_ESCAPE))
         {
@@ -295,20 +373,7 @@ namespace palm
         mCamera.update(window->getpGLFWWindow(), speed, mouseSpeed);
 
         // ImGui
-        ImGui_ImplVulkan_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-        ImGui::Begin("configuration");
-        ImGui::Text("device = %s", device.getPhysicalDeviceName().data());
-        ImGui::Text("fps = %lf", 1. / deltaTime);
-        const auto& pos    = mCamera.getPos();
-        const auto& lookAt = mCamera.getLookAt();
-        ImGui::Text("pos = (%lf, %lf, %lf)", pos.x, pos.y, pos.z);
-        ImGui::Text("lookat = (%lf, %lf, %lf)", lookAt.x, lookAt.y, lookAt.z);
-
-        ImGui::End();
-
-        ImGui::Render();
+        renderImGui();
 
         // wait and reset fence
         mFences[mNow]->wait();
@@ -353,14 +418,13 @@ namespace palm
         command->execute(mFences[mNow], mImageAvailableSems[mNow], mRenderCompletedSems[mNow]);
         // present swapchain(window) image
         window->present(imageIndex, mRenderCompletedSems[mNow].get());
-    
+
         // update frame index
         mNow = (mNow + 1) % frameCount;
     }
 
     Editor::~Editor()
     {
-
     }
 
 }  // namespace palm
