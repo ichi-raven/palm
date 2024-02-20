@@ -71,6 +71,8 @@ namespace palm
 
         void renderImGui();
 
+        void onResized();
+
     private:
         vk2s::Camera mCamera;
 
@@ -79,10 +81,12 @@ namespace palm
         std::vector<Handle<vk2s::Semaphore>> mRenderCompletedSems;
         std::vector<Handle<vk2s::Fence>> mFences;
 
-        Handle<vk2s::RenderPass> mRenderpass;
-        Handle<vk2s::Pipeline> mGraphicsPipeline;
-        Handle<vk2s::DynamicBuffer> mSceneBuffer;
-        Handle<vk2s::BindGroup> mBindGroup;
+        UniqueHandle<vk2s::Image> mDepthBuffer;
+
+        UniqueHandle<vk2s::RenderPass> mRenderpass;
+        UniqueHandle<vk2s::Pipeline> mGraphicsPipeline;
+        UniqueHandle<vk2s::DynamicBuffer> mSceneBuffer;
+        UniqueHandle<vk2s::BindGroup> mBindGroup;
 
         std::vector<MeshInstance> mMeshInstances;
 

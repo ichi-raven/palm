@@ -15,6 +15,7 @@
 #include <imgui_impl_vulkan.h>
 
 #include <iostream>
+#include <filesystem>
 
 inline vk::TransformMatrixKHR convert(const glm::mat4x3& m)
 {
@@ -158,7 +159,6 @@ namespace palm
         try
         {
             // create depth buffer
-            Handle<vk2s::Image> depthBuffer;
             {
                 const auto format   = vk::Format::eD32Sfloat;
                 const uint32_t size = windowWidth * windowHeight * vk2s::Compiler::getSizeOfFormat(format);
@@ -172,10 +172,10 @@ namespace palm
                 ci.usage         = vk::ImageUsageFlagBits::eDepthStencilAttachment;
                 ci.initialLayout = vk::ImageLayout::eUndefined;
 
-                depthBuffer = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eDepth);
+                mDepthBuffer = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eDepth);
             }
 
-            mRenderpass = device.create<vk2s::RenderPass>(window.get(), vk::AttachmentLoadOp::eClear, depthBuffer);
+            mRenderpass = device.create<vk2s::RenderPass>(window.get(), vk::AttachmentLoadOp::eClear, mDepthBuffer);
 
             device.initImGui(frameCount, window.get(), mRenderpass.get());
 
@@ -300,7 +300,7 @@ namespace palm
         }
         ImGui::End();
 
-        ImGui::SetNextWindowPos(ImVec2(0, 20));     // メニューバーウィンドウの高さ分下に配置
+        ImGui::SetNextWindowPos(ImVec2(0, 20));                    // メニューバーウィンドウの高さ分下に配置
         ImGui::SetNextWindowSize(ImVec2(80, windowHeight - 180));  // Unityのツールバーのサイズに合わせる
         ImGui::Begin("ToolBar", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
@@ -316,21 +316,55 @@ namespace palm
 
         ImGui::End();
 
-        ImGui::SetNextWindowPos(ImVec2(0, windowHeight - 180));     // 画面下部に配置
-        ImGui::SetNextWindowSize(ImVec2(windowWidth, 180));  // ファイルエクスプローラのサイズ
-        ImGui::Begin("FileExplorer", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+        {
+            ImGui::SetNextWindowPos(ImVec2(0, windowHeight - 180));  // 画面下部に配置
+            ImGui::SetNextWindowSize(ImVec2(windowWidth, 180));      // ファイルエクスプローラのサイズ
+            ImGui::Begin("FileExplorer", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
-        ImGui::Text("File Explorer");
+            static std::filesystem::path current = std::filesystem::current_path();
 
-        ImGui::End();
+            ImGui::Text(current.string().c_str());
 
-        ImGui::SetNextWindowPos(ImVec2(880, 20));    // 右側に配置
-        ImGui::SetNextWindowSize(ImVec2(320, windowHeight - 180));  // シーンエディタのサイズ
-        ImGui::Begin("SceneEditor", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+            if (ImGui::Button("<-"))
+            {
+                current = current.parent_path();
+            }
 
-        ImGui::Text("Scene Editor");
+            for (const auto& entry : std::filesystem::directory_iterator(current))
+            {
+                if (entry.is_directory())
+                {
+                    if (ImGui::TreeNode(entry.path().filename().string().c_str()))
+                    {
+                        if (ImGui::Button(entry.path().filename().string().c_str()))
+                        {
+                            current = entry.path();
+                        }
 
-        ImGui::End();
+                        ImGui::TreePop();
+                    }
+                }
+                else
+                {
+                    if (ImGui::Selectable(entry.path().filename().string().c_str()))
+                    {
+                        ImGui::Text(entry.path().filename().string().c_str());
+                    }
+                }
+            }
+
+            ImGui::End();
+        }
+
+        {
+            ImGui::SetNextWindowPos(ImVec2(880, 20));                   // 右側に配置
+            ImGui::SetNextWindowSize(ImVec2(320, windowHeight - 180));  // シーンエディタのサイズ
+            ImGui::Begin("SceneEditor", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+
+            ImGui::Text("Scene Editor");
+
+            ImGui::End();
+        }
 
         //ImGui::Begin("configuration");
         //ImGui::Text("device = %s", device.getPhysicalDeviceName().data());
@@ -345,6 +379,35 @@ namespace palm
         ImGui::Render();
     }
 
+    void Editor::onResized()
+    {
+        auto& device = getCommonRegion()->device;
+        auto& window = getCommonRegion()->window;
+
+        window->resize();
+
+        {
+            const auto format = vk::Format::eD32Sfloat;
+
+            const auto [w, h] = window->getWindowSize();
+
+            const uint32_t size = w * h * vk2s::Compiler::getSizeOfFormat(format);
+
+            vk::ImageCreateInfo ci;
+            ci.arrayLayers   = 1;
+            ci.extent        = vk::Extent3D(w, h, 1);
+            ci.format        = format;
+            ci.imageType     = vk::ImageType::e2D;
+            ci.mipLevels     = 1;
+            ci.usage         = vk::ImageUsageFlagBits::eDepthStencilAttachment;
+            ci.initialLayout = vk::ImageLayout::eUndefined;
+
+            mDepthBuffer = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eDepth);
+        }
+
+        mRenderpass->recreateFrameBuffers(window.get(), mDepthBuffer);
+    }
+
     void Editor::update()
     {
         constexpr auto colorClearValue   = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 1.0f });
@@ -356,6 +419,8 @@ namespace palm
 
         const auto [windowWidth, windowHeight] = window->getWindowSize();
         const auto frameCount                  = window->getFrameCount();
+
+        static bool resizedWhenPresent = false;
 
         if (!window->update() || window->getKey(GLFW_KEY_ESCAPE))
         {
@@ -377,7 +442,6 @@ namespace palm
 
         // wait and reset fence
         mFences[mNow]->wait();
-        mFences[mNow]->reset();
 
         {  // write data
             SceneUB sceneUBO{
@@ -391,6 +455,14 @@ namespace palm
 
         // acquire next image from swapchain(window)
         const auto [imageIndex, resized] = window->acquireNextImage(mImageAvailableSems[mNow].get());
+
+        if (resized)
+        {
+            onResized();
+            return;
+        }
+
+        mFences[mNow]->reset();
 
         auto& command = mCommands[mNow];
         // start writing command
@@ -417,7 +489,11 @@ namespace palm
         // execute
         command->execute(mFences[mNow], mImageAvailableSems[mNow], mRenderCompletedSems[mNow]);
         // present swapchain(window) image
-        window->present(imageIndex, mRenderCompletedSems[mNow].get());
+        if (window->present(imageIndex, mRenderCompletedSems[mNow].get()))
+        {
+            onResized();
+            return;
+        }
 
         // update frame index
         mNow = (mNow + 1) % frameCount;
@@ -425,6 +501,10 @@ namespace palm
 
     Editor::~Editor()
     {
+        for (auto& fence : mFences)
+        {
+            fence->wait();
+        }
     }
 
 }  // namespace palm
