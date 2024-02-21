@@ -334,12 +334,10 @@ namespace palm
             {
                 if (entry.is_directory())
                 {
+                    ImGui::SetNextItemOpen(false);
                     if (ImGui::TreeNode(entry.path().filename().string().c_str()))
                     {
-                        if (ImGui::Button(entry.path().filename().string().c_str()))
-                        {
-                            current = entry.path();
-                        }
+                        current = entry.path();
 
                         ImGui::TreePop();
                     }
@@ -357,7 +355,7 @@ namespace palm
         }
 
         {
-            ImGui::SetNextWindowPos(ImVec2(880, 20));                   // 右側に配置
+            ImGui::SetNextWindowPos(ImVec2(windowWidth - 320, 20));                   // 右側に配置
             ImGui::SetNextWindowSize(ImVec2(320, windowHeight - 180));  // シーンエディタのサイズ
             ImGui::Begin("SceneEditor", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
