@@ -36,11 +36,6 @@ namespace palm
         std::vector<vk2s::AssetLoader::Material> hostMaterials;
         loader.load(path.data(), hostMeshes, hostMaterials);
 
-        //hostMeshes.erase(hostMeshes.begin());
-        //hostMeshes.erase(hostMeshes.begin());
-        //hostMaterials.erase(hostMaterials.begin());
-        //hostMaterials.erase(hostMaterials.begin());
-
         meshInstances.resize(hostMeshes.size());
         for (size_t i = 0; i < meshInstances.size(); ++i)
         {
@@ -172,12 +167,39 @@ namespace palm
                 ci.usage         = vk::ImageUsageFlagBits::eDepthStencilAttachment;
                 ci.initialLayout = vk::ImageLayout::eUndefined;
 
-                mDepthBuffer = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eDepth);
+                mFrameBuffer.depthBuffer = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eDepth);
             }
 
-            mRenderpass = device.create<vk2s::RenderPass>(window.get(), vk::AttachmentLoadOp::eClear, mDepthBuffer);
+            // create G-Buffer
+            {
+                const auto format   = vk::Format::eR32G32B32A32Sfloat;
+                const uint32_t size = windowWidth * windowHeight * vk2s::Compiler::getSizeOfFormat(format);
 
-            device.initImGui(frameCount, window.get(), mRenderpass.get());
+                vk::ImageCreateInfo ci;
+                ci.arrayLayers   = 1;
+                ci.extent        = vk::Extent3D(windowWidth, windowHeight, 1);
+                ci.format        = format;
+                ci.imageType     = vk::ImageType::e2D;
+                ci.mipLevels     = 1;
+                ci.usage         = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eColorAttachment;
+                ci.initialLayout = vk::ImageLayout::eUndefined;
+
+                mFrameBuffer.worldPosTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+                mFrameBuffer.normalTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+            
+                UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
+                cmd->begin(true);
+                cmd->transitionImageLayout(mFrameBuffer.worldPosTex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
+                cmd->transitionImageLayout(mFrameBuffer.normalTex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
+                cmd->end();
+                cmd->execute();
+            }
+
+            mGeometryPass = device.create<vk2s::RenderPass>({mFrameBuffer.worldPosTex, mFrameBuffer.normalTex}, mFrameBuffer.depthBuffer);
+
+            mPresentPass = device.create<vk2s::RenderPass>(window.get(), vk::AttachmentLoadOp::eClear);
+
+            device.initImGui(frameCount, window.get(), mPresentPass.get());
 
             auto vertexShader   = device.create<vk2s::Shader>("../../shaders/rasterize/vertex.vert", "main");
             auto fragmentShader = device.create<vk2s::Shader>("../../shaders/rasterize/fragment.frag", "main");
@@ -197,7 +219,7 @@ namespace palm
                 .vs            = vertexShader,
                 .fs            = fragmentShader,
                 .bindLayout    = bindLayout,
-                .renderPass    = mRenderpass,
+                .renderPass    = mGeometryPass,
                 .inputState    = vk::PipelineVertexInputStateCreateInfo({}, inputBinding, std::get<0>(vertexShader->getReflection())),
                 .inputAssembly = vk::PipelineInputAssemblyStateCreateInfo({}, vk::PrimitiveTopology::eTriangleList),
                 .viewportState = vk::PipelineViewportStateCreateInfo({}, 1, &viewport, 1, &scissor),
@@ -261,7 +283,107 @@ namespace palm
         mNow      = 0;
     }
 
-    void Editor::renderImGui()
+
+    void Editor::update()
+    {
+        constexpr auto colorClearValue   = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 1.0f });
+        constexpr auto depthClearValue   = vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0));
+        constexpr std::array clearValues = { colorClearValue, depthClearValue };
+
+        auto& device = getCommonRegion()->device;
+        auto& window = getCommonRegion()->window;
+
+        const auto [windowWidth, windowHeight] = window->getWindowSize();
+        const auto frameCount                  = window->getFrameCount();
+
+        static bool resizedWhenPresent = false;
+
+        if (!window->update() || window->getKey(GLFW_KEY_ESCAPE))
+        {
+            exitApplication();
+        }
+
+        // update time
+        const double currentTime = glfwGetTime();
+        float deltaTime          = static_cast<float>(currentTime - mLastTime);
+        mLastTime                = currentTime;
+
+        // update camera
+        const double speed      = 2.0f * deltaTime;
+        const double mouseSpeed = 0.7f * deltaTime;
+        mCamera.update(window->getpGLFWWindow(), speed, mouseSpeed);
+
+        // ImGui
+        renderImGui();
+
+        // wait and reset fence
+        mFences[mNow]->wait();
+
+        {  // write data
+            SceneUB sceneUBO{
+                .model = glm::mat4(1.0),
+                .view  = mCamera.getViewMatrix(),
+                .proj  = mCamera.getProjectionMatrix(),
+            };
+
+            mSceneBuffer->write(&sceneUBO, sizeof(SceneUB), mNow * mSceneBuffer->getBlockSize());
+        }
+
+        // acquire next image from swapchain(window)
+        const auto [imageIndex, resized] = window->acquireNextImage(mImageAvailableSems[mNow].get());
+
+        if (resized)
+        {
+            onResized();
+            return;
+        }
+
+        mFences[mNow]->reset();
+
+        auto& command = mCommands[mNow];
+        // start writing command
+        command->begin();
+        command->beginRenderPass(mGeometryPass.get(), imageIndex, vk::Rect2D({ 0, 0 }, { windowWidth, windowHeight }), clearValues);
+
+        command->setPipeline(mGraphicsPipeline);
+
+        command->setBindGroup(mBindGroup.get(), { mNow * static_cast<uint32_t>(mSceneBuffer->getBlockSize()) });
+        for (auto& mesh : mMeshInstances)
+        {
+            command->bindVertexBuffer(mesh.vertexBuffer.get());
+            command->bindIndexBuffer(mesh.indexBuffer.get());
+
+            command->drawIndexed(mesh.hostMesh.indices.size(), 1, 0, 0, 1);
+        }
+
+        command->drawImGui();
+        command->endRenderPass();
+
+        // end writing commands
+        command->end();
+
+        // execute
+        command->execute(mFences[mNow], mImageAvailableSems[mNow], mRenderCompletedSems[mNow]);
+        // present swapchain(window) image
+        if (window->present(imageIndex, mRenderCompletedSems[mNow].get()))
+        {
+            onResized();
+            return;
+        }
+
+        // update frame index
+        mNow = (mNow + 1) % frameCount;
+    }
+
+    Editor::~Editor()
+    {
+        for (auto& fence : mFences)
+        {
+            fence->wait();
+        }
+    }
+
+        void Editor::renderImGui()
     {
         auto& device = getCommonRegion()->device;
         auto& window = getCommonRegion()->window;
@@ -355,7 +477,7 @@ namespace palm
         }
 
         {
-            ImGui::SetNextWindowPos(ImVec2(windowWidth - 320, 20));                   // 右側に配置
+            ImGui::SetNextWindowPos(ImVec2(windowWidth - 320, 20));     // 右側に配置
             ImGui::SetNextWindowSize(ImVec2(320, windowHeight - 180));  // シーンエディタのサイズ
             ImGui::Begin("SceneEditor", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
@@ -376,6 +498,7 @@ namespace palm
 
         ImGui::Render();
     }
+
 
     void Editor::onResized()
     {
@@ -400,109 +523,12 @@ namespace palm
             ci.usage         = vk::ImageUsageFlagBits::eDepthStencilAttachment;
             ci.initialLayout = vk::ImageLayout::eUndefined;
 
-            mDepthBuffer = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eDepth);
+            mFrameBuffer.depthBuffer = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eDepth);
         }
 
-        mRenderpass->recreateFrameBuffers(window.get(), mDepthBuffer);
-    }
+        mGeometryPass->recreateFrameBuffers(window.get(), mFrameBuffer.depthBuffer);
 
-    void Editor::update()
-    {
-        constexpr auto colorClearValue   = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 1.0f });
-        constexpr auto depthClearValue   = vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0));
-        constexpr std::array clearValues = { colorClearValue, depthClearValue };
-
-        auto& device = getCommonRegion()->device;
-        auto& window = getCommonRegion()->window;
-
-        const auto [windowWidth, windowHeight] = window->getWindowSize();
-        const auto frameCount                  = window->getFrameCount();
-
-        static bool resizedWhenPresent = false;
-
-        if (!window->update() || window->getKey(GLFW_KEY_ESCAPE))
-        {
-            exitApplication();
-        }
-
-        // update time
-        const double currentTime = glfwGetTime();
-        float deltaTime          = static_cast<float>(currentTime - mLastTime);
-        mLastTime                = currentTime;
-
-        // update camera
-        const double speed      = 2.0f * deltaTime;
-        const double mouseSpeed = 0.7f * deltaTime;
-        mCamera.update(window->getpGLFWWindow(), speed, mouseSpeed);
-
-        // ImGui
-        renderImGui();
-
-        // wait and reset fence
-        mFences[mNow]->wait();
-
-        {  // write data
-            SceneUB sceneUBO{
-                .model = glm::mat4(1.0),
-                .view  = mCamera.getViewMatrix(),
-                .proj  = mCamera.getProjectionMatrix(),
-            };
-
-            mSceneBuffer->write(&sceneUBO, sizeof(SceneUB), mNow * mSceneBuffer->getBlockSize());
-        }
-
-        // acquire next image from swapchain(window)
-        const auto [imageIndex, resized] = window->acquireNextImage(mImageAvailableSems[mNow].get());
-
-        if (resized)
-        {
-            onResized();
-            return;
-        }
-
-        mFences[mNow]->reset();
-
-        auto& command = mCommands[mNow];
-        // start writing command
-        command->begin();
-        command->beginRenderPass(mRenderpass.get(), imageIndex, vk::Rect2D({ 0, 0 }, { windowWidth, windowHeight }), clearValues);
-
-        command->setPipeline(mGraphicsPipeline);
-
-        command->setBindGroup(mBindGroup.get(), { mNow * static_cast<uint32_t>(mSceneBuffer->getBlockSize()) });
-        for (auto& mesh : mMeshInstances)
-        {
-            command->bindVertexBuffer(mesh.vertexBuffer.get());
-            command->bindIndexBuffer(mesh.indexBuffer.get());
-
-            command->drawIndexed(mesh.hostMesh.indices.size(), 1, 0, 0, 1);
-        }
-
-        command->drawImGui();
-        command->endRenderPass();
-
-        // end writing commands
-        command->end();
-
-        // execute
-        command->execute(mFences[mNow], mImageAvailableSems[mNow], mRenderCompletedSems[mNow]);
-        // present swapchain(window) image
-        if (window->present(imageIndex, mRenderCompletedSems[mNow].get()))
-        {
-            onResized();
-            return;
-        }
-
-        // update frame index
-        mNow = (mNow + 1) % frameCount;
-    }
-
-    Editor::~Editor()
-    {
-        for (auto& fence : mFences)
-        {
-            fence->wait();
-        }
+        mPresentPass->recreateFrameBuffers(window.get());
     }
 
 }  // namespace palm

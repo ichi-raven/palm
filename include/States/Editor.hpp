@@ -64,6 +64,13 @@ namespace palm
             Handle<vk2s::AccelerationStructure> blas;
         };
 
+        struct FrameBuffer
+        {
+            UniqueHandle<vk2s::Image> depthBuffer;
+            UniqueHandle<vk2s::Image> worldPosTex;
+            UniqueHandle<vk2s::Image> normalTex;
+        };
+
     private:
         inline static void load(std::string_view path, vk2s::Device& device, vk2s::AssetLoader& loader, std::vector<MeshInstance>& meshInstances, Handle<vk2s::Buffer>& materialUB, std::vector<Handle<vk2s::Image>>& materialTextures);
 
@@ -81,10 +88,12 @@ namespace palm
         std::vector<Handle<vk2s::Semaphore>> mRenderCompletedSems;
         std::vector<Handle<vk2s::Fence>> mFences;
 
-        UniqueHandle<vk2s::Image> mDepthBuffer;
+        FrameBuffer mFrameBuffer;
 
-        UniqueHandle<vk2s::RenderPass> mRenderpass;
+        UniqueHandle<vk2s::RenderPass> mGeometryPass;
+        UniqueHandle<vk2s::RenderPass> mPresentPass;
         UniqueHandle<vk2s::Pipeline> mGraphicsPipeline;
+        UniqueHandle<vk2s::Pipeline> mRayTracePipeline;
         UniqueHandle<vk2s::DynamicBuffer> mSceneBuffer;
         UniqueHandle<vk2s::BindGroup> mBindGroup;
 
