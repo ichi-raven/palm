@@ -9,7 +9,7 @@ precision highp int;
 #extension GL_EXT_shader_explicit_arithmetic_types : enable
 #extension GL_EXT_control_flow_attributes : enable
 
-#include "types.glsl"
+#include "../common/types.glsl"
 
 // bindings
 layout(binding=0, set=0) uniform accelerationStructureEXT TLAS;

@@ -1,4 +1,5 @@
 /*****************************************************************//**
+/*****************************************************************//**
  * @file   Editor.hpp
  * @brief  header file of editor state
  * 
@@ -71,6 +72,15 @@ namespace palm
             UniqueHandle<vk2s::Image> normalTex;
         };
 
+        struct GraphicsPipeline
+        {
+            UniqueHandle<vk2s::RenderPass> renderpass;
+            UniqueHandle<vk2s::Pipeline> pipeline;
+            UniqueHandle<vk2s::Shader> vs;
+            UniqueHandle<vk2s::Shader> fs;
+
+        };
+
     private:
         inline static void load(std::string_view path, vk2s::Device& device, vk2s::AssetLoader& loader, std::vector<MeshInstance>& meshInstances, Handle<vk2s::Buffer>& materialUB, std::vector<Handle<vk2s::Image>>& materialTextures);
 
@@ -90,15 +100,13 @@ namespace palm
 
         FrameBuffer mFrameBuffer;
 
-        UniqueHandle<vk2s::RenderPass> mGeometryPass;
-        UniqueHandle<vk2s::RenderPass> mPresentPass;
-        UniqueHandle<vk2s::Pipeline> mGraphicsPipeline;
+        GraphicsPipeline mGeometryPass;
+        GraphicsPipeline mLightingPass;
         UniqueHandle<vk2s::Pipeline> mRayTracePipeline;
         UniqueHandle<vk2s::DynamicBuffer> mSceneBuffer;
         UniqueHandle<vk2s::BindGroup> mBindGroup;
 
         std::vector<MeshInstance> mMeshInstances;
-
 
         double mLastTime = 0;
         uint32_t mNow;

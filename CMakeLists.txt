@@ -74,11 +74,9 @@ set(ASSIMP_INCLUDE_DIR ${ASSIMP_DIR}/include ${CMAKE_BINARY_DIR}/ThirdParty/vk2s
 set(EC2S_DIR ${CMAKE_SOURCE_DIR}/ThirdParty/EC2S)
 
 # GLFW
-# add_subdirectory(${GLFW_DIR})
 set(GLFW_LIB_NAME glfw3)
 
 # Assimp
-# add_subdirectory(${ASSIMP_DIR})
 set(ASSIMP_LIB_NAME assimp-vc143-mt)
 
 # vk2s

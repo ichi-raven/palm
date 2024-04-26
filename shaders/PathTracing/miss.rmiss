@@ -1,8 +1,8 @@
 #version 460
 #extension GL_EXT_ray_tracing : enable
 
-#include "types.glsl"
-#include "constants.glsl"
+#include "../common/types.glsl"
+#include "../common/constants.glsl"
 #include "bindings.glsl"
 
 layout(location = 0) rayPayloadInEXT Payload payload;
@@ -22,10 +22,10 @@ void main()
   const float phi = sgn(y) * acos(x / sqrt(x * x + y * y));
   const float theta = acos(z / length(worldRayDirection));
 
-  payload.Le = vec3(0.03);
+  payload.Le = vec3(0.1);
   payload.intersected = false;
 
   // account for infinite lights if ray has no intersection (missed)
-  //payload.Le = texture(envmap, vec2(phi / M_PI2, theta / M_PI)).xyz;
-  //payload.end = true;
+  payload.Le = texture(envmap, vec2(phi / M_PI2, theta / M_PI)).xyz;
+  payload.intersected = false;
 }

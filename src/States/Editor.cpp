@@ -185,8 +185,8 @@ namespace palm
                 ci.initialLayout = vk::ImageLayout::eUndefined;
 
                 mFrameBuffer.worldPosTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
-                mFrameBuffer.normalTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
-            
+                mFrameBuffer.normalTex   = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+
                 UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
                 cmd->begin(true);
                 cmd->transitionImageLayout(mFrameBuffer.worldPosTex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
@@ -195,7 +195,9 @@ namespace palm
                 cmd->execute();
             }
 
-            mGeometryPass = device.create<vk2s::RenderPass>({mFrameBuffer.worldPosTex, mFrameBuffer.normalTex}, mFrameBuffer.depthBuffer);
+            std::vector<Handle<vk2s::Image>> images = { mFrameBuffer.worldPosTex, mFrameBuffer.normalTex };
+
+            mGeometryPass = device.create<vk2s::RenderPass>(images, mFrameBuffer.depthBuffer);
 
             mPresentPass = device.create<vk2s::RenderPass>(window.get(), vk::AttachmentLoadOp::eClear);
 
@@ -215,10 +217,10 @@ namespace palm
             vk::PipelineColorBlendAttachmentState colorBlendAttachment(VK_FALSE);
             colorBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
 
-            vk2s::Pipeline::VkGraphicsPipelineInfo gpi{
+            vk2s::Pipeline::GraphicsPipelineInfo gpi{
                 .vs            = vertexShader,
                 .fs            = fragmentShader,
-                .bindLayout    = bindLayout,
+                .bindLayouts   = bindLayout,
                 .renderPass    = mGeometryPass,
                 .inputState    = vk::PipelineVertexInputStateCreateInfo({}, inputBinding, std::get<0>(vertexShader->getReflection())),
                 .inputAssembly = vk::PipelineInputAssemblyStateCreateInfo({}, vk::PrimitiveTopology::eTriangleList),
@@ -249,7 +251,7 @@ namespace palm
             // create bindgroup
             mBindGroup = device.create<vk2s::BindGroup>(bindLayout.get());
 
-            mBindGroup->bind(0, 0, vk::DescriptorType::eUniformBufferDynamic, mSceneBuffer.get());
+            mBindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, mSceneBuffer.get());
 
             // create commands and sync objects
 
@@ -282,7 +284,6 @@ namespace palm
         mLastTime = glfwGetTime();
         mNow      = 0;
     }
-
 
     void Editor::update()
     {
@@ -347,7 +348,7 @@ namespace palm
 
         command->setPipeline(mGraphicsPipeline);
 
-        command->setBindGroup(mBindGroup.get(), { mNow * static_cast<uint32_t>(mSceneBuffer->getBlockSize()) });
+        command->setBindGroup(0, mBindGroup.get(), { mNow * static_cast<uint32_t>(mSceneBuffer->getBlockSize()) });
         for (auto& mesh : mMeshInstances)
         {
             command->bindVertexBuffer(mesh.vertexBuffer.get());
@@ -383,7 +384,7 @@ namespace palm
         }
     }
 
-        void Editor::renderImGui()
+    void Editor::renderImGui()
     {
         auto& device = getCommonRegion()->device;
         auto& window = getCommonRegion()->window;
@@ -498,7 +499,6 @@ namespace palm
 
         ImGui::Render();
     }
-
 
     void Editor::onResized()
     {

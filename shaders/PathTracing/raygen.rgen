@@ -5,14 +5,14 @@
 #extension GL_EXT_shader_explicit_arithmetic_types : enable
 #extension GL_EXT_control_flow_attributes : enable
 
-#include "types.glsl"
-#include "constants.glsl"
-#include "bindings.glsl"
-#include "randoms.glsl"
-#include "BSDFs.glsl"
-#include "lights.glsl"
+#include "../common/types.glsl"
+#include "../common/constants.glsl"
+#include "../common/randoms.glsl"
+#include "../common/BSDFs.glsl"
+#include "../common/DisneyBSDF.glsl"
+#include "../common/lights.glsl"
 
-#include "DisneyBSDF.glsl"
+#include "bindings.glsl"
 
 layout(location = 0) rayPayloadEXT Payload payload;
 layout(location = 1) rayPayloadEXT bool shadowed;
@@ -45,7 +45,7 @@ vec3 sampleLi(const uint sampleIndex)
   const uint shadowFlags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
 
   // for debug (if true, do NEE)
-  const bool NEE = true;
+  const bool NEE = false;
 
   vec3 L = vec3(0.0);
   vec3 beta = vec3(1.0);
@@ -131,6 +131,9 @@ vec3 sampleLi(const uint sampleIndex)
 
 vec3 correct(const vec3 v)
 {
+  const float pos_infinity = uintBitsToFloat(0x7F800000);
+  const float neg_infinity = uintBitsToFloat(0xFF800000);
+
   // NaN
   if (v.x != v.x || v.y != v.y || v.z != v.z)
   {
@@ -160,6 +163,7 @@ void main()
   const ivec2 imageUV = ivec2(gl_LaunchIDEXT.xy);
 
   vec3 L = vec3(0.);
+  [[unroll]]
   for (int i = 0; i < sceneParams.spp; ++i)
   {
     L += correct(sampleLi(i + sceneParams.untilSPP));

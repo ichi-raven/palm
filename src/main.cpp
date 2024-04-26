@@ -8,6 +8,7 @@
 
 int main()
 {
+
     ec2s::Application<palm::AppState, palm::CommonRegion> app;
 
     app.mpCommonRegion->window = app.mpCommonRegion->device.create<vk2s::Window>(1200, 1000, 3, "palm window");
