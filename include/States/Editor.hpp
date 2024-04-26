@@ -65,20 +65,20 @@ namespace palm
             Handle<vk2s::AccelerationStructure> blas;
         };
 
-        struct FrameBuffer
+        struct GBuffer
         {
             UniqueHandle<vk2s::Image> depthBuffer;
             UniqueHandle<vk2s::Image> worldPosTex;
             UniqueHandle<vk2s::Image> normalTex;
         };
 
-        struct GraphicsPipeline
+        struct GraphicsPass
         {
             UniqueHandle<vk2s::RenderPass> renderpass;
             UniqueHandle<vk2s::Pipeline> pipeline;
             UniqueHandle<vk2s::Shader> vs;
             UniqueHandle<vk2s::Shader> fs;
-
+            std::vector<UniqueHandle<vk2s::BindLayout>> bindLayouts;
         };
 
     private:
@@ -98,11 +98,10 @@ namespace palm
         std::vector<Handle<vk2s::Semaphore>> mRenderCompletedSems;
         std::vector<Handle<vk2s::Fence>> mFences;
 
-        FrameBuffer mFrameBuffer;
+        GBuffer mGBuffer;
 
-        GraphicsPipeline mGeometryPass;
-        GraphicsPipeline mLightingPass;
-        UniqueHandle<vk2s::Pipeline> mRayTracePipeline;
+        GraphicsPass mGeometryPass;
+        GraphicsPass mLightingPass;
         UniqueHandle<vk2s::DynamicBuffer> mSceneBuffer;
         UniqueHandle<vk2s::BindGroup> mBindGroup;
 
