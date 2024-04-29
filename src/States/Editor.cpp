@@ -155,6 +155,39 @@ namespace palm
 
         try
         {
+            // load meshes and materials
+
+            Handle<vk2s::Buffer> materialBuffer;
+            std::vector<Handle<vk2s::Image>> materialTextures;
+            auto sampler = device.create<vk2s::Sampler>(vk::SamplerCreateInfo());
+            vk2s::AssetLoader loader;
+
+            load("../../resources/model/CornellBox/CornellBox-Sphere.obj", device, loader, mMeshInstances, materialBuffer, materialTextures);
+
+
+            // default sampler
+            mDefaultSampler = device.create<vk2s::Sampler>(vk::SamplerCreateInfo());
+
+            // create dummy image
+            {
+                const auto format   = vk::Format::eR8G8B8A8Unorm;
+                const uint32_t size = vk2s::Compiler::getSizeOfFormat(format);  // 1pixel
+
+                vk::ImageCreateInfo ci;
+                ci.arrayLayers   = 1;
+                ci.extent        = vk::Extent3D(1, 1, 1);
+                ci.format        = format;
+                ci.imageType     = vk::ImageType::e2D;
+                ci.mipLevels     = 1;
+                ci.usage         = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
+                ci.initialLayout = vk::ImageLayout::eUndefined;
+
+                mDummyImage = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+
+                uint8_t data[] = { 0, 0, 200, 0 };
+                mDummyImage->write(data, size);
+            }
+
             // create depth buffer
             {
                 const auto format   = vk::Format::eD32Sfloat;
@@ -183,35 +216,43 @@ namespace palm
                 ci.format        = format;
                 ci.imageType     = vk::ImageType::e2D;
                 ci.mipLevels     = 1;
-                ci.usage         = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eColorAttachment;
+                ci.usage         = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eColorAttachment;
                 ci.initialLayout = vk::ImageLayout::eUndefined;
 
+                mGBuffer.albedoTex   = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
                 mGBuffer.worldPosTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
                 mGBuffer.normalTex   = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
 
                 UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
                 cmd->begin(true);
+                cmd->transitionImageLayout(mGBuffer.albedoTex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
                 cmd->transitionImageLayout(mGBuffer.worldPosTex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
                 cmd->transitionImageLayout(mGBuffer.normalTex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
                 cmd->end();
                 cmd->execute();
             }
 
-            device.initImGui(frameCount, window.get(), mLightingPass.renderpass.get());
-
             // geometry pass
             {
-                std::vector<Handle<vk2s::Image>> images = { mGBuffer.worldPosTex, mGBuffer.normalTex };
+                std::vector<Handle<vk2s::Image>> images = { mGBuffer.albedoTex, mGBuffer.worldPosTex, mGBuffer.normalTex };
 
-                mGeometryPass.renderpass = device.create<vk2s::RenderPass>(images, mGBuffer.depthBuffer);
+                mGeometryPass.renderpass = device.create<vk2s::RenderPass>(images, mGBuffer.depthBuffer, vk::AttachmentLoadOp::eClear);
 
-                mGeometryPass.vs = device.create<vk2s::Shader>("../../shaders/deferred/Geometry.vert", "main");
-                mGeometryPass.fs = device.create<vk2s::Shader>("../../shaders/rasterize/Geometry.frag", "main");
+                mGeometryPass.vs = device.create<vk2s::Shader>("../../shaders/raster/geometry.vert", "main");
+                mGeometryPass.fs = device.create<vk2s::Shader>("../../shaders/raster/geometry.frag", "main");
 
-                std::array bindings = {
+                std::vector bindings0 = {
                     vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eCombinedImageSampler, std::max(1ull, materialTextures.size()), vk::ShaderStageFlagBits::eAll),
                 };
-                mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings));
+
+                std::vector bindings1 = {
+                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAll),
+                };
+
+                mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
+                mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings1));
 
                 vk::VertexInputBindingDescription inputBinding(0, sizeof(vk2s::AssetLoader::Vertex));
                 const auto& inputAttributes = std::get<0>(mGeometryPass.vs->getReflection());
@@ -219,6 +260,7 @@ namespace palm
                 vk::Rect2D scissor({ 0, 0 }, window->getVkSwapchainExtent());
                 vk::PipelineColorBlendAttachmentState colorBlendAttachment(VK_FALSE);
                 colorBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
+                std::array attachments = { colorBlendAttachment, colorBlendAttachment, colorBlendAttachment };
 
                 vk2s::Pipeline::GraphicsPipelineInfo gpi{
                     .vs            = mGeometryPass.vs,
@@ -231,7 +273,7 @@ namespace palm
                     .rasterizer    = vk::PipelineRasterizationStateCreateInfo({}, VK_FALSE, VK_FALSE, vk::PolygonMode::eFill, vk::CullModeFlagBits::eNone, vk::FrontFace::eClockwise, VK_FALSE, 0.0f, 0.0f, 0.0f, 1.0f),
                     .multiSampling = vk::PipelineMultisampleStateCreateInfo({}, vk::SampleCountFlagBits::e1, VK_FALSE),
                     .depthStencil  = vk::PipelineDepthStencilStateCreateInfo({}, VK_TRUE, VK_TRUE, vk::CompareOp::eLess, VK_FALSE),
-                    .colorBlending = vk::PipelineColorBlendStateCreateInfo({}, VK_FALSE, vk::LogicOp::eCopy, 1, &colorBlendAttachment),
+                    .colorBlending = vk::PipelineColorBlendStateCreateInfo({}, VK_FALSE, vk::LogicOp::eCopy, attachments),
                 };
 
                 mGeometryPass.pipeline = device.create<vk2s::Pipeline>(gpi);
@@ -239,13 +281,23 @@ namespace palm
 
             {  // lighting pass
                 mLightingPass.renderpass = device.create<vk2s::RenderPass>(window.get(), vk::AttachmentLoadOp::eClear);
-                mLightingPass.vs         = device.create<vk2s::Shader>("../../shaders/rasterize/Lighting.vert", "main");
-                mLightingPass.fs         = device.create<vk2s::Shader>("../../shaders/rasterize/Lighting.frag", "main");
+                mLightingPass.vs         = device.create<vk2s::Shader>("../../shaders/raster/lighting.vert", "main");
+                mLightingPass.fs         = device.create<vk2s::Shader>("../../shaders/raster/lighting.frag", "main");
 
-                std::array bindings = {
-                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
+                std::array bindings0 = {
+                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eAll),
                 };
-                mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings));
+
+                std::vector bindings1 = {
+                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eCombinedImageSampler, std::max(1ull, materialTextures.size()), vk::ShaderStageFlagBits::eAll),
+                };
+
+                mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
+                mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings1));
 
                 vk::VertexInputBindingDescription inputBinding(0, sizeof(vk2s::AssetLoader::Vertex));
                 const auto& inputAttributes = std::get<0>(mGeometryPass.vs->getReflection());
@@ -255,12 +307,12 @@ namespace palm
                 colorBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
 
                 vk2s::Pipeline::GraphicsPipelineInfo gpi{
-                    .vs            = mGeometryPass.vs,
-                    .fs            = mGeometryPass.fs,
-                    .bindLayouts   = mGeometryPass.bindLayouts,
-                    .renderPass    = mGeometryPass.renderpass,
-                    .inputState    = vk::PipelineVertexInputStateCreateInfo({}, inputBinding, inputAttributes),
-                    .inputAssembly = vk::PipelineInputAssemblyStateCreateInfo({}, vk::PrimitiveTopology::eTriangleList),
+                    .vs            = mLightingPass.vs,
+                    .fs            = mLightingPass.fs,
+                    .bindLayouts   = mLightingPass.bindLayouts,
+                    .renderPass    = mLightingPass.renderpass,
+                    .inputState    = vk::PipelineVertexInputStateCreateInfo(),
+                    .inputAssembly = vk::PipelineInputAssemblyStateCreateInfo({}, vk::PrimitiveTopology::eTriangleStrip),
                     .viewportState = vk::PipelineViewportStateCreateInfo({}, 1, &viewport, 1, &scissor),
                     .rasterizer    = vk::PipelineRasterizationStateCreateInfo({}, VK_FALSE, VK_FALSE, vk::PolygonMode::eFill, vk::CullModeFlagBits::eNone, vk::FrontFace::eClockwise, VK_FALSE, 0.0f, 0.0f, 0.0f, 1.0f),
                     .multiSampling = vk::PipelineMultisampleStateCreateInfo({}, vk::SampleCountFlagBits::e1, VK_FALSE),
@@ -271,14 +323,8 @@ namespace palm
                 mLightingPass.pipeline = device.create<vk2s::Pipeline>(gpi);
             }
 
-            // load meshes and materials
-
-            Handle<vk2s::Buffer> materialBuffer;
-            std::vector<Handle<vk2s::Image>> materialTextures;
-            auto sampler = device.create<vk2s::Sampler>(vk::SamplerCreateInfo());
-            vk2s::AssetLoader loader;
-
-            load("../../resources/model/CornellBox/CornellBox-Sphere.obj", device, loader, mMeshInstances, materialBuffer, materialTextures);
+            // initialize ImGui
+            device.initImGui(frameCount, window.get(), mLightingPass.renderpass.get());
 
             // uniform buffer
             {
@@ -286,10 +332,41 @@ namespace palm
                 mSceneBuffer    = device.create<vk2s::DynamicBuffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eUniformBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, frameCount);
             }
 
-            // create bindgroup
-            mBindGroup = device.create<vk2s::BindGroup>(bindLayout.get());
+            for (uint32_t i = 0; auto& mesh : mMeshInstances)
+            {
+                const auto size     = sizeof(InstanceUB) * frameCount;
+                mesh.instanceBuffer = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eUniformBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
-            mBindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, mSceneBuffer.get());
+                InstanceUB data{
+                    .model    = glm::mat4(1.0),
+                    .matIndex = i++,
+                    .padding  = { 0.0 },
+                };
+
+                mesh.instanceBuffer->write(&data, sizeof(InstanceUB));
+
+                mesh.instanceBindGroup = device.create<vk2s::BindGroup>(mGeometryPass.bindLayouts[1].get());
+                mesh.instanceBindGroup->bind(0, vk::DescriptorType::eUniformBuffer, mesh.instanceBuffer.get());
+            }
+
+            // create bindgroup
+            mSceneBindGroup = device.create<vk2s::BindGroup>(mGeometryPass.bindLayouts[0].get());
+
+            mSceneBindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, mSceneBuffer.get());
+            mSceneBindGroup->bind(1, vk::DescriptorType::eStorageBuffer, materialBuffer.get());
+            if (materialTextures.empty())
+            {
+                mSceneBindGroup->bind(2, vk::DescriptorType::eCombinedImageSampler, mDummyImage, sampler);  // dummy
+            }
+            else
+            {
+                mSceneBindGroup->bind(2, vk::DescriptorType::eCombinedImageSampler, materialTextures, sampler);
+            }
+
+            mGBuffer.bindGroup = device.create<vk2s::BindGroup>(mLightingPass.bindLayouts[0].get());
+            mGBuffer.bindGroup->bind(0, vk::DescriptorType::eCombinedImageSampler, mGBuffer.albedoTex, mDefaultSampler);
+            mGBuffer.bindGroup->bind(1, vk::DescriptorType::eCombinedImageSampler, mGBuffer.worldPosTex, mDefaultSampler);
+            mGBuffer.bindGroup->bind(2, vk::DescriptorType::eCombinedImageSampler, mGBuffer.normalTex, mDefaultSampler);
 
             // create commands and sync objects
 
@@ -326,8 +403,9 @@ namespace palm
     void Editor::update()
     {
         constexpr auto colorClearValue   = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 1.0f });
+        constexpr auto gbufferClearValue = vk::ClearValue(std::array{ 0.f, 0.f, 0.f, 1.0f });
         constexpr auto depthClearValue   = vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0));
-        constexpr std::array clearValues = { colorClearValue, depthClearValue };
+        constexpr std::array clearValues = { gbufferClearValue, gbufferClearValue, gbufferClearValue, depthClearValue };
 
         auto& device = getCommonRegion()->device;
         auto& window = getCommonRegion()->window;
@@ -360,9 +438,9 @@ namespace palm
 
         {  // write data
             SceneUB sceneUBO{
-                .model = glm::mat4(1.0),
-                .view  = mCamera.getViewMatrix(),
-                .proj  = mCamera.getProjectionMatrix(),
+                .view   = mCamera.getViewMatrix(),
+                .proj   = mCamera.getProjectionMatrix(),
+                .camPos = glm::vec4(mCamera.getPos(), 1.0),
             };
 
             mSceneBuffer->write(&sceneUBO, sizeof(SceneUB), mNow * mSceneBuffer->getBlockSize());
@@ -382,21 +460,50 @@ namespace palm
         auto& command = mCommands[mNow];
         // start writing command
         command->begin();
-        command->beginRenderPass(mGeometryPass.renderpass.get(), imageIndex, vk::Rect2D({ 0, 0 }, { windowWidth, windowHeight }), clearValues);
-
-        command->setPipeline(mGeometryPass.pipeline);
-
-        command->setBindGroup(0, mBindGroup.get(), { mNow * static_cast<uint32_t>(mSceneBuffer->getBlockSize()) });
-        for (auto& mesh : mMeshInstances)
+        // geometry pass
         {
-            command->bindVertexBuffer(mesh.vertexBuffer.get());
-            command->bindIndexBuffer(mesh.indexBuffer.get());
+            command->beginRenderPass(mGeometryPass.renderpass.get(), 0, vk::Rect2D({ 0, 0 }, { windowWidth, windowHeight }), clearValues);
 
-            command->drawIndexed(mesh.hostMesh.indices.size(), 1, 0, 0, 1);
+            command->setPipeline(mGeometryPass.pipeline);
+
+            command->setBindGroup(0, mSceneBindGroup.get(), { mNow * static_cast<uint32_t>(mSceneBuffer->getBlockSize()) });
+            for (auto& mesh : mMeshInstances)
+            {
+                command->setBindGroup(1, mesh.instanceBindGroup.get());
+                command->bindVertexBuffer(mesh.vertexBuffer.get());
+                command->bindIndexBuffer(mesh.indexBuffer.get());
+
+                command->drawIndexed(mesh.hostMesh.indices.size(), 1, 0, 0, 1);
+            }
+            command->endRenderPass();
         }
 
-        command->drawImGui();
-        command->endRenderPass();
+        // barrier
+        {
+            command->transitionImageLayout(mGBuffer.albedoTex.get(), vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+            command->transitionImageLayout(mGBuffer.worldPosTex.get(), vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+            command->transitionImageLayout(mGBuffer.normalTex.get(), vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+        }
+
+        // lighting pass
+        {
+            command->beginRenderPass(mLightingPass.renderpass.get(), imageIndex, vk::Rect2D({ 0, 0 }, { windowWidth, windowHeight }), colorClearValue);
+
+            command->setPipeline(mLightingPass.pipeline);
+            command->setBindGroup(0, mGBuffer.bindGroup.get());
+            command->setBindGroup(1, mSceneBindGroup.get(), { mNow * static_cast<uint32_t>(mSceneBuffer->getBlockSize()) });
+            command->draw(4, 1, 0, 0);
+            command->drawImGui();
+
+            command->endRenderPass();
+        }
+
+        // barrier
+        {
+            command->transitionImageLayout(mGBuffer.albedoTex.get(), vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eColorAttachmentOptimal);
+            command->transitionImageLayout(mGBuffer.worldPosTex.get(), vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eColorAttachmentOptimal);
+            command->transitionImageLayout(mGBuffer.normalTex.get(), vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eColorAttachmentOptimal);
+        }
 
         // end writing commands
         command->end();
@@ -433,8 +540,8 @@ namespace palm
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::SetNextWindowPos(ImVec2(0, 0));
-        ImGui::SetNextWindowSize(ImVec2(windowWidth, 20));  // Unityのメニューバーのサイズに合わせる
+        ImGui::SetNextWindowPos(ImVec2(0, 0));// left
+        ImGui::SetNextWindowSize(ImVec2(windowWidth, 20));  
         ImGui::Begin("MenuBar", NULL, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
         if (ImGui::BeginMenuBar())
@@ -461,8 +568,8 @@ namespace palm
         }
         ImGui::End();
 
-        ImGui::SetNextWindowPos(ImVec2(0, 20));                    // メニューバーウィンドウの高さ分下に配置
-        ImGui::SetNextWindowSize(ImVec2(80, windowHeight - 180));  // Unityのツールバーのサイズに合わせる
+        ImGui::SetNextWindowPos(ImVec2(0, 20));                    //top
+        ImGui::SetNextWindowSize(ImVec2(80, windowHeight - 180)); 
         ImGui::Begin("ToolBar", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
         ImGui::Text("Toolbar:");
@@ -476,8 +583,8 @@ namespace palm
         ImGui::End();
 
         {
-            ImGui::SetNextWindowPos(ImVec2(0, windowHeight - 180));  // 画面下部に配置
-            ImGui::SetNextWindowSize(ImVec2(windowWidth, 180));      // ファイルエクスプローラのサイズ
+            ImGui::SetNextWindowPos(ImVec2(0, windowHeight - 180));  // bottom
+            ImGui::SetNextWindowSize(ImVec2(windowWidth, 180));     
             ImGui::Begin("FileExplorer", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
             static std::filesystem::path current = std::filesystem::current_path();
@@ -514,8 +621,8 @@ namespace palm
         }
 
         {
-            ImGui::SetNextWindowPos(ImVec2(windowWidth - 320, 20));     // 右側に配置
-            ImGui::SetNextWindowSize(ImVec2(320, windowHeight - 180));  // シーンエディタのサイズ
+            ImGui::SetNextWindowPos(ImVec2(windowWidth - 320, 20));     // right
+            ImGui::SetNextWindowSize(ImVec2(320, windowHeight - 180));  
             ImGui::Begin("SceneEditor", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
             ImGui::Text("Scene Editor");

@@ -25,9 +25,16 @@ namespace palm
     private:
         struct SceneUB  // std430
         {
-            glm::mat4 model;
             glm::mat4 view;
             glm::mat4 proj;
+            glm::vec4 camPos;
+        };
+
+        struct InstanceUB
+        {
+            glm::mat4 model;
+            uint32_t matIndex;
+            float padding[3];
         };
 
         enum class MaterialType : int32_t
@@ -63,13 +70,18 @@ namespace palm
             Handle<vk2s::Buffer> indexBuffer;
 
             Handle<vk2s::AccelerationStructure> blas;
+            Handle<vk2s::Buffer> instanceBuffer;
+            Handle<vk2s::BindGroup> instanceBindGroup;
         };
 
         struct GBuffer
         {
             UniqueHandle<vk2s::Image> depthBuffer;
+            UniqueHandle<vk2s::Image> albedoTex;
             UniqueHandle<vk2s::Image> worldPosTex;
             UniqueHandle<vk2s::Image> normalTex;
+
+            UniqueHandle<vk2s::BindGroup> bindGroup;
         };
 
         struct GraphicsPass
@@ -78,7 +90,7 @@ namespace palm
             UniqueHandle<vk2s::Pipeline> pipeline;
             UniqueHandle<vk2s::Shader> vs;
             UniqueHandle<vk2s::Shader> fs;
-            std::vector<UniqueHandle<vk2s::BindLayout>> bindLayouts;
+            std::vector<Handle<vk2s::BindLayout>> bindLayouts;
         };
 
     private:
@@ -103,8 +115,11 @@ namespace palm
         GraphicsPass mGeometryPass;
         GraphicsPass mLightingPass;
 
+        UniqueHandle<vk2s::Image> mDummyImage;
+        UniqueHandle<vk2s::Sampler> mDefaultSampler;
+
         UniqueHandle<vk2s::DynamicBuffer> mSceneBuffer;
-        UniqueHandle<vk2s::BindGroup> mBindGroup;
+        UniqueHandle<vk2s::BindGroup> mSceneBindGroup;
 
         std::vector<MeshInstance> mMeshInstances;
 

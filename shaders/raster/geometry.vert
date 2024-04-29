@@ -27,6 +27,6 @@ void main()
     vec4 worldPos = instanceUB.model * vec4(inPosition, 1.0);
     gl_Position = sceneUB.proj * sceneUB.view * worldPos;
     fragPos = worldPos.xyz;
-    fragNormal = (inverse(transpose(instanceUB.model)) * vec4(inNormal, 1.0)).xyz;
+    fragNormal = (transpose(inverse(instanceUB.model)) * vec4(inNormal, 1.0)).xyz;
     fragTexCoord = inTexCoord;
 }
