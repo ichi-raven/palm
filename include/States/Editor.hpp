@@ -102,6 +102,7 @@ namespace palm
 
         GraphicsPass mGeometryPass;
         GraphicsPass mLightingPass;
+
         UniqueHandle<vk2s::DynamicBuffer> mSceneBuffer;
         UniqueHandle<vk2s::BindGroup> mBindGroup;
 

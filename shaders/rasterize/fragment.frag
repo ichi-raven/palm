@@ -18,7 +18,6 @@ layout(binding = 0, set = 0) uniform SceneUB {
     vec4 camPos;
 } sceneUB;
 
-
 layout(binding = 0, set = 1) uniform InstanceUB {
     mat4 model;
     uint matIndex;
@@ -31,7 +30,6 @@ layout(binding=2, set=0) uniform sampler2D texSamplers[];
 void main()
 {
     Material material = materials[instanceUB.matIndex];
-
 
     DisneyMaterial disneyMat;
     disneyMat.baseColor = material.albedo.xyz;
