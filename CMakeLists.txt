@@ -68,10 +68,13 @@ set(STB_DIR   ${VK2S_DIR}/ThirdParty/stb)
 set(GLM_DIR   ${VK2S_DIR}/ThirdParty/glm)
 set(IMGUI_DIR ${VK2S_DIR}/ThirdParty/imgui)
 set(IMGUI_BACKEND_DIR ${VK2S_DIR}/ThirdParty/imgui/backends)
+set(IMGUIZMO_DIR ${CMAKE_SOURCE_DIR}/ThirdParty/ImGuizmo)
 set(SPIRV_REFLECT_DIR ${VK2S_DIR}/ThirdParty/SPIRV-Reflect)
 set(ASSIMP_DIR ${VK2S_DIR}/ThirdParty/Assimp)
 set(ASSIMP_INCLUDE_DIR ${ASSIMP_DIR}/include ${CMAKE_BINARY_DIR}/ThirdParty/vk2s/ThirdParty/Assimp/include)
 set(EC2S_DIR ${CMAKE_SOURCE_DIR}/ThirdParty/EC2S)
+set(SLANG_DIR ${VK2S_DIR}/ThirdParty/slang)
+set(SLANG_LIB_NAME slang)
 
 # GLFW
 set(GLFW_LIB_NAME glfw3)

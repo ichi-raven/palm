@@ -32,11 +32,12 @@ inline vk::TransformMatrixKHR convert(const glm::mat4x3& m)
 
 namespace palm
 {
-    inline void Editor::load(std::string_view path, vk2s::Device& device, vk2s::AssetLoader& loader, std::vector<MeshInstance>& meshInstances, Handle<vk2s::Buffer>& materialUB, std::vector<Handle<vk2s::Image>>& materialTextures)
+    inline void Editor::load(std::string_view path, vk2s::Device& device, std::vector<MeshInstance>& meshInstances, Handle<vk2s::Buffer>& materialUB, std::vector<Handle<vk2s::Image>>& materialTextures)
     {
-        std::vector<vk2s::AssetLoader::Mesh> hostMeshes;
-        std::vector<vk2s::AssetLoader::Material> hostMaterials;
-        loader.load(path.data(), hostMeshes, hostMaterials);
+        vk2s::Scene scene(path);
+
+        const std::vector<vk2s::Mesh>& hostMeshes = scene.getMeshes();
+        const std::vector<vk2s::Material>& hostMaterials = scene.getMaterials();
 
         meshInstances.resize(hostMeshes.size());
         for (size_t i = 0; i < meshInstances.size(); ++i)
@@ -46,7 +47,7 @@ namespace palm
             const auto& hostMesh = meshInstances[i].hostMesh;
 
             {  // vertex buffer
-                const auto vbSize  = hostMesh.vertices.size() * sizeof(vk2s::AssetLoader::Vertex);
+                const auto vbSize  = hostMesh.vertices.size() * sizeof(vk2s::Vertex);
                 const auto vbUsage = vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR | vk::BufferUsageFlagBits::eShaderDeviceAddress | vk::BufferUsageFlagBits::eStorageBuffer;
                 vk::BufferCreateInfo ci({}, vbSize, vbUsage);
                 vk::MemoryPropertyFlags fb = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
@@ -68,80 +69,14 @@ namespace palm
             }
         }
 
-        // materials
-        constexpr double threshold = 1.5;
-        std::vector<MaterialUB> materialData;
-        materialData.reserve(hostMaterials.size());
-        for (const auto& hostMat : hostMaterials)
+        // materials        
         {
-            auto& mat        = materialData.emplace_back();
-            mat.materialType = static_cast<uint32_t>(MaterialType::eLambert);  // default
-            mat.emissive     = glm::vec4(0.);
-            mat.IOR          = 1.0;
-
-            if (std::holds_alternative<glm::vec4>(hostMat.diffuse))
-            {
-                mat.albedo   = std::get<glm::vec4>(hostMat.diffuse);
-                mat.texIndex = -1;
-            }
-            else
-            {
-                mat.albedo   = glm::vec4(0.3f, 0.3f, 0.3f, 1.f);  // DEBUG COLOR
-                mat.texIndex = materialTextures.size();
-
-                auto& texture           = materialTextures.emplace_back();
-                const auto& hostTexture = std::get<vk2s::AssetLoader::Texture>(hostMat.diffuse);
-                const auto width        = hostTexture.width;
-                const auto height       = hostTexture.height;
-                const auto size         = width * height * static_cast<uint32_t>(STBI_rgb_alpha);
-
-                vk::ImageCreateInfo ci;
-                ci.arrayLayers   = 1;
-                ci.extent        = vk::Extent3D(width, height, 1);
-                ci.format        = vk::Format::eR8G8B8A8Srgb;
-                ci.imageType     = vk::ImageType::e2D;
-                ci.mipLevels     = 1;
-                ci.usage         = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
-                ci.initialLayout = vk::ImageLayout::eUndefined;
-
-                texture = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
-
-                texture->write(hostTexture.pData, size);
-            }
-
-            if (hostMat.specular && hostMat.shininess && glm::length(*hostMat.specular) > threshold)
-            {
-                //mat.materialType = static_cast<uint32_t>(MaterialType::eLambert);  // default
-                //mat.albedo       = glm::vec4(1.f);  // DEBUG COLOR
-
-                mat.materialType = static_cast<uint32_t>(MaterialType::eConductor);
-                mat.albedo       = *hostMat.specular;
-                mat.alpha        = 1. - *hostMat.shininess / 1024.;
-            }
-
-            if (hostMat.IOR && *hostMat.IOR > 1.1)
-            {
-                //mat.materialType = static_cast<uint32_t>(MaterialType::eLambert);  // default
-                //mat.albedo       = glm::vec4(1.f);  // DEBUG COLOR
-
-                mat.materialType = static_cast<uint32_t>(MaterialType::eDielectric);
-                mat.albedo       = glm::vec4(1.0);
-                mat.IOR          = *hostMat.IOR;
-            }
-
-            if (hostMat.emissive && glm::length(*hostMat.emissive) > threshold)
-            {
-                mat.emissive = *hostMat.emissive;
-            }
-        }
-
-        {
-            const auto ubSize = sizeof(MaterialUB) * materialData.size();
+            const auto ubSize = sizeof(vk2s::Material) * hostMaterials.size();
             vk::BufferCreateInfo ci({}, ubSize, vk::BufferUsageFlagBits::eStorageBuffer);
             vk::MemoryPropertyFlags fb = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
 
             materialUB = device.create<vk2s::Buffer>(ci, fb);
-            materialUB->write(materialData.data(), ubSize);
+            materialUB->write(hostMaterials.data(), ubSize);
         }
     }
 
@@ -160,9 +95,8 @@ namespace palm
             Handle<vk2s::Buffer> materialBuffer;
             std::vector<Handle<vk2s::Image>> materialTextures;
             auto sampler = device.create<vk2s::Sampler>(vk::SamplerCreateInfo());
-            vk2s::AssetLoader loader;
 
-            load("../../resources/model/CornellBox/CornellBox-Sphere.obj", device, loader, mMeshInstances, materialBuffer, materialTextures);
+            load("../../resources/model/CornellBox/CornellBox-Sphere.obj", device, mMeshInstances, materialBuffer, materialTextures);
 
 
             // default sampler
@@ -254,7 +188,7 @@ namespace palm
                 mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
                 mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings1));
 
-                vk::VertexInputBindingDescription inputBinding(0, sizeof(vk2s::AssetLoader::Vertex));
+                vk::VertexInputBindingDescription inputBinding(0, sizeof(vk2s::Vertex));
                 const auto& inputAttributes = std::get<0>(mGeometryPass.vs->getReflection());
                 vk::Viewport viewport(0.f, 0.f, static_cast<float>(windowWidth), static_cast<float>(windowHeight), 0.f, 1.f);
                 vk::Rect2D scissor({ 0, 0 }, window->getVkSwapchainExtent());
@@ -299,7 +233,7 @@ namespace palm
                 mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
                 mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings1));
 
-                vk::VertexInputBindingDescription inputBinding(0, sizeof(vk2s::AssetLoader::Vertex));
+                vk::VertexInputBindingDescription inputBinding(0, sizeof(vk2s::Vertex));
                 const auto& inputAttributes = std::get<0>(mGeometryPass.vs->getReflection());
                 vk::Viewport viewport(0.f, 0.f, static_cast<float>(windowWidth), static_cast<float>(windowHeight), 0.f, 1.f);
                 vk::Rect2D scissor({ 0, 0 }, window->getVkSwapchainExtent());

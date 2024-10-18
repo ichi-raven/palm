@@ -60,7 +60,6 @@ namespace vkpt
 
         Handle<vk2s::DynamicBuffer> mSampleBuffer;
 
-
         Handle<vk2s::BindLayout> mBindLayout;
         Handle<vk2s::BindGroup> mBindGroup;
 

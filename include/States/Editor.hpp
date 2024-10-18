@@ -12,7 +12,7 @@
 #include <EC2S.hpp>
 #include <vk2s/Device.hpp>
 #include <vk2s/Camera.hpp>
-#include <vk2s/AssetLoader.hpp>
+#include <vk2s/Scene.hpp>
 
 #include "../include/AppStates.hpp"
 
@@ -65,7 +65,7 @@ namespace palm
 
         struct MeshInstance
         {
-            vk2s::AssetLoader::Mesh hostMesh;
+            vk2s::Mesh hostMesh;
             Handle<vk2s::Buffer> vertexBuffer;
             Handle<vk2s::Buffer> indexBuffer;
 
@@ -94,7 +94,7 @@ namespace palm
         };
 
     private:
-        inline static void load(std::string_view path, vk2s::Device& device, vk2s::AssetLoader& loader, std::vector<MeshInstance>& meshInstances, Handle<vk2s::Buffer>& materialUB, std::vector<Handle<vk2s::Image>>& materialTextures);
+        inline static void load(std::string_view path, vk2s::Device& device, std::vector<MeshInstance>& meshInstances, Handle<vk2s::Buffer>& materialUB, std::vector<Handle<vk2s::Image>>& materialTextures);
 
         void initVulkan();
 

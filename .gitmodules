@@ -4,3 +4,6 @@
 [submodule "ThirdParty/EC2S"]
 	path = ThirdParty/EC2S
 	url = git@github.com:ichi-raven/EC2S.git
+[submodule "ThirdParty/ImGuizmo"]
+	path = ThirdParty/ImGuizmo
+	url = git@github.com:CedricGuillemet/ImGuizmo.git
