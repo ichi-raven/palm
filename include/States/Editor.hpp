@@ -16,6 +16,8 @@
 
 #include "../include/AppStates.hpp"
 
+#include <filesystem>
+
 namespace palm
 {
     class Editor : public ec2s::State<palm::AppState, palm::CommonRegion>
@@ -23,10 +25,12 @@ namespace palm
         GEN_STATE(Editor, palm::AppState, palm::CommonRegion);
 
     private:
-        struct SceneUB  // std430
+        struct SceneParams  // std430
         {
             glm::mat4 view;
             glm::mat4 proj;
+            glm::mat4 viewInv;
+            glm::mat4 projInv;
             glm::vec4 camPos;
         };
 
@@ -37,24 +41,6 @@ namespace palm
             float padding[3];
         };
 
-        enum class MaterialType : int32_t
-        {
-            eLambert    = 0,
-            eConductor  = 1,
-            eDielectric = 2,
-            eMaterialNum
-        };
-
-        struct MaterialUB  // std430
-        {
-            glm::vec4 albedo;
-            glm::vec4 emissive;
-            int32_t texIndex;
-            int32_t materialType;
-            float alpha;
-            float IOR;
-        };
-
         struct InstanceMappingUB  // std430
         {
             uint64_t VBAddress;
@@ -63,7 +49,7 @@ namespace palm
             uint32_t padding[3];
         };
 
-        struct MeshInstance
+        struct Mesh
         {
             vk2s::Mesh hostMesh;
             Handle<vk2s::Buffer> vertexBuffer;
@@ -71,7 +57,61 @@ namespace palm
 
             Handle<vk2s::AccelerationStructure> blas;
             Handle<vk2s::Buffer> instanceBuffer;
-            Handle<vk2s::BindGroup> instanceBindGroup;
+        };
+
+        struct Material
+        {
+            enum class Type : int32_t
+            {
+                eLambert    = 0,
+                eConductor  = 1,
+                eDielectric = 2,
+                eMaterialNum
+            };
+
+            struct Params  // std430
+            {
+                glm::vec4 albedo;
+                glm::vec4 emissive;
+                int32_t texIndex;
+                int32_t materialType;
+                float alpha;
+                float IOR;
+            };
+
+            vk2s::Material materialParam;
+            Handle<vk2s::Buffer> uniformBuffer;
+            
+            constexpr static uint32_t kDefaultTexNum = 4;
+            Handle<vk2s::Image> albedoTex;
+            Handle<vk2s::Image> roughnessTex;
+            Handle<vk2s::Image> metalnessTex;
+            Handle<vk2s::Image> normalMapTex;
+
+            Handle<vk2s::BindGroup> bindGroup;
+
+        };
+
+        struct EntityInfo
+        {
+            std::string groupName;
+            std::string entityName;
+            ec2s::Entity entityID;
+        };
+
+        struct Transform
+        {
+            struct Params
+            {
+                glm::mat4 model;
+                glm::mat4 modelInvTranspose;
+                glm::vec3 vel;
+                float padding;
+            };
+
+            Params params;
+            Handle<vk2s::DynamicBuffer> entityBuffer;
+            Handle<vk2s::BindGroup> bindGroup;
         };
 
         struct GBuffer
@@ -94,13 +134,19 @@ namespace palm
         };
 
     private:
-        inline static void load(std::string_view path, vk2s::Device& device, std::vector<MeshInstance>& meshInstances, Handle<vk2s::Buffer>& materialUB, std::vector<Handle<vk2s::Image>>& materialTextures);
+        //inline static void load(std::string_view path, vk2s::Device& device, std::vector<MeshInstance>& meshInstances, Handle<vk2s::Buffer>& materialUB, std::vector<Handle<vk2s::Image>>& materialTextures);
 
         void initVulkan();
 
-        void renderImGui();
+        void updateAndRenderImGui(const double deltaTime);
+
+        void updateShaderResources();
 
         void onResized();
+
+        void addEntity(const std::filesystem::path& path);
+
+        void removeEntity(ec2s::Entity entity);
 
     private:
         vk2s::Camera mCamera;
@@ -121,10 +167,11 @@ namespace palm
         UniqueHandle<vk2s::DynamicBuffer> mSceneBuffer;
         UniqueHandle<vk2s::BindGroup> mSceneBindGroup;
 
-        std::vector<MeshInstance> mMeshInstances;
+        std::vector<ec2s::Entity> mActiveEntities;
 
         double mLastTime = 0;
         uint32_t mNow;
+        uint32_t mFrameCount;
     };
 
 }  // namespace palm

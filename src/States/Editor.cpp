@@ -32,19 +32,76 @@ inline vk::TransformMatrixKHR convert(const glm::mat4x3& m)
 
 namespace palm
 {
-    inline void Editor::load(std::string_view path, vk2s::Device& device, std::vector<MeshInstance>& meshInstances, Handle<vk2s::Buffer>& materialUB, std::vector<Handle<vk2s::Image>>& materialTextures)
+    //inline void Editor::load(std::string_view path, vk2s::Device& device, std::vector<MeshInstance>& meshInstances, Handle<vk2s::Buffer>& materialUB, std::vector<Handle<vk2s::Image>>& materialTextures)
+    //{
+    //    vk2s::Scene scene(path);
+
+    //    const std::vector<vk2s::Mesh>& hostMeshes        = scene.getMeshes();
+    //    const std::vector<vk2s::Material>& hostMaterials = scene.getMaterials();
+
+    //    meshInstances.resize(hostMeshes.size());
+    //    for (size_t i = 0; i < meshInstances.size(); ++i)
+    //    {
+    //        auto& mesh           = meshInstances[i];
+    //        mesh.hostMesh        = std::move(hostMeshes[i]);
+    //        const auto& hostMesh = meshInstances[i].hostMesh;
+
+    //        {  // vertex buffer
+    //            const auto vbSize  = hostMesh.vertices.size() * sizeof(vk2s::Vertex);
+    //            const auto vbUsage = vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR | vk::BufferUsageFlagBits::eShaderDeviceAddress | vk::BufferUsageFlagBits::eStorageBuffer;
+    //            vk::BufferCreateInfo ci({}, vbSize, vbUsage);
+    //            vk::MemoryPropertyFlags fb = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
+
+    //            mesh.vertexBuffer = device.create<vk2s::Buffer>(ci, fb);
+    //            mesh.vertexBuffer->write(hostMesh.vertices.data(), vbSize);
+    //        }
+
+    //        {  // index buffer
+
+    //            const auto ibSize  = hostMesh.indices.size() * sizeof(uint32_t);
+    //            const auto ibUsage = vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR | vk::BufferUsageFlagBits::eShaderDeviceAddress | vk::BufferUsageFlagBits::eStorageBuffer;
+
+    //            vk::BufferCreateInfo ci({}, ibSize, ibUsage);
+    //            vk::MemoryPropertyFlags fb = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
+
+    //            mesh.indexBuffer = device.create<vk2s::Buffer>(ci, fb);
+    //            mesh.indexBuffer->write(hostMesh.indices.data(), ibSize);
+    //        }
+    //    }
+
+    //    // materials
+    //    {
+    //        const auto ubSize = sizeof(vk2s::Material) * hostMaterials.size();
+    //        vk::BufferCreateInfo ci({}, ubSize, vk::BufferUsageFlagBits::eStorageBuffer);
+    //        vk::MemoryPropertyFlags fb = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
+
+    //        materialUB = device.create<vk2s::Buffer>(ci, fb);
+    //        materialUB->write(hostMaterials.data(), ubSize);
+    //    }
+    //}
+
+    void Editor::addEntity(const std::filesystem::path& path)
     {
-        vk2s::Scene scene(path);
+        auto& device = common()->device;
+        auto& window = getCommonRegion()->window;
+        auto& scene  = common()->scene;
 
-        const std::vector<vk2s::Mesh>& hostMeshes = scene.getMeshes();
-        const std::vector<vk2s::Material>& hostMaterials = scene.getMaterials();
+        vk2s::Scene model(path.string());
 
-        meshInstances.resize(hostMeshes.size());
-        for (size_t i = 0; i < meshInstances.size(); ++i)
+        const std::vector<vk2s::Mesh>& hostMeshes        = model.getMeshes();
+        const std::vector<vk2s::Material>& hostMaterials = model.getMaterials();
+
+        assert(hostMaterials.size() == hostMeshes.size() || !"The number of mesh is different from the number of material!");
+
+        for (size_t i = 0; i < hostMeshes.size(); ++i)
         {
-            auto& mesh           = meshInstances[i];
-            mesh.hostMesh        = std::move(hostMeshes[i]);
-            const auto& hostMesh = meshInstances[i].hostMesh;
+            const auto& entity   = mActiveEntities.emplace_back(scene.create<Mesh, Material, EntityInfo, Transform>());
+            auto& mesh           = scene.get<Mesh>(entity);
+            auto& material       = scene.get<Material>(entity);
+            auto& info           = scene.get<EntityInfo>(entity);
+            auto& transform      = scene.get<Transform>(entity);
+            mesh.hostMesh        = hostMeshes[i];
+            const auto& hostMesh = mesh.hostMesh;
 
             {  // vertex buffer
                 const auto vbSize  = hostMesh.vertices.size() * sizeof(vk2s::Vertex);
@@ -67,16 +124,49 @@ namespace palm
                 mesh.indexBuffer = device.create<vk2s::Buffer>(ci, fb);
                 mesh.indexBuffer->write(hostMesh.indices.data(), ibSize);
             }
-        }
 
-        // materials        
-        {
-            const auto ubSize = sizeof(vk2s::Material) * hostMaterials.size();
-            vk::BufferCreateInfo ci({}, ubSize, vk::BufferUsageFlagBits::eStorageBuffer);
-            vk::MemoryPropertyFlags fb = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
+            // materials
+            {
+                const auto ubSize = sizeof(vk2s::Material) * hostMaterials.size();
+                vk::BufferCreateInfo ci({}, ubSize, vk::BufferUsageFlagBits::eStorageBuffer);
+                vk::MemoryPropertyFlags fb = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
 
-            materialUB = device.create<vk2s::Buffer>(ci, fb);
-            materialUB->write(hostMaterials.data(), ubSize);
+                material.uniformBuffer = device.create<vk2s::Buffer>(ci, fb);
+                material.uniformBuffer->write(hostMaterials.data(), ubSize);
+            }
+
+            // information
+            {
+                info.entityName = std::to_string(i);
+                info.entityID   = entity;
+
+                info.groupName       = path.filename().string();
+                const size_t dot_pos = info.groupName.find_last_of('.');
+                if (dot_pos != std::string_view::npos)
+                {
+                    info.groupName = info.groupName.substr(0, dot_pos);
+                }
+            }
+
+            // transform
+            {
+                transform.params.model             = glm::identity<glm::mat4>();
+                transform.params.modelInvTranspose = glm::transpose(glm::inverse(transform.params.model));
+                transform.params.vel               = glm::vec3(0.f);
+                transform.params.padding           = { 0.f };
+
+                const auto frameCount = window->getFrameCount();
+                const auto size       = sizeof(Transform::Params) * frameCount;
+                transform.entityBuffer =
+                    device.create<vk2s::DynamicBuffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eUniformBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, frameCount);
+                for (int i = 0; i < frameCount; ++i)
+                {
+                    transform.entityBuffer->write(&transform.params, sizeof(Transform::Params), i * transform.entityBuffer->getBlockSize());
+                }
+
+                transform.bindGroup = device.create<vk2s::BindGroup>(mGeometryPass.bindLayouts[1].get());
+                transform.bindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, transform.entityBuffer.get());
+            }
         }
     }
 
@@ -92,12 +182,7 @@ namespace palm
         {
             // load meshes and materials
 
-            Handle<vk2s::Buffer> materialBuffer;
-            std::vector<Handle<vk2s::Image>> materialTextures;
             auto sampler = device.create<vk2s::Sampler>(vk::SamplerCreateInfo());
-
-            load("../../resources/model/CornellBox/CornellBox-Sphere.obj", device, mMeshInstances, materialBuffer, materialTextures);
-
 
             // default sampler
             mDefaultSampler = device.create<vk2s::Sampler>(vk::SamplerCreateInfo());
@@ -172,17 +257,18 @@ namespace palm
 
                 mGeometryPass.renderpass = device.create<vk2s::RenderPass>(images, mGBuffer.depthBuffer, vk::AttachmentLoadOp::eClear);
 
-                mGeometryPass.vs = device.create<vk2s::Shader>("../../shaders/raster/geometry.vert", "main");
-                mGeometryPass.fs = device.create<vk2s::Shader>("../../shaders/raster/geometry.frag", "main");
+                mGeometryPass.vs = device.create<vk2s::Shader>("../../shaders/Slang/rasterize/Geometry.slang", "vsmain");
+                mGeometryPass.fs = device.create<vk2s::Shader>("../../shaders/Slang/rasterize/Geometry.slang", "fsmain");
 
                 std::vector bindings0 = {
+                    // Scene MVP information
+                    // VP
                     vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
-                    vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
-                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eCombinedImageSampler, std::max(1ull, materialTextures.size()), vk::ShaderStageFlagBits::eAll),
                 };
 
                 std::vector bindings1 = {
-                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAll),
+                    // Entity information
+                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
                 };
 
                 mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
@@ -215,23 +301,24 @@ namespace palm
 
             {  // lighting pass
                 mLightingPass.renderpass = device.create<vk2s::RenderPass>(window.get(), vk::AttachmentLoadOp::eClear);
-                mLightingPass.vs         = device.create<vk2s::Shader>("../../shaders/raster/lighting.vert", "main");
-                mLightingPass.fs         = device.create<vk2s::Shader>("../../shaders/raster/lighting.frag", "main");
+                mLightingPass.vs         = device.create<vk2s::Shader>("../../shaders/Slang/rasterize/Lighting.slang", "vsmain");
+                mLightingPass.fs         = device.create<vk2s::Shader>("../../shaders/Slang/rasterize/Lighting.slang", "fsmain");
 
                 std::array bindings0 = {
-                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eAll),
-                    vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eAll),
-                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eAll),
                 };
 
-                std::vector bindings1 = {
-                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
-                    vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
-                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eCombinedImageSampler, std::max(1ull, materialTextures.size()), vk::ShaderStageFlagBits::eAll),
-                };
+                //std::vector bindings1 = {
+                //    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
+                //    vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
+                //    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eCombinedImageSampler, Material::kDefaultTexNum, vk::ShaderStageFlagBits::eAll),
+                //};
 
                 mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
-                mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings1));
+                //mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings1));
 
                 vk::VertexInputBindingDescription inputBinding(0, sizeof(vk2s::Vertex));
                 const auto& inputAttributes = std::get<0>(mGeometryPass.vs->getReflection());
@@ -262,45 +349,20 @@ namespace palm
 
             // uniform buffer
             {
-                const auto size = sizeof(SceneUB) * frameCount;
+                const auto size = sizeof(SceneParams) * frameCount;
                 mSceneBuffer    = device.create<vk2s::DynamicBuffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eUniformBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, frameCount);
-            }
-
-            for (uint32_t i = 0; auto& mesh : mMeshInstances)
-            {
-                const auto size     = sizeof(InstanceUB) * frameCount;
-                mesh.instanceBuffer = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eUniformBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-
-                InstanceUB data{
-                    .model    = glm::mat4(1.0),
-                    .matIndex = i++,
-                    .padding  = { 0.0 },
-                };
-
-                mesh.instanceBuffer->write(&data, sizeof(InstanceUB));
-
-                mesh.instanceBindGroup = device.create<vk2s::BindGroup>(mGeometryPass.bindLayouts[1].get());
-                mesh.instanceBindGroup->bind(0, vk::DescriptorType::eUniformBuffer, mesh.instanceBuffer.get());
             }
 
             // create bindgroup
             mSceneBindGroup = device.create<vk2s::BindGroup>(mGeometryPass.bindLayouts[0].get());
 
             mSceneBindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, mSceneBuffer.get());
-            mSceneBindGroup->bind(1, vk::DescriptorType::eStorageBuffer, materialBuffer.get());
-            if (materialTextures.empty())
-            {
-                mSceneBindGroup->bind(2, vk::DescriptorType::eCombinedImageSampler, mDummyImage, sampler);  // dummy
-            }
-            else
-            {
-                mSceneBindGroup->bind(2, vk::DescriptorType::eCombinedImageSampler, materialTextures, sampler);
-            }
 
             mGBuffer.bindGroup = device.create<vk2s::BindGroup>(mLightingPass.bindLayouts[0].get());
-            mGBuffer.bindGroup->bind(0, vk::DescriptorType::eCombinedImageSampler, mGBuffer.albedoTex, mDefaultSampler);
-            mGBuffer.bindGroup->bind(1, vk::DescriptorType::eCombinedImageSampler, mGBuffer.worldPosTex, mDefaultSampler);
-            mGBuffer.bindGroup->bind(2, vk::DescriptorType::eCombinedImageSampler, mGBuffer.normalTex, mDefaultSampler);
+            mGBuffer.bindGroup->bind(0, vk::DescriptorType::eSampledImage, mGBuffer.albedoTex);
+            mGBuffer.bindGroup->bind(1, vk::DescriptorType::eSampledImage, mGBuffer.worldPosTex);
+            mGBuffer.bindGroup->bind(2, vk::DescriptorType::eSampledImage, mGBuffer.normalTex);
+            mGBuffer.bindGroup->bind(3, mDefaultSampler.get());
 
             // create commands and sync objects
 
@@ -337,12 +399,13 @@ namespace palm
     void Editor::update()
     {
         constexpr auto colorClearValue   = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 1.0f });
-        constexpr auto gbufferClearValue = vk::ClearValue(std::array{ 0.f, 0.f, 0.f, 1.0f });
+        constexpr auto gbufferClearValue = vk::ClearValue(std::array{ 0.1f, 0.1f, 0.1f, 1.0f });
         constexpr auto depthClearValue   = vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0));
         constexpr std::array clearValues = { gbufferClearValue, gbufferClearValue, gbufferClearValue, depthClearValue };
 
-        auto& device = getCommonRegion()->device;
-        auto& window = getCommonRegion()->window;
+        auto& device = common()->device;
+        auto& window = common()->window;
+        auto& scene  = common()->scene;
 
         const auto [windowWidth, windowHeight] = window->getWindowSize();
         const auto frameCount                  = window->getFrameCount();
@@ -364,21 +427,14 @@ namespace palm
         const double mouseSpeed = 0.7f * deltaTime;
         mCamera.update(window->getpGLFWWindow(), speed, mouseSpeed);
 
-        // ImGui
-        renderImGui();
-
         // wait and reset fence
         mFences[mNow]->wait();
 
-        {  // write data
-            SceneUB sceneUBO{
-                .view   = mCamera.getViewMatrix(),
-                .proj   = mCamera.getProjectionMatrix(),
-                .camPos = glm::vec4(mCamera.getPos(), 1.0),
-            };
+        // ImGui
+        updateAndRenderImGui(deltaTime);
 
-            mSceneBuffer->write(&sceneUBO, sizeof(SceneUB), mNow * mSceneBuffer->getBlockSize());
-        }
+        // update shader resource buffers
+        updateShaderResources();
 
         // acquire next image from swapchain(window)
         const auto [imageIndex, resized] = window->acquireNextImage(mImageAvailableSems[mNow].get());
@@ -401,14 +457,17 @@ namespace palm
             command->setPipeline(mGeometryPass.pipeline);
 
             command->setBindGroup(0, mSceneBindGroup.get(), { mNow * static_cast<uint32_t>(mSceneBuffer->getBlockSize()) });
-            for (auto& mesh : mMeshInstances)
-            {
-                command->setBindGroup(1, mesh.instanceBindGroup.get());
-                command->bindVertexBuffer(mesh.vertexBuffer.get());
-                command->bindIndexBuffer(mesh.indexBuffer.get());
+            // draw call
+            scene.each<Mesh, Material, Transform>(
+                [&](Mesh& mesh, Material& material, Transform& transform)
+                {
+                    command->setBindGroup(1, transform.bindGroup.get(), { mNow * static_cast<uint32_t>(transform.entityBuffer->getBlockSize()) });
+                    command->bindVertexBuffer(mesh.vertexBuffer.get());
+                    command->bindIndexBuffer(mesh.indexBuffer.get());
 
-                command->drawIndexed(mesh.hostMesh.indices.size(), 1, 0, 0, 1);
-            }
+                    command->drawIndexed(mesh.hostMesh.indices.size(), 1, 0, 0, 1);
+                });
+
             command->endRenderPass();
         }
 
@@ -425,7 +484,7 @@ namespace palm
 
             command->setPipeline(mLightingPass.pipeline);
             command->setBindGroup(0, mGBuffer.bindGroup.get());
-            command->setBindGroup(1, mSceneBindGroup.get(), { mNow * static_cast<uint32_t>(mSceneBuffer->getBlockSize()) });
+            //command->setBindGroup(1, mSceneBindGroup.get(), { mNow * static_cast<uint32_t>(mSceneBuffer->getBlockSize()) });
             command->draw(4, 1, 0, 0);
             command->drawImGui();
 
@@ -463,10 +522,31 @@ namespace palm
         }
     }
 
-    void Editor::renderImGui()
+    void Editor::updateShaderResources()
     {
-        auto& device = getCommonRegion()->device;
-        auto& window = getCommonRegion()->window;
+        {  // write data
+            //const auto& view = glm::transpose(mCamera.getViewMatrix()); // DEBUG!!
+            //const auto& proj = glm::transpose(mCamera.getProjectionMatrix()); // DEBUG!!
+            const auto& view = mCamera.getViewMatrix();        
+            const auto& proj = mCamera.getProjectionMatrix();  
+
+            SceneParams sceneParams{
+                .view    = view,
+                .proj    = proj,
+                .viewInv = glm::inverse(view),
+                .projInv = glm::inverse(proj),
+                .camPos  = glm::vec4(mCamera.getPos(), 1.0),
+            };
+
+            mSceneBuffer->write(&sceneParams, sizeof(SceneParams), mNow * mSceneBuffer->getBlockSize());
+        }
+    }
+
+    void Editor::updateAndRenderImGui(const double deltaTime)
+    {
+        auto& device = common()->device;
+        auto& window = common()->window;
+        auto& scene  = common()->scene;
 
         const auto [windowWidth, windowHeight] = window->getWindowSize();
 
@@ -474,8 +554,8 @@ namespace palm
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::SetNextWindowPos(ImVec2(0, 0));// left
-        ImGui::SetNextWindowSize(ImVec2(windowWidth, 20));  
+        ImGui::SetNextWindowPos(ImVec2(0, 0));  // left
+        ImGui::SetNextWindowSize(ImVec2(windowWidth, 15));
         ImGui::Begin("MenuBar", NULL, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
         if (ImGui::BeginMenuBar())
@@ -502,23 +582,23 @@ namespace palm
         }
         ImGui::End();
 
-        ImGui::SetNextWindowPos(ImVec2(0, 20));                    //top
-        ImGui::SetNextWindowSize(ImVec2(80, windowHeight - 180)); 
-        ImGui::Begin("ToolBar", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+        //ImGui::SetNextWindowPos(ImVec2(0, 20));  //top
+        //ImGui::SetNextWindowSize(ImVec2(80, windowHeight - 180));
+        //ImGui::Begin("ToolBar", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
-        ImGui::Text("Toolbar:");
-        if (ImGui::Button("Play"))
-        {
-        }
-        if (ImGui::Button("Stop"))
-        {
-        }
+        //ImGui::Text("Toolbar:");
+        //if (ImGui::Button("Play"))
+        //{
+        //}
+        //if (ImGui::Button("Stop"))
+        //{
+        //}
 
-        ImGui::End();
+        //ImGui::End();
 
         {
             ImGui::SetNextWindowPos(ImVec2(0, windowHeight - 180));  // bottom
-            ImGui::SetNextWindowSize(ImVec2(windowWidth, 180));     
+            ImGui::SetNextWindowSize(ImVec2(windowWidth, 180));
             ImGui::Begin("FileExplorer", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
             static std::filesystem::path current = std::filesystem::current_path();
@@ -546,7 +626,7 @@ namespace palm
                 {
                     if (ImGui::Selectable(entry.path().filename().string().c_str()))
                     {
-                        ImGui::Text(entry.path().filename().string().c_str());
+                        addEntity(entry.path());
                     }
                 }
             }
@@ -555,11 +635,25 @@ namespace palm
         }
 
         {
-            ImGui::SetNextWindowPos(ImVec2(windowWidth - 320, 20));     // right
-            ImGui::SetNextWindowSize(ImVec2(320, windowHeight - 180));  
+            ImGui::SetNextWindowPos(ImVec2(windowWidth - 320, 20));  // right
+            ImGui::SetNextWindowSize(ImVec2(320, windowHeight - 180));
             ImGui::Begin("SceneEditor", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
             ImGui::Text("Scene Editor");
+
+            scene.each<EntityInfo>(
+                [&](EntityInfo& info)
+                {
+                    std::string viewing = info.groupName + "/" + info.entityName;
+                    ImGui::Text(viewing.c_str());
+                });
+            ImGui::Text("Information");
+            ImGui::Text("device = %s", device.getPhysicalDeviceName().data());
+            ImGui::Text("fps = %lf", 1. / deltaTime);
+            const auto& pos    = mCamera.getPos();
+            const auto& lookAt = mCamera.getLookAt();
+            ImGui::Text("pos = (%lf, %lf, %lf)", pos.x, pos.y, pos.z);
+            ImGui::Text("lookat = (%lf, %lf, %lf)", lookAt.x, lookAt.y, lookAt.z);
 
             ImGui::End();
         }

@@ -22,6 +22,7 @@ namespace palm
     {
         vk2s::Device device;
         UniqueHandle<vk2s::Window> window;
+        ec2s::Registry scene;
     };
 
 }  // namespace palm
