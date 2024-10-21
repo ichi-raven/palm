@@ -550,6 +550,8 @@ namespace palm
 
         const auto [windowWidth, windowHeight] = window->getWindowSize();
 
+        constexpr auto kFontScale = 1.7f;
+
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
@@ -557,6 +559,7 @@ namespace palm
         ImGui::SetNextWindowPos(ImVec2(0, 0));  // left
         ImGui::SetNextWindowSize(ImVec2(windowWidth, 15));
         ImGui::Begin("MenuBar", NULL, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+        ImGui::SetWindowFontScale(kFontScale);
 
         if (ImGui::BeginMenuBar())
         {
@@ -600,6 +603,7 @@ namespace palm
             ImGui::SetNextWindowPos(ImVec2(0, windowHeight - 180));  // bottom
             ImGui::SetNextWindowSize(ImVec2(windowWidth, 180));
             ImGui::Begin("FileExplorer", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+            ImGui::SetWindowFontScale(kFontScale);
 
             static std::filesystem::path current = std::filesystem::current_path();
 
@@ -638,6 +642,7 @@ namespace palm
             ImGui::SetNextWindowPos(ImVec2(windowWidth - 320, 20));  // right
             ImGui::SetNextWindowSize(ImVec2(320, windowHeight - 180));
             ImGui::Begin("SceneEditor", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+            ImGui::SetWindowFontScale(kFontScale);
 
             ImGui::Text("Scene Editor");
 

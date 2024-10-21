@@ -24,6 +24,6 @@ VSOutput vsmain(uint id : SV_VertexID)
 [shader("fragment")]
 float4 fsmain(VSOutput in) : SV_Target
 {
-    float4 output = albedoTex.Sample(sampler, in.uv); // DEBUG
+    float4 output = normalTex.Sample(sampler, in.uv); // DEBUG
     return output;
 }
