@@ -96,7 +96,7 @@ namespace palm
 
         for (size_t i = 0; i < hostMeshes.size(); ++i)
         {
-            const auto& entity   = mActiveEntities.emplace_back(scene.create<Mesh, Material, EntityInfo, Transform>());
+            const auto entity    = scene.create<Mesh, Material, EntityInfo, Transform>();
             auto& mesh           = scene.get<Mesh>(entity);
             auto& material       = scene.get<Material>(entity);
             auto& info           = scene.get<EntityInfo>(entity);
@@ -168,7 +168,42 @@ namespace palm
                 transform.bindGroup = device.create<vk2s::BindGroup>(mGeometryPass.bindLayouts[1].get());
                 transform.bindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, transform.entityBuffer.get());
             }
+
+            // select added entity
+            mPickedEntity = entity;
         }
+    }
+
+    void Editor::removeEntity(const ec2s::Entity entity)
+    {
+        if (mPickedEntity && *mPickedEntity == entity)
+        {
+            mPickedEntity.reset();
+        }
+
+        auto& device = common()->device;
+        auto& scene  = common()->scene;
+
+        device.waitIdle();
+
+        auto& mesh = scene.get<Mesh>(entity);
+        device.destroy(mesh.blas);
+        device.destroy(mesh.vertexBuffer);
+        device.destroy(mesh.indexBuffer);
+        device.destroy(mesh.instanceBuffer);
+
+        auto& material = scene.get<Material>(entity);
+        device.destroy(material.uniformBuffer);
+        device.destroy(material.albedoTex);
+        device.destroy(material.normalMapTex);
+        device.destroy(material.metalnessTex);
+        device.destroy(material.roughnessTex);
+        device.destroy(material.bindGroup);
+
+        auto& transform = scene.get<Transform>(entity);
+        device.destroy(transform.entityBuffer);
+
+        scene.destroy(entity);
     }
 
     void Editor::initVulkan()
@@ -564,10 +599,9 @@ namespace palm
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
         ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, windowWidth, windowHeight);
-        
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));  // left
-        ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.015));
+        ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.03));
         ImGui::Begin("MenuBar", NULL, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
         ImGui::SetWindowFontScale(kFontScale);
 
@@ -610,8 +644,8 @@ namespace palm
         //ImGui::End();
 
         {
-            ImGui::SetNextWindowPos(ImVec2(0, windowHeight * 0.82));  // bottom
-            ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.18));
+            ImGui::SetNextWindowPos(ImVec2(0, windowHeight * 0.80));  // bottom
+            ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.20));
             ImGui::Begin("FileExplorer", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
             ImGui::SetWindowFontScale(kFontScale);
 
@@ -649,8 +683,8 @@ namespace palm
         }
 
         {
-            ImGui::SetNextWindowPos(ImVec2(windowWidth * 0.70, windowHeight * 0.02));  // right
-            ImGui::SetNextWindowSize(ImVec2(windowWidth * 0.30, windowHeight * 0.82));
+            ImGui::SetNextWindowPos(ImVec2(windowWidth * 0.70, windowHeight * 0.03));  // right
+            ImGui::SetNextWindowSize(ImVec2(windowWidth * 0.30, windowHeight * 0.77));
             ImGui::Begin("SceneEditor", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
             ImGui::SetWindowFontScale(kFontScale);
 
@@ -659,12 +693,26 @@ namespace palm
             scene.each<EntityInfo>(
                 [&](ec2s::Entity entity, EntityInfo& info)
                 {
-                    std::string viewing = info.groupName + "/" + info.entityName;
-                    if (ImGui::Selectable(viewing.c_str()))
+                    std::string viewing = info.groupName + "/" + info.entityName + " entity[" + std::to_string(entity & ec2s::kEntityIndexMask) + "]";
+                    const bool picked   = mPickedEntity && entity == *mPickedEntity;
+
+                    if (ImGui::Selectable(viewing.c_str(), picked))
                     {
                         mPickedEntity = entity;
                     }
+
+                    if (ImGui::IsItemHovered() && ImGui::IsKeyPressed(ImGuiKey_Delete, false))
+                    {
+                        removeEntity(entity);
+                    }
                 });
+
+            if (mPickedEntity && ImGui::IsKeyPressed(ImGuiKey_Delete, false))
+            {
+                removeEntity(*mPickedEntity);
+            }
+
+            ImGui::Spacing();
             ImGui::Text("Information");
             ImGui::Text("device = %s", device.getPhysicalDeviceName().data());
             ImGui::Text("fps = %lf", 1. / deltaTime);
@@ -681,8 +729,10 @@ namespace palm
 
                 static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::TRANSLATE;
                 const auto& viewMat                              = mCamera.getViewMatrix();
-                const auto& projectionMat                        = mCamera.getProjectionMatrix();
+                glm::mat4 projectionMat                          = mCamera.getProjectionMatrix();
+                projectionMat[1][1] *= -1.f;  // HACK: too adhoc
 
+                ImGui::Text("Manipulation (Picked: %s)", scene.get<EntityInfo>(*mPickedEntity).entityName.c_str());
                 // Position editor (Translation)
                 ImGui::Text("Position");
                 ImGui::SliderFloat3("Translate", glm::value_ptr(transform.pos), -10.0f, 10.0f);
@@ -698,15 +748,15 @@ namespace palm
                 // update buffer value
                 transform.params.update(transform.pos, glm::radians(transform.rot), transform.scale);
 
-                if (ImGui::IsKeyPressed(ImGuiKey_T))
+                if (ImGui::IsKeyPressed(ImGuiKey_1))
                 {
                     currentGizmoOperation = ImGuizmo::TRANSLATE;
                 }
-                if (ImGui::IsKeyPressed(ImGuiKey_R))
+                if (ImGui::IsKeyPressed(ImGuiKey_2))
                 {
                     currentGizmoOperation = ImGuizmo::ROTATE;
                 }
-                if (ImGui::IsKeyPressed(ImGuiKey_S))
+                if (ImGui::IsKeyPressed(ImGuiKey_3))
                 {
                     currentGizmoOperation = ImGuizmo::SCALE;
                 }

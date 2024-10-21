@@ -160,7 +160,7 @@ namespace palm
 
         void addEntity(const std::filesystem::path& path);
 
-        void removeEntity(ec2s::Entity entity);
+        void removeEntity(const ec2s::Entity entity);
 
     private:
         vk2s::Camera mCamera;
@@ -181,7 +181,6 @@ namespace palm
         UniqueHandle<vk2s::DynamicBuffer> mSceneBuffer;
         UniqueHandle<vk2s::BindGroup> mSceneBindGroup;
 
-        std::vector<ec2s::Entity> mActiveEntities;
         std::optional<ec2s::Entity> mPickedEntity;
 
         double mLastTime = 0;

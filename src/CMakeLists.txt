@@ -36,13 +36,20 @@ set(IMGUIZMO_SOURCE_FILES
 )
 
 # Create executable
-add_executable(${MAIN_EXE})
-target_sources(${MAIN_EXE}
-PUBLIC
+set (EXEC_SRCS 
 main.cpp
 States/Editor.cpp
 ${IMGUI_SOURCE_FILES}
 ${IMGUIZMO_SOURCE_FILES}
+)
+
+add_executable(${MAIN_EXE} ${EXEC_SRCS})
+target_sources(${MAIN_EXE}
+PUBLIC
+${EXEC_SRCS}
+../include/AppStates.hpp
+../include/Film.hpp
+../include/Integrator.hpp
 )
 
 # link libraries
