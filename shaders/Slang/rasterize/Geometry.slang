@@ -51,9 +51,9 @@ struct FSOutput
 [shader("vertex")]
 VSOutput vsmain(VSInput in)
 {
-    VSOutput output = (VSOutput)0;
-    output.worldInfo.pos = mul(entityParams.model, float4(in.pos, 1.0)).xyz;
-    output.worldInfo.normal =  mul(entityParams.modelInvTranspose, float4(in.normal, 0.)).xyz;
+    VSOutput output         = (VSOutput)0;
+    output.worldInfo.pos    = mul(float4(in.pos, 1.0), entityParams.model).xyz;
+    output.worldInfo.normal = mul(float4(in.normal, 0.), entityParams.modelInvTranspose).xyz;
     output.worldInfo.uv = in.uv;
 
     //output.SVPos = mul(sceneParams.proj, mul(sceneParams.view, float4(output.worldInfo.pos, 1.0)));

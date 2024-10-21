@@ -41,6 +41,8 @@ target_sources(${MAIN_EXE}
 PUBLIC
 main.cpp
 States/Editor.cpp
+${IMGUI_SOURCE_FILES}
+${IMGUIZMO_SOURCE_FILES}
 )
 
 # link libraries

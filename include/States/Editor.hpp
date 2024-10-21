@@ -14,6 +14,10 @@
 #include <vk2s/Camera.hpp>
 #include <vk2s/Scene.hpp>
 
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 #include "../include/AppStates.hpp"
 
 #include <filesystem>
@@ -81,7 +85,7 @@ namespace palm
 
             vk2s::Material materialParam;
             Handle<vk2s::Buffer> uniformBuffer;
-            
+
             constexpr static uint32_t kDefaultTexNum = 4;
             Handle<vk2s::Image> albedoTex;
             Handle<vk2s::Image> roughnessTex;
@@ -89,7 +93,6 @@ namespace palm
             Handle<vk2s::Image> normalMapTex;
 
             Handle<vk2s::BindGroup> bindGroup;
-
         };
 
         struct EntityInfo
@@ -107,9 +110,20 @@ namespace palm
                 glm::mat4 modelInvTranspose;
                 glm::vec3 vel;
                 float padding;
+
+                void update(glm::vec3 translate, const glm::vec3& rotation, const glm::vec3& scaling)
+                {
+                    vel = translate - glm::vec3(model[0][3], model[1][3], model[2][3]);
+
+                    model             = glm::translate(glm::mat4(1.f), translate) * glm::toMat4(glm::quat(rotation)) * glm::scale(glm::mat4(1.f), scaling);
+                    modelInvTranspose = glm::transpose(glm::inverse(model));
+                }
             };
 
             Params params;
+            glm::vec3 pos = { 0.f, 0.f, 0.f };
+            glm::vec3 rot = { 0.f, 0.f, 0.f };
+            glm::vec3 scale = { 1.f, 1.f, 1.f };
             Handle<vk2s::DynamicBuffer> entityBuffer;
             Handle<vk2s::BindGroup> bindGroup;
         };
@@ -168,6 +182,7 @@ namespace palm
         UniqueHandle<vk2s::BindGroup> mSceneBindGroup;
 
         std::vector<ec2s::Entity> mActiveEntities;
+        std::optional<ec2s::Entity> mPickedEntity;
 
         double mLastTime = 0;
         uint32_t mNow;

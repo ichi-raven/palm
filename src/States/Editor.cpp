@@ -15,6 +15,7 @@
 
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
+#include <ImGuizmo.h>
 
 #include <iostream>
 #include <filesystem>
@@ -524,11 +525,14 @@ namespace palm
 
     void Editor::updateShaderResources()
     {
-        {  // write data
+        auto& scene = common()->scene;
+
+        // scene information
+        {
             //const auto& view = glm::transpose(mCamera.getViewMatrix()); // DEBUG!!
             //const auto& proj = glm::transpose(mCamera.getProjectionMatrix()); // DEBUG!!
-            const auto& view = mCamera.getViewMatrix();        
-            const auto& proj = mCamera.getProjectionMatrix();  
+            const auto& view = mCamera.getViewMatrix();
+            const auto& proj = mCamera.getProjectionMatrix();
 
             SceneParams sceneParams{
                 .view    = view,
@@ -540,6 +544,9 @@ namespace palm
 
             mSceneBuffer->write(&sceneParams, sizeof(SceneParams), mNow * mSceneBuffer->getBlockSize());
         }
+
+        // entity informations
+        scene.each<Transform>([&](Transform& transform) { transform.entityBuffer->write(&transform.params, sizeof(Transform::Params), mNow * transform.entityBuffer->getBlockSize()); });
     }
 
     void Editor::updateAndRenderImGui(const double deltaTime)
@@ -550,14 +557,17 @@ namespace palm
 
         const auto [windowWidth, windowHeight] = window->getWindowSize();
 
-        constexpr auto kFontScale = 1.7f;
+        constexpr auto kFontScale = 1.5f;
 
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
+        ImGuizmo::BeginFrame();
+        ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, windowWidth, windowHeight);
+        
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));  // left
-        ImGui::SetNextWindowSize(ImVec2(windowWidth, 15));
+        ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.015));
         ImGui::Begin("MenuBar", NULL, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
         ImGui::SetWindowFontScale(kFontScale);
 
@@ -600,8 +610,8 @@ namespace palm
         //ImGui::End();
 
         {
-            ImGui::SetNextWindowPos(ImVec2(0, windowHeight - 180));  // bottom
-            ImGui::SetNextWindowSize(ImVec2(windowWidth, 180));
+            ImGui::SetNextWindowPos(ImVec2(0, windowHeight * 0.82));  // bottom
+            ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.18));
             ImGui::Begin("FileExplorer", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
             ImGui::SetWindowFontScale(kFontScale);
 
@@ -639,18 +649,21 @@ namespace palm
         }
 
         {
-            ImGui::SetNextWindowPos(ImVec2(windowWidth - 320, 20));  // right
-            ImGui::SetNextWindowSize(ImVec2(320, windowHeight - 180));
+            ImGui::SetNextWindowPos(ImVec2(windowWidth * 0.70, windowHeight * 0.02));  // right
+            ImGui::SetNextWindowSize(ImVec2(windowWidth * 0.30, windowHeight * 0.82));
             ImGui::Begin("SceneEditor", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
             ImGui::SetWindowFontScale(kFontScale);
 
             ImGui::Text("Scene Editor");
 
             scene.each<EntityInfo>(
-                [&](EntityInfo& info)
+                [&](ec2s::Entity entity, EntityInfo& info)
                 {
                     std::string viewing = info.groupName + "/" + info.entityName;
-                    ImGui::Text(viewing.c_str());
+                    if (ImGui::Selectable(viewing.c_str()))
+                    {
+                        mPickedEntity = entity;
+                    }
                 });
             ImGui::Text("Information");
             ImGui::Text("device = %s", device.getPhysicalDeviceName().data());
@@ -660,18 +673,58 @@ namespace palm
             ImGui::Text("pos = (%lf, %lf, %lf)", pos.x, pos.y, pos.z);
             ImGui::Text("lookat = (%lf, %lf, %lf)", lookAt.x, lookAt.y, lookAt.z);
 
+            ImGui::Spacing();
+            // transform editing (experimental)
+            if (mPickedEntity)
+            {
+                auto& transform = scene.get<Transform>(*mPickedEntity);
+
+                static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::TRANSLATE;
+                const auto& viewMat                              = mCamera.getViewMatrix();
+                const auto& projectionMat                        = mCamera.getProjectionMatrix();
+
+                // Position editor (Translation)
+                ImGui::Text("Position");
+                ImGui::SliderFloat3("Translate", glm::value_ptr(transform.pos), -10.0f, 10.0f);
+
+                // Rotation editor (Euler Angles)
+                ImGui::Text("Rotation");
+                ImGui::SliderFloat3("Rotate", glm::value_ptr(transform.rot), -180.0f, 180.0f);
+
+                // Scale editor
+                ImGui::Text("Scale");
+                ImGui::SliderFloat3("Scale", glm::value_ptr(transform.scale), 0.1f, 20.0f);
+
+                // update buffer value
+                transform.params.update(transform.pos, glm::radians(transform.rot), transform.scale);
+
+                if (ImGui::IsKeyPressed(ImGuiKey_T))
+                {
+                    currentGizmoOperation = ImGuizmo::TRANSLATE;
+                }
+                if (ImGui::IsKeyPressed(ImGuiKey_R))
+                {
+                    currentGizmoOperation = ImGuizmo::ROTATE;
+                }
+                if (ImGui::IsKeyPressed(ImGuiKey_S))
+                {
+                    currentGizmoOperation = ImGuizmo::SCALE;
+                }
+
+                ImGuizmo::Manipulate(glm::value_ptr(viewMat), glm::value_ptr(projectionMat), currentGizmoOperation, ImGuizmo::WORLD, glm::value_ptr(transform.params.model));
+
+                glm::vec3 translation, rotation, objectScale;
+                ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform.params.model), glm::value_ptr(translation), glm::value_ptr(rotation), glm::value_ptr(objectScale));
+
+                transform.pos   = translation;
+                transform.rot   = rotation;
+                transform.scale = objectScale;
+                // re calculate
+                transform.params.update(transform.pos, glm::radians(transform.rot), transform.scale);
+            }
+
             ImGui::End();
         }
-
-        //ImGui::Begin("configuration");
-        //ImGui::Text("device = %s", device.getPhysicalDeviceName().data());
-        ////ImGui::Text("fps = %lf", 1. / deltaTime);
-        //const auto& pos    = mCamera.getPos();
-        //const auto& lookAt = mCamera.getLookAt();
-        //ImGui::Text("pos = (%lf, %lf, %lf)", pos.x, pos.y, pos.z);
-        //ImGui::Text("lookat = (%lf, %lf, %lf)", lookAt.x, lookAt.y, lookAt.z);
-
-        //ImGui::End();
 
         ImGui::Render();
     }
