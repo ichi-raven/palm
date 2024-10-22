@@ -2,6 +2,8 @@
 
 #include "../include/AppStates.hpp"
 #include "../include/States/Editor.hpp"
+#include "../include/States/Renderer.hpp"
+#include "../include/States/MaterialViewer.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -13,7 +15,9 @@ int main()
 
     app.mpCommonRegion->window = app.mpCommonRegion->device.create<vk2s::Window>(1920, 1080, 3, "palm window", false);
 
-    app.addState<palm::Editor>(palm::AppState::eEditor);
+    app.addState<palm::Editor>          (palm::AppState::eEditor);
+    app.addState<palm::Renderer>          (palm::AppState::eRenderer);
+    app.addState<palm::MaterialViewer>  (palm::AppState::eMaterialViewer);
 
     app.init(palm::AppState::eEditor);
 

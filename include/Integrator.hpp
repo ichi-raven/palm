@@ -4,10 +4,11 @@
 #include <vk2s/Device.hpp>
 #include <vk2s/Camera.hpp>
 
-#include "Film.hpp"
-#include "MaterialTable.hpp"
+#include <EC2S.hpp>
 
-namespace vkpt
+#include "Film.hpp"
+
+namespace palm
 {
     class Integrator
     {
@@ -22,7 +23,7 @@ namespace vkpt
         };
 
     public:
-        Integrator(vk2s::Device& device, MaterialTable& matTable);
+        Integrator(vk2s::Device& device, ec2s::Registry& scene);
 
         void build();
         
@@ -50,7 +51,6 @@ namespace vkpt
     private:
 
         vk2s::Device& mDevice;
-        MaterialTable& mMatTable;
 
         std::pair<uint32_t, uint32_t> mBounds;
 

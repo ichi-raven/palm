@@ -9,6 +9,10 @@
 //#define VULKAN_HPP_NO_CONSTRUCTORS
 
 #include "../include/States/Editor.hpp"
+#include "../include/Mesh.hpp"
+#include "../include/Material.hpp"
+#include "../include/EntityInfo.hpp"
+#include "../include/Transform.hpp"
 
 #include <stb_image.h>
 #include <glm/glm.hpp>

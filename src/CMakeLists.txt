@@ -39,6 +39,8 @@ set(IMGUIZMO_SOURCE_FILES
 set (EXEC_SRCS 
 main.cpp
 States/Editor.cpp
+States/Renderer.cpp
+States/MaterialViewer.cpp
 ${IMGUI_SOURCE_FILES}
 ${IMGUIZMO_SOURCE_FILES}
 )
@@ -47,9 +49,19 @@ add_executable(${MAIN_EXE} ${EXEC_SRCS})
 target_sources(${MAIN_EXE}
 PUBLIC
 ${EXEC_SRCS}
+# header files
 ../include/AppStates.hpp
 ../include/Film.hpp
 ../include/Integrator.hpp
+
+../include/Mesh.hpp
+../include/Material.hpp
+../include/Transform.hpp
+../include/EntityInfo.hpp
+
+../include/States/Editor.hpp
+../include/States/Renderer.hpp
+../include/States/MaterialViewer.hpp
 )
 
 # link libraries

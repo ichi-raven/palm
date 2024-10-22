@@ -1,13 +1,12 @@
 /*****************************************************************//**
-/*****************************************************************//**
- * @file   Editor.hpp
- * @brief  header file of editor state
+ * @file   Renderer.hpp
+ * @brief  
  * 
  * @author ichi-raven
- * @date   February 2024
+ * @date   October 2024
  *********************************************************************/
-#ifndef PALM_INCLUDE_STATES_EDITOR_HPP_
-#define PALM_INCLUDE_STATES_EDITOR_HPP_
+#ifndef PALM_INCLUDE_STATES_RENDERER_HPP_
+#define PALM_INCLUDE_STATES_RENDERER_HPP_
 
 #include <EC2S.hpp>
 #include <vk2s/Device.hpp>
@@ -24,9 +23,9 @@
 
 namespace palm
 {
-    class Editor : public ec2s::State<palm::AppState, palm::CommonRegion>
+    class Renderer : public ec2s::State<palm::AppState, palm::CommonRegion>
     {
-        GEN_STATE(Editor, palm::AppState, palm::CommonRegion);
+        GEN_STATE(Renderer, palm::AppState, palm::CommonRegion);
 
     private:
         struct SceneParams  // std430
@@ -53,25 +52,6 @@ namespace palm
             uint32_t padding[3];
         };
 
-        struct GBuffer
-        {
-            UniqueHandle<vk2s::Image> depthBuffer;
-            UniqueHandle<vk2s::Image> albedoTex;
-            UniqueHandle<vk2s::Image> worldPosTex;
-            UniqueHandle<vk2s::Image> normalTex;
-
-            UniqueHandle<vk2s::BindGroup> bindGroup;
-        };
-
-        struct GraphicsPass
-        {
-            UniqueHandle<vk2s::RenderPass> renderpass;
-            UniqueHandle<vk2s::Pipeline> pipeline;
-            UniqueHandle<vk2s::Shader> vs;
-            UniqueHandle<vk2s::Shader> fs;
-            std::vector<Handle<vk2s::BindLayout>> bindLayouts;
-        };
-
     private:
         //inline static void load(std::string_view path, vk2s::Device& device, std::vector<MeshInstance>& meshInstances, Handle<vk2s::Buffer>& materialUB, std::vector<Handle<vk2s::Image>>& materialTextures);
 
@@ -95,18 +75,11 @@ namespace palm
         std::vector<Handle<vk2s::Semaphore>> mRenderCompletedSems;
         std::vector<Handle<vk2s::Fence>> mFences;
 
-        GBuffer mGBuffer;
-
-        GraphicsPass mGeometryPass;
-        GraphicsPass mLightingPass;
-
         UniqueHandle<vk2s::Image> mDummyImage;
         UniqueHandle<vk2s::Sampler> mDefaultSampler;
 
         UniqueHandle<vk2s::DynamicBuffer> mSceneBuffer;
         UniqueHandle<vk2s::BindGroup> mSceneBindGroup;
-
-        std::optional<ec2s::Entity> mPickedEntity;
 
         double mLastTime = 0;
         uint32_t mNow;

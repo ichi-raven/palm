@@ -15,7 +15,8 @@ namespace palm
     enum class AppState
     {
         eEditor,
-        eRender,
+        eRenderer,
+        eMaterialViewer,
     };
 
     struct CommonRegion
