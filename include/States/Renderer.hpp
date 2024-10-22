@@ -20,6 +20,7 @@
 
 #include "../include/AppStates.hpp"
 #include "../include/GraphicsPass.hpp"
+#include "../include/Integrator.hpp"
 
 #include <filesystem>
 
@@ -71,6 +72,8 @@ namespace palm
 
     private:
         vk2s::Camera mCamera;
+
+        std::unique_ptr<Integrator> mIntegrator;
 
         std::vector<Handle<vk2s::Command>> mCommands;
         std::vector<Handle<vk2s::Semaphore>> mImageAvailableSems;

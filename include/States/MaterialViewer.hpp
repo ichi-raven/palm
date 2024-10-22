@@ -18,6 +18,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "../include/AppStates.hpp"
+#include "../include/GraphicsPass.hpp"
 
 #include <filesystem>
 
@@ -75,15 +76,13 @@ namespace palm
         std::vector<Handle<vk2s::Semaphore>> mRenderCompletedSems;
         std::vector<Handle<vk2s::Fence>> mFences;
 
-        UniqueHandle<vk2s::Image> mDummyImage;
-        UniqueHandle<vk2s::Sampler> mDefaultSampler;
-
-        UniqueHandle<vk2s::DynamicBuffer> mSceneBuffer;
-        UniqueHandle<vk2s::BindGroup> mSceneBindGroup;
+        GraphicsPass mGuiPass;
 
         double mLastTime = 0;
         uint32_t mNow;
         uint32_t mFrameCount;
+
+        std::optional<AppState> mChangeDst;
     };
 
 }  // namespace palm

@@ -529,6 +529,7 @@ namespace palm
         // change state
         if (mChangeDst)
         {
+            device.waitIdle();
             changeState(*mChangeDst);
         }
 
@@ -542,6 +543,8 @@ namespace palm
         {
             fence->wait();
         }
+        auto& device = getCommonRegion()->device;
+        device.destroyImGui();
     }
 
     void Editor::updateShaderResources()

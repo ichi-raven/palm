@@ -1,5 +1,12 @@
-#ifndef VKPT_INCLUDE_INTEGRATOR_HPP_
-#define VKPT_INCLUDE_INTEGRATOR_HPP_
+/*****************************************************************//**
+ * @file   Integrator.hpp
+ * @brief  
+ * 
+ * @author ichi-raven
+ * @date   October 2024
+ *********************************************************************/
+#ifndef PALM_INCLUDE_INTEGRATOR_HPP_
+#define PALM_INCLUDE_INTEGRATOR_HPP_
 
 #include <vk2s/Device.hpp>
 #include <vk2s/Camera.hpp>

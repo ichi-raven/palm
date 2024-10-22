@@ -1,11 +1,18 @@
-#ifndef VKPT_INCLUDE_FILM_HPP_
-#define VKPT_INCLUDE_FILM_HPP_
+/*****************************************************************//**
+ * @file   Film.hpp
+ * @brief  
+ * 
+ * @author ichi-raven
+ * @date   October 2024
+ *********************************************************************/
+#ifndef PALM_INCLUDE_FILM_HPP_
+#define PALM_INCLUDE_FILM_HPP_
 
 #include <vk2s/Device.hpp>
 
 #include <cstdint>
 
-namespace vkpt
+namespace palm
 {
     class Film
     {
@@ -37,6 +44,6 @@ namespace vkpt
         Handle<vk2s::Buffer> mStagingBuffer;
 
     };
-}  // namespace vkpt
+}  // namespace palm
 
 #endif

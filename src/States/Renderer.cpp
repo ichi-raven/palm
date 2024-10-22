@@ -93,6 +93,12 @@ namespace palm
 
     Renderer::~Renderer()
     {
+        for (auto& fence : mFences)
+        {
+            fence->wait();
+        }
+        auto& device = getCommonRegion()->device;
+        device.destroyImGui();
     }
 
     void Renderer::initVulkan()
@@ -109,6 +115,9 @@ namespace palm
             {
                 mGuiPass.renderpass = device.create<vk2s::RenderPass>(window.get(), vk::AttachmentLoadOp::eClear);
             }
+
+            // initialize ImGui
+            device.initImGui(frameCount, window.get(), mGuiPass.renderpass.get());
 
             // create commands and sync objects
 
@@ -149,10 +158,13 @@ namespace palm
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
         ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, windowWidth, windowHeight);
-
-        ImGui::Begin("Notice", NULL);
-        ImGui::Text("under construction!");
         ImGui::SetWindowFontScale(kFontScale);
+
+        ImGui::Begin("Select Integrator", NULL);
+        if (ImGui::Selectable("path"))
+        {
+            // set path integrator and initialize
+        }
 
         ImGui::End();
 
@@ -161,7 +173,6 @@ namespace palm
 
     void Renderer::updateShaderResources()
     {
-
     }
 
     void Renderer::onResized()
