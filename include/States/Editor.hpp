@@ -19,6 +19,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "../include/AppStates.hpp"
+#include "../GraphicsPass.hpp"
 
 #include <filesystem>
 
@@ -63,15 +64,6 @@ namespace palm
             UniqueHandle<vk2s::BindGroup> bindGroup;
         };
 
-        struct GraphicsPass
-        {
-            UniqueHandle<vk2s::RenderPass> renderpass;
-            UniqueHandle<vk2s::Pipeline> pipeline;
-            UniqueHandle<vk2s::Shader> vs;
-            UniqueHandle<vk2s::Shader> fs;
-            std::vector<Handle<vk2s::BindLayout>> bindLayouts;
-        };
-
     private:
         //inline static void load(std::string_view path, vk2s::Device& device, std::vector<MeshInstance>& meshInstances, Handle<vk2s::Buffer>& materialUB, std::vector<Handle<vk2s::Image>>& materialTextures);
 
@@ -100,13 +92,14 @@ namespace palm
         GraphicsPass mGeometryPass;
         GraphicsPass mLightingPass;
 
-        UniqueHandle<vk2s::Image> mDummyImage;
         UniqueHandle<vk2s::Sampler> mDefaultSampler;
 
         UniqueHandle<vk2s::DynamicBuffer> mSceneBuffer;
         UniqueHandle<vk2s::BindGroup> mSceneBindGroup;
 
         std::optional<ec2s::Entity> mPickedEntity;
+
+        std::optional<AppState> mChangeDst;
 
         double mLastTime = 0;
         uint32_t mNow;

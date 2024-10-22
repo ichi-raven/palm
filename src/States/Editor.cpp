@@ -220,32 +220,8 @@ namespace palm
 
         try
         {
-            // load meshes and materials
-
-            auto sampler = device.create<vk2s::Sampler>(vk::SamplerCreateInfo());
-
             // default sampler
             mDefaultSampler = device.create<vk2s::Sampler>(vk::SamplerCreateInfo());
-
-            // create dummy image
-            {
-                const auto format   = vk::Format::eR8G8B8A8Unorm;
-                const uint32_t size = vk2s::Compiler::getSizeOfFormat(format);  // 1pixel
-
-                vk::ImageCreateInfo ci;
-                ci.arrayLayers   = 1;
-                ci.extent        = vk::Extent3D(1, 1, 1);
-                ci.format        = format;
-                ci.imageType     = vk::ImageType::e2D;
-                ci.mipLevels     = 1;
-                ci.usage         = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
-                ci.initialLayout = vk::ImageLayout::eUndefined;
-
-                mDummyImage = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
-
-                uint8_t data[] = { 0, 0, 200, 0 };
-                mDummyImage->write(data, size);
-            }
 
             // create depth buffer
             {
@@ -550,6 +526,12 @@ namespace palm
             return;
         }
 
+        // change state
+        if (mChangeDst)
+        {
+            changeState(*mChangeDst);
+        }
+
         // update frame index
         mNow = (mNow + 1) % frameCount;
     }
@@ -629,23 +611,22 @@ namespace palm
                 ImGui::EndMenu();
             }
 
+            if (ImGui::BeginMenu("GoTo"))
+            {
+                if (ImGui::MenuItem("Renderer", NULL))
+                {
+                    mChangeDst = AppState::eRenderer;
+                }
+                if (ImGui::MenuItem("MaterialViewer", NULL))
+                {
+                    mChangeDst = AppState::eMaterialViewer;
+                }
+                ImGui::EndMenu();
+            }
+
             ImGui::EndMenuBar();
         }
         ImGui::End();
-
-        //ImGui::SetNextWindowPos(ImVec2(0, 20));  //top
-        //ImGui::SetNextWindowSize(ImVec2(80, windowHeight - 180));
-        //ImGui::Begin("ToolBar", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
-
-        //ImGui::Text("Toolbar:");
-        //if (ImGui::Button("Play"))
-        //{
-        //}
-        //if (ImGui::Button("Stop"))
-        //{
-        //}
-
-        //ImGui::End();
 
         {
             ImGui::SetNextWindowPos(ImVec2(0, windowHeight * 0.80));  // bottom
@@ -739,15 +720,15 @@ namespace palm
                 ImGui::Text("Manipulation (Picked: %s)", scene.get<EntityInfo>(*mPickedEntity).entityName.c_str());
                 // Position editor (Translation)
                 ImGui::Text("Position");
-                ImGui::SliderFloat3("Translate", glm::value_ptr(transform.pos), -10.0f, 10.0f);
+                ImGui::InputFloat3("Translate", glm::value_ptr(transform.pos));
 
                 // Rotation editor (Euler Angles)
                 ImGui::Text("Rotation");
-                ImGui::SliderFloat3("Rotate", glm::value_ptr(transform.rot), -180.0f, 180.0f);
+                ImGui::InputFloat3("Rotate", glm::value_ptr(transform.rot));
 
                 // Scale editor
                 ImGui::Text("Scale");
-                ImGui::SliderFloat3("Scale", glm::value_ptr(transform.scale), 0.1f, 20.0f);
+                ImGui::InputFloat3("Scale", glm::value_ptr(transform.scale));
 
                 // update buffer value
                 transform.params.update(transform.pos, glm::radians(transform.rot), transform.scale);

@@ -58,6 +58,7 @@ ${EXEC_SRCS}
 ../include/Material.hpp
 ../include/Transform.hpp
 ../include/EntityInfo.hpp
+../include/GraphicsPass.hpp
 
 ../include/States/Editor.hpp
 ../include/States/Renderer.hpp
