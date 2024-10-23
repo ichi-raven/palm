@@ -24,67 +24,8 @@
 #include <iostream>
 #include <filesystem>
 
-inline vk::TransformMatrixKHR convert(const glm::mat4x3& m)
-{
-    vk::TransformMatrixKHR mtx;
-    auto mT = glm::transpose(m);
-    memcpy(&mtx.matrix[0], &mT[0], sizeof(float) * 4);
-    memcpy(&mtx.matrix[1], &mT[1], sizeof(float) * 4);
-    memcpy(&mtx.matrix[2], &mT[2], sizeof(float) * 4);
-
-    return mtx;
-};
-
 namespace palm
 {
-    //inline void Editor::load(std::string_view path, vk2s::Device& device, std::vector<MeshInstance>& meshInstances, Handle<vk2s::Buffer>& materialUB, std::vector<Handle<vk2s::Image>>& materialTextures)
-    //{
-    //    vk2s::Scene scene(path);
-
-    //    const std::vector<vk2s::Mesh>& hostMeshes        = scene.getMeshes();
-    //    const std::vector<vk2s::Material>& hostMaterials = scene.getMaterials();
-
-    //    meshInstances.resize(hostMeshes.size());
-    //    for (size_t i = 0; i < meshInstances.size(); ++i)
-    //    {
-    //        auto& mesh           = meshInstances[i];
-    //        mesh.hostMesh        = std::move(hostMeshes[i]);
-    //        const auto& hostMesh = meshInstances[i].hostMesh;
-
-    //        {  // vertex buffer
-    //            const auto vbSize  = hostMesh.vertices.size() * sizeof(vk2s::Vertex);
-    //            const auto vbUsage = vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR | vk::BufferUsageFlagBits::eShaderDeviceAddress | vk::BufferUsageFlagBits::eStorageBuffer;
-    //            vk::BufferCreateInfo ci({}, vbSize, vbUsage);
-    //            vk::MemoryPropertyFlags fb = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
-
-    //            mesh.vertexBuffer = device.create<vk2s::Buffer>(ci, fb);
-    //            mesh.vertexBuffer->write(hostMesh.vertices.data(), vbSize);
-    //        }
-
-    //        {  // index buffer
-
-    //            const auto ibSize  = hostMesh.indices.size() * sizeof(uint32_t);
-    //            const auto ibUsage = vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR | vk::BufferUsageFlagBits::eShaderDeviceAddress | vk::BufferUsageFlagBits::eStorageBuffer;
-
-    //            vk::BufferCreateInfo ci({}, ibSize, ibUsage);
-    //            vk::MemoryPropertyFlags fb = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
-
-    //            mesh.indexBuffer = device.create<vk2s::Buffer>(ci, fb);
-    //            mesh.indexBuffer->write(hostMesh.indices.data(), ibSize);
-    //        }
-    //    }
-
-    //    // materials
-    //    {
-    //        const auto ubSize = sizeof(vk2s::Material) * hostMaterials.size();
-    //        vk::BufferCreateInfo ci({}, ubSize, vk::BufferUsageFlagBits::eStorageBuffer);
-    //        vk::MemoryPropertyFlags fb = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
-
-    //        materialUB = device.create<vk2s::Buffer>(ci, fb);
-    //        materialUB->write(hostMaterials.data(), ubSize);
-    //    }
-    //}
-
     void Editor::addEntity(const std::filesystem::path& path)
     {
         auto& device = common()->device;
@@ -628,11 +569,11 @@ namespace palm
 
             if (ImGui::BeginMenu("GoTo"))
             {
-                if (ImGui::MenuItem("Renderer", NULL))
+                if (ImGui::MenuItem("Renderer", NULL) && scene.size<Mesh>() != 0)
                 {
                     mChangeDst = AppState::eRenderer;
                 }
-                if (ImGui::MenuItem("MaterialViewer", NULL))
+                if (ImGui::MenuItem("MaterialViewer", NULL) && mPickedEntity)
                 {
                     mChangeDst = AppState::eMaterialViewer;
                 }

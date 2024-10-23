@@ -40,11 +40,6 @@ namespace palm
         float deltaTime          = static_cast<float>(currentTime - mLastTime);
         mLastTime                = currentTime;
 
-        // update camera
-        const double speed      = 2.0f * deltaTime;
-        const double mouseSpeed = 0.7f * deltaTime;
-        mCamera.update(window->getpGLFWWindow(), speed, mouseSpeed);
-
         // wait and reset fence
         mFences[mNow]->wait();
 
@@ -137,9 +132,6 @@ namespace palm
                 mFences[i]              = device.create<vk2s::Fence>();
             }
 
-            mCamera = vk2s::Camera(60., 1. * windowWidth / windowHeight);
-            mCamera.setPos(glm::vec3(0.0, 0.8, 3.0));
-            mCamera.setLookAt(glm::vec3(0.0, 0.8, -2.0));
         }
         catch (std::exception& e)
         {

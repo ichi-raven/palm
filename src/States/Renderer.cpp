@@ -1,4 +1,4 @@
-/*****************************************************************//**
+/*****************************************************************/ /**
  * @file   Renderer.cpp
  * @brief  
  * 
@@ -6,6 +6,8 @@
  * @date   October 2024
  *********************************************************************/
 #include "../include/States/Renderer.hpp"
+
+#include "../include/Integrators/PathIntegrator.hpp"
 
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
@@ -47,11 +49,6 @@ namespace palm
         float deltaTime          = static_cast<float>(currentTime - mLastTime);
         mLastTime                = currentTime;
 
-        // update camera
-        const double speed      = 2.0f * deltaTime;
-        const double mouseSpeed = 0.7f * deltaTime;
-        mCamera.update(window->getpGLFWWindow(), speed, mouseSpeed);
-
         // wait and reset fence
         mFences[mNow]->wait();
 
@@ -76,8 +73,24 @@ namespace palm
         // start writing command
         command->begin();
 
-        // GUI pass
+        // integrator
+        if (mIntegrator)
+        {
+            mIntegrator->sample(mFences[mNow], command);
 
+            const auto region = vk::ImageCopy()
+                                    .setExtent({ windowWidth, windowHeight, 1 })
+                                    .setSrcSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 })
+                                    .setSrcOffset({ 0, 0, 0 })
+                                    .setDstSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 })
+                                    .setDstOffset({ 0, 0, 0 });
+
+            command->transitionImageLayout(mOutputImage.get(), vk::ImageLayout::eGeneral, vk::ImageLayout::eTransferSrcOptimal);
+            command->copyImageToSwapchain(mOutputImage.get(), window.get(), region, imageIndex);
+            command->transitionImageLayout(mOutputImage.get(), vk::ImageLayout::eTransferSrcOptimal, vk::ImageLayout::eGeneral);
+        }
+
+        // GUI pass
         command->beginRenderPass(mGuiPass.renderpass.get(), imageIndex, vk::Rect2D({ 0, 0 }, { windowWidth, windowHeight }), colorClearValue);
         command->drawImGui();
         command->endRenderPass();
@@ -120,7 +133,7 @@ namespace palm
         {
             // ImGui pass
             {
-                mGuiPass.renderpass = device.create<vk2s::RenderPass>(window.get(), vk::AttachmentLoadOp::eClear);
+                mGuiPass.renderpass = device.create<vk2s::RenderPass>(window.get(), vk::AttachmentLoadOp::eLoad);
             }
 
             // initialize ImGui
@@ -140,9 +153,28 @@ namespace palm
                 mFences[i]              = device.create<vk2s::Fence>();
             }
 
-            mCamera = vk2s::Camera(60., 1. * windowWidth / windowHeight);
-            mCamera.setPos(glm::vec3(0.0, 0.8, 3.0));
-            mCamera.setLookAt(glm::vec3(0.0, 0.8, -2.0));
+            // create output image
+            {
+                const auto format   = window->getVkSwapchainImageFormat();
+                const uint32_t size = windowWidth * windowHeight * vk2s::Compiler::getSizeOfFormat(format);
+
+                vk::ImageCreateInfo ci;
+                ci.arrayLayers   = 1;
+                ci.extent        = vk::Extent3D(windowWidth, windowHeight, 1);
+                ci.format        = format;
+                ci.imageType     = vk::ImageType::e2D;
+                ci.mipLevels     = 1;
+                ci.usage         = vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eStorage;
+                ci.initialLayout = vk::ImageLayout::eUndefined;
+
+                mOutputImage = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+
+                UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
+                cmd->begin(true);
+                cmd->transitionImageLayout(mOutputImage.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
+                cmd->end();
+                cmd->execute();
+            }
         }
         catch (std::exception& e)
         {
@@ -170,7 +202,7 @@ namespace palm
         ImGui::Begin("Select Integrator", NULL);
         if (ImGui::Selectable("path"))
         {
-            // set path integrator and initialize
+            mIntegrator = std::make_unique<PathIntegrator>(device, scene, mOutputImage);
         }
 
         ImGui::End();

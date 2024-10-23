@@ -32,6 +32,18 @@ namespace palm
 
     private:
 
+        struct SceneParams  // std430
+        {
+            glm::mat4 view;
+            glm::mat4 proj;
+            glm::mat4 viewInv;
+            glm::mat4 projInv;
+            glm::vec4 camPos;
+            glm::vec2 screenSize;
+            glm::vec2 padding;            
+            glm::vec4 lightDir;
+        };
+
         // can be modified from ImGui
         struct GUIParams
         {
@@ -44,8 +56,12 @@ namespace palm
         Handle<vk2s::AccelerationStructure> mTLAS;
 
         // shader resources
-        Handle<vk2s::DynamicBuffer> mSampleBuffer;
+        Handle<vk2s::Buffer> mSceneBuffer;
+        Handle<vk2s::Buffer> mSampleBuffer;
         Handle<vk2s::Image> mPoolImage;
+        std::vector<Handle<vk2s::Buffer>> mVertexBuffers;
+        std::vector<Handle<vk2s::Buffer>> mIndexBuffers;
+
         // binding 
         Handle<vk2s::BindLayout> mBindLayout;
         Handle<vk2s::BindGroup> mBindGroup;

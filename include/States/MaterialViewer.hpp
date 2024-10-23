@@ -64,7 +64,6 @@ namespace palm
         void onResized();
 
     private:
-        vk2s::Camera mCamera;
 
         std::vector<Handle<vk2s::Command>> mCommands;
         std::vector<Handle<vk2s::Semaphore>> mImageAvailableSems;

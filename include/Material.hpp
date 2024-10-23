@@ -25,11 +25,26 @@ namespace palm
         struct Params  // std430
         {
             glm::vec4 albedo;
-            glm::vec4 emissive;
-            int32_t texIndex;
-            int32_t materialType;
-            float alpha;
+            float roughness;
+            float metalness;
+            float flatness;
+            float specularTint;
+
+            float sheen;
+            glm::vec3 sheenTint;
+
+            float anisotropic;
+            float clearcoat;
+            float clearcoatGloss;
             float IOR;
+
+            int32_t albedoTexIndex;
+            int32_t roughnessTexIndex;
+            int32_t metalnessTexIndex;
+            int32_t normalmapTexIndex;
+
+            int32_t materialType;
+            glm::vec3 emissive;
         };
 
         vk2s::Material materialParam;

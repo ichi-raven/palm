@@ -36,7 +36,7 @@ namespace palm
                 modelInvTranspose = glm::transpose(glm::inverse(model));
             }
 
-            inline vk::TransformMatrixKHR convert()
+            vk::TransformMatrixKHR convert() const
             {
                 vk::TransformMatrixKHR mtx;
                 auto mT = glm::transpose(model);

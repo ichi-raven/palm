@@ -66,7 +66,8 @@ namespace palm
         void onResized();
 
     private:
-        vk2s::Camera mCamera;
+
+        Handle<vk2s::Image> mOutputImage;
 
         std::unique_ptr<Integrator> mIntegrator;
 

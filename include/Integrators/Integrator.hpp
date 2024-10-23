@@ -20,10 +20,10 @@ namespace palm
     class Integrator
     {
     public:
-        Integrator(vk2s::Device& device, ec2s::Registry& scene, Handle<vk2s::Image> output)
+        Integrator(vk2s::Device& device, ec2s::Registry& scene, Handle<vk2s::Image> outputImage)
             : mDevice(device)
             , mScene(scene)
-            , mOutput(output)
+            , mOutputImage(outputImage)
             {}
          
         virtual ~Integrator(){}
