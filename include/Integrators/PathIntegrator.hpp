@@ -32,20 +32,29 @@ namespace palm
 
     private:
 
-        uint32_t mSpp;
+        // can be modified from ImGui
+        struct GUIParams
+        {
+            uint32_t spp;
+        };
 
-        Handle<vk2s::Shader> mRaygenShader;
-        Handle<vk2s::Shader> mClosestHitShader;
-        Handle<vk2s::Shader> mMissShader;
+        GUIParams mGUIParams;
 
+        // TLAS
+        Handle<vk2s::AccelerationStructure> mTLAS;
+
+        // shader resources
         Handle<vk2s::DynamicBuffer> mSampleBuffer;
-
+        Handle<vk2s::Image> mPoolImage;
+        // binding 
         Handle<vk2s::BindLayout> mBindLayout;
         Handle<vk2s::BindGroup> mBindGroup;
 
+        // pipeline and SBT
         Handle<vk2s::Pipeline> mRaytracePipeline;
         Handle<vk2s::ShaderBindingTable> mShaderBindingTable;
-
+        
+        
     };
 }  // namespace palm
 

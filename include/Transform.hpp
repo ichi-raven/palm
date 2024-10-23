@@ -11,6 +11,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
+
+#include <vulkan/vulkan.hpp>
 
 #include <vk2s/Device.hpp>
 
@@ -32,6 +35,17 @@ namespace palm
                 model             = glm::translate(glm::mat4(1.f), translate) * glm::toMat4(glm::quat(rotation)) * glm::scale(glm::mat4(1.f), scaling);
                 modelInvTranspose = glm::transpose(glm::inverse(model));
             }
+
+            inline vk::TransformMatrixKHR convert()
+            {
+                vk::TransformMatrixKHR mtx;
+                auto mT = glm::transpose(model);
+                memcpy(&mtx.matrix[0], &mT[0], sizeof(float) * 4);
+                memcpy(&mtx.matrix[1], &mT[1], sizeof(float) * 4);
+                memcpy(&mtx.matrix[2], &mT[2], sizeof(float) * 4);
+
+                return mtx;
+            };
         };
 
         Params params;

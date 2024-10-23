@@ -36,7 +36,7 @@ namespace palm
 
         vk2s::Device& mDevice;
         ec2s::Registry& mScene;
-        Handle<vk2s::Image> mOutput;
+        Handle<vk2s::Image> mOutputImage;
     };
 }  // namespace palm
 

@@ -65,7 +65,6 @@ namespace palm
         };
 
     private:
-        //inline static void load(std::string_view path, vk2s::Device& device, std::vector<MeshInstance>& meshInstances, Handle<vk2s::Buffer>& materialUB, std::vector<Handle<vk2s::Image>>& materialTextures);
 
         void initVulkan();
 

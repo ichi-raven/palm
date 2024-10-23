@@ -130,6 +130,9 @@ namespace palm
                 mesh.indexBuffer->write(hostMesh.indices.data(), ibSize);
             }
 
+            { // BLAS
+                mesh.blas = device.create<vk2s::AccelerationStructure>(mesh.hostMesh.vertices.size(), sizeof(vk2s::Vertex), mesh.vertexBuffer.get(), mesh.hostMesh.indices.size() / 3, mesh.indexBuffer.get());
+            }
             // materials
             {
                 const auto ubSize = sizeof(vk2s::Material) * hostMaterials.size();

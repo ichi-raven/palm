@@ -18,7 +18,7 @@ int main()
     app.addState<palm::Renderer>        (palm::AppState::eRenderer);
     app.addState<palm::MaterialViewer>  (palm::AppState::eMaterialViewer);
 
-    app.init(palm::AppState::eMaterialViewer);
+    app.init(palm::AppState::eEditor);
 
     while (!app.endAll())
     {

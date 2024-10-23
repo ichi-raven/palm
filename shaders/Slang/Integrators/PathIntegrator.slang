@@ -1,0 +1,12 @@
+
+[[]]
+raygenMain()
+{
+
+}
+
+missMain
+
+shadowMain
+
+chitMain

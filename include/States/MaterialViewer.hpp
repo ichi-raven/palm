@@ -54,7 +54,6 @@ namespace palm
         };
 
     private:
-        //inline static void load(std::string_view path, vk2s::Device& device, std::vector<MeshInstance>& meshInstances, Handle<vk2s::Buffer>& materialUB, std::vector<Handle<vk2s::Image>>& materialTextures);
 
         void initVulkan();
 
@@ -63,10 +62,6 @@ namespace palm
         void updateShaderResources();
 
         void onResized();
-
-        void addEntity(const std::filesystem::path& path);
-
-        void removeEntity(const ec2s::Entity entity);
 
     private:
         vk2s::Camera mCamera;
