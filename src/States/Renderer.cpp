@@ -1,3 +1,10 @@
+/*****************************************************************//**
+ * @file   Renderer.cpp
+ * @brief  
+ * 
+ * @author ichi-raven
+ * @date   October 2024
+ *********************************************************************/
 #include "../include/States/Renderer.hpp"
 
 #include <imgui_impl_glfw.h>

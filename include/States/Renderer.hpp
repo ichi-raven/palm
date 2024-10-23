@@ -20,7 +20,7 @@
 
 #include "../include/AppStates.hpp"
 #include "../include/GraphicsPass.hpp"
-#include "../include/Integrator.hpp"
+#include "../include/Integrators/Integrator.hpp"
 
 #include <filesystem>
 

@@ -393,10 +393,6 @@ namespace palm
                 mRenderCompletedSems[i] = device.create<vk2s::Semaphore>();
                 mFences[i]              = device.create<vk2s::Fence>();
             }
-
-            mCamera = vk2s::Camera(60., 1. * windowWidth / windowHeight);
-            mCamera.setPos(glm::vec3(0.0, 0.8, 3.0));
-            mCamera.setLookAt(glm::vec3(0.0, 0.8, -2.0));
         }
         catch (std::exception& e)
         {
@@ -407,6 +403,17 @@ namespace palm
     void Editor::init()
     {
         initVulkan();
+
+        auto& window = common()->window;
+        auto& scene  = common()->scene;
+
+        mCameraEntity                          = scene.create<vk2s::Camera>();
+        auto& camera                           = scene.get<vk2s::Camera>(mCameraEntity);
+        const auto [windowWidth, windowHeight] = window->getWindowSize();
+
+        camera = vk2s::Camera(60., 1. * windowWidth / windowHeight);
+        camera.setPos(glm::vec3(0.0, 0.8, 3.0));
+        camera.setLookAt(glm::vec3(0.0, 0.8, -2.0));
 
         mLastTime = glfwGetTime();
         mNow      = 0;
@@ -441,7 +448,7 @@ namespace palm
         // update camera
         const double speed      = 2.0f * deltaTime;
         const double mouseSpeed = 0.7f * deltaTime;
-        mCamera.update(window->getpGLFWWindow(), speed, mouseSpeed);
+        scene.get<vk2s::Camera>(mCameraEntity).update(window->getpGLFWWindow(), speed, mouseSpeed);
 
         // wait and reset fence
         mFences[mNow]->wait();
@@ -549,21 +556,22 @@ namespace palm
 
     void Editor::updateShaderResources()
     {
-        auto& scene = common()->scene;
+        auto& scene  = common()->scene;
+        auto& camera = scene.get<vk2s::Camera>(mCameraEntity);
 
         // scene information
         {
             //const auto& view = glm::transpose(mCamera.getViewMatrix()); // DEBUG!!
             //const auto& proj = glm::transpose(mCamera.getProjectionMatrix()); // DEBUG!!
-            const auto& view = mCamera.getViewMatrix();
-            const auto& proj = mCamera.getProjectionMatrix();
+            const auto& view = camera.getViewMatrix();
+            const auto& proj = camera.getProjectionMatrix();
 
             SceneParams sceneParams{
                 .view    = view,
                 .proj    = proj,
                 .viewInv = glm::inverse(view),
                 .projInv = glm::inverse(proj),
-                .camPos  = glm::vec4(mCamera.getPos(), 1.0),
+                .camPos  = glm::vec4(camera.getPos(), 1.0),
             };
 
             mSceneBuffer->write(&sceneParams, sizeof(SceneParams), mNow * mSceneBuffer->getBlockSize());
@@ -578,6 +586,7 @@ namespace palm
         auto& device = common()->device;
         auto& window = common()->window;
         auto& scene  = common()->scene;
+        auto& camera = scene.get<vk2s::Camera>(mCameraEntity);
 
         const auto [windowWidth, windowHeight] = window->getWindowSize();
 
@@ -704,8 +713,8 @@ namespace palm
             ImGui::Text("Information");
             ImGui::Text("device = %s", device.getPhysicalDeviceName().data());
             ImGui::Text("fps = %lf", 1. / deltaTime);
-            const auto& pos    = mCamera.getPos();
-            const auto& lookAt = mCamera.getLookAt();
+            const auto& pos    = camera.getPos();
+            const auto& lookAt = camera.getLookAt();
             ImGui::Text("pos = (%lf, %lf, %lf)", pos.x, pos.y, pos.z);
             ImGui::Text("lookat = (%lf, %lf, %lf)", lookAt.x, lookAt.y, lookAt.z);
 
@@ -716,8 +725,8 @@ namespace palm
                 auto& transform = scene.get<Transform>(*mPickedEntity);
 
                 static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::TRANSLATE;
-                const auto& viewMat                              = mCamera.getViewMatrix();
-                glm::mat4 projectionMat                          = mCamera.getProjectionMatrix();
+                const auto& viewMat                              = camera.getViewMatrix();
+                glm::mat4 projectionMat                          = camera.getProjectionMatrix();
                 projectionMat[1][1] *= -1.f;  // HACK: too adhoc
 
                 ImGui::Text("Manipulation (Picked: %s)", scene.get<EntityInfo>(*mPickedEntity).entityName.c_str());

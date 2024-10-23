@@ -80,7 +80,6 @@ namespace palm
         void removeEntity(const ec2s::Entity entity);
 
     private:
-        vk2s::Camera mCamera;
 
         std::vector<Handle<vk2s::Command>> mCommands;
         std::vector<Handle<vk2s::Semaphore>> mImageAvailableSems;
@@ -98,6 +97,7 @@ namespace palm
         UniqueHandle<vk2s::BindGroup> mSceneBindGroup;
 
         std::optional<ec2s::Entity> mPickedEntity;
+        ec2s::Entity mCameraEntity;
 
         std::optional<AppState> mChangeDst;
 

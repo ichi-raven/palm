@@ -38,9 +38,12 @@ set(IMGUIZMO_SOURCE_FILES
 # Create executable
 set (EXEC_SRCS 
 main.cpp
+
 States/Editor.cpp
 States/Renderer.cpp
 States/MaterialViewer.cpp
+
+Integrators/PathIntegrator.cpp
 ${IMGUI_SOURCE_FILES}
 ${IMGUIZMO_SOURCE_FILES}
 )
@@ -52,7 +55,9 @@ ${EXEC_SRCS}
 # header files
 ../include/AppStates.hpp
 ../include/Film.hpp
-../include/Integrator.hpp
+
+../include/Integrators/Integrator.hpp
+../include/Integrators/PathIntegrator.hpp
 
 ../include/Mesh.hpp
 ../include/Material.hpp
