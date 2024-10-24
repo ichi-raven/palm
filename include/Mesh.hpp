@@ -15,6 +15,14 @@ namespace palm
 {
     struct Mesh
     {
+        struct Vertex
+        {
+            glm::vec3 pos;
+            float u;
+            glm::vec3 normal;
+            float v;
+        };
+
         vk2s::Mesh hostMesh;
         Handle<vk2s::Buffer> vertexBuffer;
         Handle<vk2s::Buffer> indexBuffer;

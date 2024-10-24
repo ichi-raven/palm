@@ -30,6 +30,7 @@ namespace palm
         GEN_STATE(Editor, palm::AppState, palm::CommonRegion);
 
     private:
+
         struct SceneParams  // std430
         {
             glm::mat4 view;

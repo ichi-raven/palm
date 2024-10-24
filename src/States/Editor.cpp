@@ -39,24 +39,33 @@ namespace palm
 
         assert(hostMaterials.size() == hostMeshes.size() || !"The number of mesh is different from the number of material!");
 
-        for (size_t i = 0; i < hostMeshes.size(); ++i)
+        for (const auto& hostMesh : hostMeshes)
         {
-            const auto entity    = scene.create<Mesh, Material, EntityInfo, Transform>();
-            auto& mesh           = scene.get<Mesh>(entity);
-            auto& material       = scene.get<Material>(entity);
-            auto& info           = scene.get<EntityInfo>(entity);
-            auto& transform      = scene.get<Transform>(entity);
-            mesh.hostMesh        = hostMeshes[i];
-            const auto& hostMesh = mesh.hostMesh;
+            const auto entity = scene.create<Mesh, Material, EntityInfo, Transform>();
+            auto& mesh        = scene.get<Mesh>(entity);
+            auto& material    = scene.get<Material>(entity);
+            auto& info        = scene.get<EntityInfo>(entity);
+            auto& transform   = scene.get<Transform>(entity);
+            mesh.hostMesh     = hostMesh;
 
             {  // vertex buffer
-                const auto vbSize  = hostMesh.vertices.size() * sizeof(vk2s::Vertex);
+                std::vector<Mesh::Vertex> vertices;
+                vertices.resize(mesh.hostMesh.vertices.size());
+                for (int i = 0; i < mesh.hostMesh.vertices.size(); ++i)
+                {
+                    vertices[i].pos    = mesh.hostMesh.vertices[i].pos;
+                    vertices[i].normal = mesh.hostMesh.vertices[i].normal;
+                    vertices[i].u      = mesh.hostMesh.vertices[i].uv.x;
+                    vertices[i].v      = mesh.hostMesh.vertices[i].uv.y;
+                }
+
+                const auto vbSize  = vertices.size() * sizeof(Mesh::Vertex);
                 const auto vbUsage = vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR | vk::BufferUsageFlagBits::eShaderDeviceAddress | vk::BufferUsageFlagBits::eStorageBuffer;
                 vk::BufferCreateInfo ci({}, vbSize, vbUsage);
                 vk::MemoryPropertyFlags fb = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
 
                 mesh.vertexBuffer = device.create<vk2s::Buffer>(ci, fb);
-                mesh.vertexBuffer->write(hostMesh.vertices.data(), vbSize);
+                mesh.vertexBuffer->write(vertices.data(), vbSize);
             }
 
             {  // index buffer
@@ -71,8 +80,8 @@ namespace palm
                 mesh.indexBuffer->write(hostMesh.indices.data(), ibSize);
             }
 
-            { // BLAS
-                mesh.blas = device.create<vk2s::AccelerationStructure>(mesh.hostMesh.vertices.size(), sizeof(vk2s::Vertex), mesh.vertexBuffer.get(), mesh.hostMesh.indices.size() / 3, mesh.indexBuffer.get());
+            {  // BLAS
+                mesh.blas = device.create<vk2s::AccelerationStructure>(mesh.hostMesh.vertices.size(), sizeof(Mesh::Vertex), mesh.vertexBuffer.get(), mesh.hostMesh.indices.size() / 3, mesh.indexBuffer.get());
             }
             // materials
             {
@@ -86,7 +95,7 @@ namespace palm
 
             // information
             {
-                info.entityName = std::to_string(i);
+                info.entityName = mesh.hostMesh.nodeName;
                 info.entityID   = entity;
 
                 info.groupName       = path.filename().string();
@@ -234,7 +243,7 @@ namespace palm
                 mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
                 mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings1));
 
-                vk::VertexInputBindingDescription inputBinding(0, sizeof(vk2s::Vertex));
+                vk::VertexInputBindingDescription inputBinding(0, sizeof(Mesh::Vertex));
                 const auto& inputAttributes = std::get<0>(mGeometryPass.vs->getReflection());
                 vk::Viewport viewport(0.f, 0.f, static_cast<float>(windowWidth), static_cast<float>(windowHeight), 0.f, 1.f);
                 vk::Rect2D scissor({ 0, 0 }, window->getVkSwapchainExtent());
@@ -280,8 +289,6 @@ namespace palm
                 mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
                 //mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings1));
 
-                vk::VertexInputBindingDescription inputBinding(0, sizeof(vk2s::Vertex));
-                const auto& inputAttributes = std::get<0>(mGeometryPass.vs->getReflection());
                 vk::Viewport viewport(0.f, 0.f, static_cast<float>(windowWidth), static_cast<float>(windowHeight), 0.f, 1.f);
                 vk::Rect2D scissor({ 0, 0 }, window->getVkSwapchainExtent());
                 vk::PipelineColorBlendAttachmentState colorBlendAttachment(VK_FALSE);
@@ -351,13 +358,21 @@ namespace palm
         auto& window = common()->window;
         auto& scene  = common()->scene;
 
-        mCameraEntity                          = scene.create<vk2s::Camera>();
-        auto& camera                           = scene.get<vk2s::Camera>(mCameraEntity);
-        const auto [windowWidth, windowHeight] = window->getWindowSize();
+        if (scene.size<vk2s::Camera>() == 0)
+        {
+            mCameraEntity = scene.create<vk2s::Camera>();
 
-        camera = vk2s::Camera(60., 1. * windowWidth / windowHeight);
-        camera.setPos(glm::vec3(0.0, 0.8, 3.0));
-        camera.setLookAt(glm::vec3(0.0, 0.8, -2.0));
+            auto& camera                           = scene.get<vk2s::Camera>(mCameraEntity);
+            const auto [windowWidth, windowHeight] = window->getWindowSize();
+
+            camera = vk2s::Camera(60., 1. * windowWidth / windowHeight);
+            camera.setPos(glm::vec3(0.0, 0.8, 3.0));
+            camera.setLookAt(glm::vec3(0.0, 0.8, -2.0));
+        }
+        else
+        {
+            scene.each<vk2s::Camera>([&](ec2s::Entity entity, vk2s::Camera& camera) { mCameraEntity = entity; });
+        }
 
         mLastTime = glfwGetTime();
         mNow      = 0;
@@ -567,7 +582,7 @@ namespace palm
                 ImGui::EndMenu();
             }
 
-            if (ImGui::BeginMenu("GoTo"))
+            if (ImGui::BeginMenu("Mode"))
             {
                 if (ImGui::MenuItem("Renderer", NULL) && scene.size<Mesh>() != 0)
                 {

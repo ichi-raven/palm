@@ -107,6 +107,13 @@ namespace palm
             return;
         }
 
+        // change state
+        if (mChangeDst)
+        {
+            device.waitIdle();
+            changeState(*mChangeDst);
+        }
+
         // update frame index
         mNow = (mNow + 1) % frameCount;
     }
@@ -197,7 +204,45 @@ namespace palm
         ImGui::NewFrame();
         ImGui::SetWindowFontScale(kFontScale);
 
-        ImGui::Begin("Select Integrator", NULL);
+
+        ImGui::SetNextWindowPos(ImVec2(0, 0));  // left
+        ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.03));
+        ImGui::Begin("MenuBar", NULL, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+        ImGui::SetWindowFontScale(kFontScale);
+        if (ImGui::BeginMenuBar())
+        {
+            if (ImGui::BeginMenu("File"))
+            {
+                ImGui::MenuItem("New", NULL);
+                ImGui::MenuItem("Open", NULL);
+                ImGui::MenuItem("Save", NULL);
+                ImGui::MenuItem("Save As", NULL);
+                ImGui::MenuItem("Exit", NULL);
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("Edit"))
+            {
+                ImGui::MenuItem("Cut", NULL);
+                ImGui::MenuItem("Copy", NULL);
+                ImGui::MenuItem("Paste", NULL);
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("Mode"))
+            {
+                if (ImGui::MenuItem("Editor", NULL))
+                {
+                    mChangeDst = AppState::eEditor;
+                }
+                ImGui::EndMenu();
+            }
+
+            ImGui::EndMenuBar();
+        }
+        ImGui::End();
+
+        ImGui::Begin("Select Integrator");
         if (ImGui::Selectable("path"))
         {
             mIntegrator = std::make_unique<PathIntegrator>(device, scene, mOutputImage);

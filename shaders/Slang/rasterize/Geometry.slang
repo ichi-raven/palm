@@ -19,10 +19,9 @@ struct EntityParams
 struct VSInput
 {
     float3 pos;
+    float u;
     float3 normal;
-    float2 uv;
-    float4 joint;
-    float4 weight;
+    float v;
 };
 
 struct WorldInfo
@@ -54,7 +53,7 @@ VSOutput vsmain(VSInput in)
     VSOutput output         = (VSOutput)0;
     output.worldInfo.pos    = mul(float4(in.pos, 1.0), entityParams.model).xyz;
     output.worldInfo.normal = mul(float4(in.normal, 0.), entityParams.modelInvTranspose).xyz;
-    output.worldInfo.uv = in.uv;
+    output.worldInfo.uv = float2(in.u, in.v);
 
     //output.SVPos = mul(sceneParams.proj, mul(sceneParams.view, float4(output.worldInfo.pos, 1.0)));
     output.SVPos = mul(mul(float4(output.worldInfo.pos, 1.0), sceneParams.view), sceneParams.proj);

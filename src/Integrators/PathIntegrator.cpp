@@ -53,7 +53,7 @@ namespace palm
                 .camPos     = glm::vec4(camPos, 1.0f),
                 .screenSize = glm::vec2(extent.width, extent.height),
                 .padding    = glm::vec2(0.f),
-                .lightDir   = glm::vec4(-1.f, -1.f, -1.f, 0.f),
+                .lightDir   = glm::vec4(1.f, 1.f, 1.f, 0.f),
             };
 
             mSceneBuffer->write(&params, sizeof(SceneParams));

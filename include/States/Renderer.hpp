@@ -67,6 +67,8 @@ namespace palm
 
     private:
 
+        std::optional<AppState> mChangeDst;
+
         Handle<vk2s::Image> mOutputImage;
 
         std::unique_ptr<Integrator> mIntegrator;
