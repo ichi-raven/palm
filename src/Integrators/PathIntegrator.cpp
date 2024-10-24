@@ -232,9 +232,7 @@ namespace palm
 
     void PathIntegrator::showConfigImGui()
     {
-        int spp = 0;
-        ImGui::InputInt("spp", &spp);
-        mGUIParams.spp = spp;
+        ImGui::InputInt("spp", &mGUIParams.spp);
     }
 
     void PathIntegrator::sample(Handle<vk2s::Fence> fence, Handle<vk2s::Command> command)

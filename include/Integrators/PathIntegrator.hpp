@@ -47,7 +47,7 @@ namespace palm
         // can be modified from ImGui
         struct GUIParams
         {
-            uint32_t spp;
+            int spp;
         };
 
         GUIParams mGUIParams;

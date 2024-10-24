@@ -195,8 +195,6 @@ namespace palm
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-        ImGuizmo::BeginFrame();
-        ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, windowWidth, windowHeight);
         ImGui::SetWindowFontScale(kFontScale);
 
         ImGui::Begin("Select Integrator", NULL);
@@ -206,6 +204,13 @@ namespace palm
         }
 
         ImGui::End();
+
+        if (mIntegrator)
+        {
+            ImGui::Begin("Integrator Config");
+            mIntegrator->showConfigImGui();
+            ImGui::End();
+        }
 
         ImGui::Render();
     }

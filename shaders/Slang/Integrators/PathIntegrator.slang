@@ -27,16 +27,14 @@ struct Vertex
 
 Vertex barycentric(Vertex v1, Vertex v2, Vertex v3, float2 barycentric)
 {
-    let w2 = barycentric.x;
-    let w3 = barycentric.y;
-    let w1 = 1.f - w2 - w3;
+    let w = float3(1.f - barycentric.x - barycentric.y, barycentric.x, barycentric.y);
 
     Vertex rtn;
-    rtn.pos = v1.pos * w1 + v2.pos * w2 + v3.pos * w3;
-    rtn.normal = v1.normal * w1 + v2.normal * w2 + v3.normal * w3;
-    rtn.uv = v1.uv * w1 + v2.uv * w2 + v3.uv * w3;
-    rtn.joint = v1.joint * w1 + v2.joint * w2 + v3.joint * w3;
-    rtn.weight = v1.weight * w1 + v2.weight * w2 + v3.weight * w3;
+    rtn.pos = v1.pos * w.x + v2.pos * w.y + v3.pos * w.z;
+    rtn.normal = normalize(v1.normal * w.x + v2.normal * w.y + v3.normal * w.z);
+    rtn.uv = v1.uv * w.x + v2.uv * w.y + v3.uv * w.z;
+    rtn.joint = v1.joint * w.x + v2.joint * w.y + v3.joint * w.z;
+    rtn.weight = v1.weight * w.x + v2.weight * w.y + v3.weight * w.z;
 
     return rtn;
 }
@@ -65,7 +63,7 @@ RayDesc getCameraRay(uint2 threadIdx)
 [[vk::binding(1, 0)]] RWTexture2D resultTexture;
 [[vk::binding(2, 0)]] ConstantBuffer<SceneParams> sceneParams;
 [[vk::binding(3, 0)]] StructuredBuffer<Vertex> vertices[];
-[[vk::binding(4, 0)]] StructuredBuffer<uint> indices[];
+[[vk::binding(4, 0)]] StructuredBuffer<uint32_t> indices[];
 
 [shader("raygeneration")]
 void rayGenShader()
@@ -87,7 +85,7 @@ void rayGenShader()
 
     let rel = threadIdx / sceneParams.screenSize;
     let pixelCenter = float2(rel.xy) + float2(0.5);
-    resultTexture[threadIdx.xy] = payload.color;//float4(pixelCenter, 0.0, 1.0);//
+    resultTexture[threadIdx.xy] = payload.color;
 }
 
 [shader("miss")]
@@ -101,56 +99,44 @@ void closestHitShader(inout RayPayload payload : SV_RayPayload,
     in BuiltInTriangleIntersectionAttributes attr)
 {
     // DEBUG
-    // let dbgInstanceIndex = PrimitiveIndex();
-    // payload.color = float4(0.8, 0.2, 0.2, 1.0);
-    // if (dbgInstanceIndex % 3 == 1)
-    // {
-    //     payload.color = float4(0.2, 0.8, 0.2, 1.0);
-    // }
-    // else if (dbgInstanceIndex % 3 == 2)
-    // {
-    //     payload.color = float4(0.2, 0.2, 0.8, 1.0);
-    // }
-    // return;
     // let dbginstanceIndex = InstanceIndex();
     // let dbgprimitiveIndex = PrimitiveIndex();
-    // let dbgindices = int3(indices[dbginstanceIndex][dbgprimitiveIndex * 3 + 0], indices[dbginstanceIndex][dbgprimitiveIndex * 3 + 1], indices[dbginstanceIndex][dbgprimitiveIndex * 3 + 2]);
-    // payload.color = float4(normalize(float3(dbgindices)), 1.0);
+    // //let dbgindices = int3(indices[dbginstanceIndex][dbgprimitiveIndex * 3 + 0], indices[dbginstanceIndex][dbgprimitiveIndex * 3 + 1], indices[dbginstanceIndex][dbgprimitiveIndex * 3 + 2]);
+    // let dbgVertex = vertices[dbginstanceIndex][0];
+    // payload.color = float4(normalize(float3(dbgVertex.normal)), 1.0);
     // return;
 
     float3 hitLocation = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
     float3 shadowRayDir = sceneParams.lightDir.xyz;
 
-    RayDesc ray;
-    ray.Origin = hitLocation;
-    ray.Direction = shadowRayDir;
-    ray.TMin = 0.001;
-    ray.TMax = 10000.0;
-    RayPayload shadowPayload = { float4(1.0, 0, 0, 0) };
-    TraceRay(sceneBVH, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, ~0, 0, 0, 1, ray, shadowPayload);
-    float shadow = 1.0 - shadowPayload.color.x;
+    // RayDesc ray;
+    // ray.Origin = hitLocation;
+    // ray.Direction = shadowRayDir;
+    // ray.TMin = 0.001;
+    // ray.TMax = 10000.0;
+    // RayPayload shadowPayload = { float4(1.0, 0, 0, 0) };
+    // TraceRay(sceneBVH, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, ~0, 0, 0, 1, ray, shadowPayload);
+    // float shadow = 1.0 - shadowPayload.color.x;
 
     let instanceIndex = InstanceIndex();
     let primitiveIndex = PrimitiveIndex();
     let indices = uint3(indices[instanceIndex][primitiveIndex * 3 + 0], indices[instanceIndex][primitiveIndex * 3 + 1], indices[instanceIndex][primitiveIndex * 3 + 2]);
-    let vertex = vertices[0][0];//barycentric(vertices[instanceIndex][indices.x], vertices[instanceIndex][indices.y], vertices[instanceIndex][indices.z], attr.barycentrics);
-    let normal = vertex.normal;
-    payload.color = float4(normal, 1.0f);
-    return;
+    let vertex = barycentric(vertices[instanceIndex][indices.x], vertices[instanceIndex][indices.y], vertices[instanceIndex][indices.z], attr.barycentrics);
+    payload.color = float4(vertex.normal, 1.0f);
 
-    float3 color = float3(0.8, 0.2, 0.2);
-    if (instanceIndex % 3 == 1)
-    {
-        color = float3(0.2, 0.8, 0.2);
-    }
-    else if (instanceIndex % 3 == 2)
-    {
-        color = float3(0.2, 0.2, 0.8);
-    }
+    // float3 color = float3(0.8, 0.2, 0.2);
+    // if (instanceIndex % 3 == 1)
+    // {
+    //     color = float3(0.2, 0.8, 0.2);
+    // }
+    // else if (instanceIndex % 3 == 2)
+    // {
+    //     color = float3(0.2, 0.2, 0.8);
+    // }
 
-    float ndotl = max(0.0, shadow * dot(normal, sceneParams.lightDir.xyz));
-    float intensity = ndotl * 0.7 + 0.3;
-    payload.color = float4(color * intensity, 1.0f);
+    // float ndotl = max(0.0, shadow * dot(normal, sceneParams.lightDir.xyz));
+    // float intensity = ndotl * 0.7 + 0.3;
+    // payload.color = float4(color * intensity, 1.0f);
 }
 
 [shader("miss")]
