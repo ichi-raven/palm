@@ -121,8 +121,8 @@ void closestHitShader(inout RayPayload payload : SV_RayPayload,
     let instanceIndex = InstanceIndex();
     let primitiveIndex = PrimitiveIndex();
     let indices = uint3(indices[instanceIndex][primitiveIndex * 3 + 0], indices[instanceIndex][primitiveIndex * 3 + 1], indices[instanceIndex][primitiveIndex * 3 + 2]);
-    let vertex = barycentric(vertices[instanceIndex][indices.x], vertices[instanceIndex][indices.y], vertices[instanceIndex][indices.z], attr.barycentrics);
-    payload.color = float4(vertex.normal, 1.0f);
+    let vertex         = barycentric(vertices[instanceIndex][indices.x], vertices[instanceIndex][indices.y], vertices[instanceIndex][indices.z], attr.barycentrics);
+    payload.color = float4(mul(float4(vertex.normal, 0.f), ObjectToWorld4x3()), 1.0f);
 
     // float3 color = float3(0.8, 0.2, 0.2);
     // if (instanceIndex % 3 == 1)
