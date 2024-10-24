@@ -72,12 +72,6 @@ void rayGenShader()
     if (threadIdx.x >= (int)sceneParams.screenSize.x) return;
     if (threadIdx.y >= (int)sceneParams.screenSize.y) return;
 
-    // float frameWidth = sceneParams.screenSize.x / sceneParams.screenSize.y * sceneParams.frameHeight;
-    // float imageY = (threadIdx.y / sceneParams.screenSize.y - 0.5f) * sceneParams.frameHeight;
-    // float imageX = (threadIdx.x / sceneParams.screenSize.x - 0.5f) * frameWidth;
-    // float imageZ = sceneParams.focalLength;
-    // float3 rayDir = normalize(sceneParams.cameraDir.xyz*imageZ - uniforms.cameraUp.xyz * imageY + uniforms.cameraRight.xyz * imageX);
-
     // Trace the ray.
     RayDesc ray = getCameraRay(threadIdx);
     RayPayload payload = { float4(0, 0, 0, 0) };
