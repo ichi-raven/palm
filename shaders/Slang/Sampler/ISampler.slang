@@ -1,9 +1,11 @@
 
 interface ISampler
 {
-    void init(int seed);
+    __init(int seed);
 
+    [mutating]
     float next1D();
-
+    
+    [mutating]
     float2 next2D();
 }

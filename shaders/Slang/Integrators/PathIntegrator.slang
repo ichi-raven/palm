@@ -30,11 +30,9 @@ Vertex barycentric(Vertex v1, Vertex v2, Vertex v3, float2 barycentric)
 
     Vertex rtn;
     rtn.pos = v1.pos * w.x + v2.pos * w.y + v3.pos * w.z;
-    rtn.normal = normalize(v1.normal * w.x + v2.normal * w.y + v3.normal * w.z);
+    rtn.normal = v1.normal * w.x + v2.normal * w.y + v3.normal * w.z;
     rtn.u = v1.u * w.x + v2.u * w.y + v3.u * w.z;
     rtn.v = v1.v * w.x + v2.v * w.y + v3.v * w.z;
-    // rtn.joint = v1.joint * w.x + v2.joint * w.y + v3.joint * w.z;
-    // rtn.weight = v1.weight * w.x + v2.weight * w.y + v3.weight * w.z;
 
     return rtn;
 }
@@ -95,21 +93,24 @@ void closestHitShader(inout RayPayload payload : SV_RayPayload,
     float3 hitLocation = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
     float3 shadowRayDir = sceneParams.lightDir.xyz;
 
-    RayDesc ray;
-    ray.Origin = hitLocation;
-    ray.Direction = shadowRayDir;
-    ray.TMin = 0.001;
-    ray.TMax = 10000.0;
-    RayPayload shadowPayload = { float4(1.0, 0, 0, 0) };
-    TraceRay(sceneBVH, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, ~0, 0, 0, 1, ray, shadowPayload);
-    let shadow = 1.0 - shadowPayload.color.x;
-
     let instanceIndex = InstanceIndex();
     let primitiveIndex = PrimitiveIndex();
     let index = uint3(indices[instanceIndex][primitiveIndex * 3 + 0], indices[instanceIndex][primitiveIndex * 3 + 1], indices[instanceIndex][primitiveIndex * 3 + 2]);
     let vertex = barycentric(vertices[instanceIndex][index.x], vertices[instanceIndex][index.y], vertices[instanceIndex][index.z], attr.barycentrics);
 
-    float ndotl = max(0.0, shadow * dot(vertex.normal, sceneParams.lightDir.xyz));
+    let worldPos    = mul(float4(vertex.pos, 1.0), ObjectToWorld4x3());
+    let worldNormal = mul(float4(vertex.normal, 0.0), ObjectToWorld4x3());
+
+    RayDesc ray;
+    ray.Origin               = worldPos;//hitLocation;
+    ray.Direction            = shadowRayDir;
+    ray.TMin                 = 0.001;
+    ray.TMax                 = 10000.0;
+    RayPayload shadowPayload = { float4(1.0, 0, 0, 0) };
+    TraceRay(sceneBVH, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, ~0, 0, 0, 1, ray, shadowPayload);
+    let shadow = 1.0 - shadowPayload.color.x;
+
+    float ndotl     = max(0.0, shadow * dot(vertex.normal, sceneParams.lightDir.xyz));
     float intensity = ndotl * 0.7 + 0.3;
     float3 color = float3(0.2, 0.8, 0.2);
     payload.color = float4(color * intensity, 1.0f);
