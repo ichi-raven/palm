@@ -1,17 +1,18 @@
-#include "ISampler.slang"
 
-public struct IndependentSampler : ISampler
+implementing Sampler;
+
+public struct IndependentSampler// : ISampler
 {
-    __init(int seed)
+    public __init(uint seed) 
     {
-        mRngState = seed;
+        prngState = seed;
     }
 
     [mutating]
     public float next1D()
     {
-        mRngState = mRngState * 747796405 + 1;
-        uint word = ((mRngState >> ((mRngState >> 28) + 4)) ^ mRngState) * 277803737;
+        prngState = prngState * 747796405 + 1;
+        uint word = ((prngState >> ((prngState >> 28) + 4)) ^ prngState) * 277803737;
         word      = (word >> 22) ^ word;
         return float(word) / 4294967295.0f;
     }
@@ -22,5 +23,5 @@ public struct IndependentSampler : ISampler
         return float2(next1D(), next1D());
     }
 
-    internal int mRngState;
+    private int prngState;
 }

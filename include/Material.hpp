@@ -18,7 +18,8 @@ namespace palm
     {
         enum class Type : int32_t
         {
-            ePrinciple,
+            eLambert = 0,
+            ePrinciple = 1,
             eMaterialNum
         };
 
@@ -47,7 +48,7 @@ namespace palm
             glm::vec3 emissive;
         };
 
-        vk2s::Material materialParam;
+        Params materialParams;
         Handle<vk2s::Buffer> uniformBuffer;
 
         constexpr static uint32_t kDefaultTexNum = 4;

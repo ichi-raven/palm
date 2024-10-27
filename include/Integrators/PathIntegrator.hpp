@@ -38,9 +38,7 @@ namespace palm
             glm::mat4 proj;
             glm::mat4 viewInv;
             glm::mat4 projInv;
-            glm::vec4 camPos;
-            glm::vec2 screenSize;
-            glm::vec2 padding;            
+            glm::vec4 camPos;        
             glm::vec4 lightDir;
         };
 

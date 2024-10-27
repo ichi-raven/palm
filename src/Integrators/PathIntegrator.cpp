@@ -51,8 +51,6 @@ namespace palm
                 .viewInv    = glm::inverse(view),
                 .projInv    = glm::inverse(proj),
                 .camPos     = glm::vec4(camPos, 1.0f),
-                .screenSize = glm::vec2(extent.width, extent.height),
-                .padding    = glm::vec2(0.f),
                 .lightDir   = glm::normalize(glm::vec4(1.f, 1.f, 1.f, 0.f)),
             };
 
