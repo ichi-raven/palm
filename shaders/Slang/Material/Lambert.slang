@@ -5,28 +5,31 @@ public struct Lambert : IMaterial
 
     public __init(in MaterialParams params_)
     {
-        params = params_;
+        mParams = params_;
     }
 
-
+    public property MaterialParams params
+    {
+        get {return mParams;}
+    }
 
     public struct BSDF : IBSDF
     {
-        public BSDFSample sample()
+        public BSDFSample sample(BSDFContext ctx, SurfaceInteraction si, float sample1, float2 sample2)
+        {
+            
+        }
+
+        public float pdf(BSDFContext ctx, SurfaceInteraction si, float3 wo)
         {
 
         }
 
-        public float pdf()
-        {
-
-        }
-
-        public float3 eval()
+        public float3 eval(BSDFContext ctx, SurfaceInteraction si, float3 wo)
         {
 
         }
     }
 
-    public MaterialParams params;
+    private MaterialParams mParams;
 }

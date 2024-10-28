@@ -2,6 +2,7 @@ module Material;
 
 import "../Utility/Frame";
 import "../Utility/Warp";
+import "../Utility/SurfaceInteraction";
 
 __include Lambert;
 
@@ -35,8 +36,15 @@ public struct MaterialParams // std140
     int32_t metalnessTexIndex;
     int32_t normalmapTexIndex;
 
-    int32_t materialType;
+    int32_t type;
     float3 emissive;
+}
+
+public struct BSDFContext
+{
+    bool isRefracted;
+    bool hasBeenRefracted;
+    float lastIOR;
 }
 
 public struct BSDFSample
@@ -68,17 +76,78 @@ public interface IMaterial
 
     public __init(in MaterialParams params);
 
-    property BSDF bsdf
-    {
-        get;
-    }
+    property MaterialParams params{ get; }
 }
 
 public interface IBSDF
 {
-    public BSDFSample sample();
+    public static BSDFSample sample(BSDFContext ctx, SurfaceInteraction si, float sample1, float2 sample2);
 
-    public float pdf();
+    public static float pdf(BSDFContext ctx, SurfaceInteraction si, float3 wo);
 
-    public float3 eval();
+    public static float3 eval(BSDFContext ctx, SurfaceInteraction si, float3 wo);
 }
+
+public struct DynamicMaterial : IMaterial
+{
+
+    public __init(MaterialParams params_)
+    {
+        params = params_;
+    }
+
+    public struct BSDF: IBSDF
+    {
+        public BSDFSample sample(BSDFContext ctx, SurfaceInteraction si, float sample1, float2 sample2)
+        {
+            switch (type)
+            {
+                case MaterialType::Lambert:
+                    Lambert.BSDF.sample(ctx, si, sample1, sample2);
+                    break;
+                case MaterialType::Principle:
+                    // Principle.BSDF.sample(ctx, si, sample1, sample2);
+                    break;
+                default: // invalid
+            }
+
+            return (BSDFSample){};
+        }
+
+        public float pdf(BSDFContext ctx, SurfaceInteraction si, float3 wo)
+        {
+            switch (type)
+            {
+                case MaterialType::Lambert:
+                    Lambert.BSDF.pdf(ctx, si, wo);
+                    break;
+                case MaterialType::Principle:
+                    // Principle.BSDF.pdf(ctx, si, wo);
+                    break;
+                default: // invalid
+            }
+        }
+
+        public float3 eval(BSDFContext ctx, SurfaceInteraction si, float3 wo)
+        {
+            switch (type)
+            {
+                case MaterialType::Lambert:
+                    Lambert.BSDF.eval(ctx, si, wo);
+                    break;
+                case MaterialType::Principle:
+                    // Principle.BSDF.eval(ctx, si, wo);
+                    break;
+                default: // invalid
+            }
+        }
+    }    
+
+    public property MaterialType type
+    {
+        get{MaterialType(params.type);}
+    }
+
+    MaterialParams params;
+}
+
