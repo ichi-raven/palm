@@ -14,7 +14,9 @@ struct SceneParams
     float4x4 viewInv;
     float4x4 projInv;
     float4 cameraPos;
-    float4 lightDir;
+
+    uint sppPerFrame;
+    float3 padding;
 }
 
 struct InstanceParams
@@ -81,8 +83,8 @@ RayDesc getCameraRay(uint2 threadIdx, float2 u)
     const float2 offset = u / DispatchRaysDimensions().xy;
     
     // TODO: lens sampling
-    let d = (screenPos) * 2.0 - 1.0;
-    //let d         = (screenPos + offset) * 2.0 - 1.0;
+    //let d = (screenPos) * 2.0 - 1.0;
+    let d         = (screenPos + offset) * 2.0 - 1.0;
     let target    = mul(sceneParams.projInv, float4(d.x, d.y, 1, 1));
     let direction = mul(sceneParams.viewInv, float4(target.xyz, 0)).xyz;
 
@@ -102,6 +104,7 @@ bool occluded(const float3 pos, const EmitterSample es)
     shadowRay.Direction            = es.to;
     shadowRay.TMin                 = k::eps;// WARN: adhoc
     shadowRay.TMax                 = es.distance - k::eps;// WARN: adhoc
+
     bool ret = false;// payload, 
     TraceRay(sceneBVH, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, ~0, 0, 0, 1, shadowRay, ret);
 
@@ -173,12 +176,12 @@ float3 sampleL(in int sampleID, in int pixelSeed)
         // }
 
         // update parameters
-        beta *= bs.f * abs(bs.wo.z) / max(k::eps, bs.pdf); // HACK: avoid zero dividing
-        payload.resetForNextBounce();
+        beta *= bs.f * abs(dot(si.normal, bs.wo)) / max(k::eps, bs.pdf); // HACK: avoid zero dividing
         ray.Origin = si.pos;
         ray.Direction = si.frame.toWorld(bs.wo);
         ray.TMin      = k::eps;
         ray.TMax      = k::infty;
+        payload.resetForNextBounce();
 
         // trace next ray
         TraceRay(sceneBVH, RAY_FLAG_NONE, ~0, 0, 0, 0, ray, payload);
@@ -193,13 +196,24 @@ float3 sampleL(in int sampleID, in int pixelSeed)
     return L;
 }
 
+float3 correct(const float3 L)
+{
+    if (L.x != L.x || L.y != L.y || L.z != L.z)
+    {
+        return k::zeros.xyz;
+    }
+
+    return L;
+}
+
 // bindings
 [[vk::binding(0, 0)]] RaytracingAccelerationStructure sceneBVH;
-[[vk::binding(1, 0)]] RWTexture2D resultTexture;
-[[vk::binding(2, 0)]] ConstantBuffer<SceneParams> sceneParams;
-[[vk::binding(3, 0)]] StructuredBuffer<Vertex> vertices[];
-[[vk::binding(4, 0)]] StructuredBuffer<uint32_t> indices[];
-[[vk::binding(5, 0)]] StructuredBuffer<InstanceParams> instanceParams;
+[[vk::binding(1, 0)]] RWTexture2D resultImage;
+[[vk::binding(2, 0)]] RWTexture2D poolImage;
+[[vk::binding(3, 0)]] ConstantBuffer<SceneParams> sceneParams;
+[[vk::binding(4, 0)]] StructuredBuffer<Vertex> vertices[];
+[[vk::binding(5, 0)]] StructuredBuffer<uint32_t> indices[];
+[[vk::binding(6, 0)]] StructuredBuffer<InstanceParams> instanceParams;
 
 [shader("raygeneration")]
 void rayGenShader()
@@ -208,18 +222,26 @@ void rayGenShader()
     if (threadIdx.x >= DispatchRaysDimensions().x) return;
     if (threadIdx.y >= DispatchRaysDimensions().y) return;
 
-    let spp = 128; // TODO: change from scene parameter
-    let pixelSeed = tea(threadIdx.x, threadIdx.y);
+    let pool = poolImage[threadIdx.xy].xyz;
+    let accumulatedSpp = reinterpret<uint>(poolImage[threadIdx.xy].w) + sceneParams.sppPerFrame;
+
+    let pixelSeed = tea(accumulatedSpp, tea(threadIdx.x, threadIdx.y));
 
     float3 L = float3(0.);
 
-    for (int sampleID = 0; sampleID < spp; ++sampleID)
+    for (int sampleID = 0; sampleID < sceneParams.sppPerFrame; ++sampleID)
     {
-        L += sampleL(sampleID, pixelSeed) / float(spp);
+        L += sampleL(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
     }
 
-    float3 gammaCorrected = sqrt(L); // HACK:
-    resultTexture[threadIdx.xy] = float4(gammaCorrected, 1.0);
+
+    let rate = float(sceneParams.sppPerFrame) / accumulatedSpp;
+
+    let finalRes = lerp(pool, L, rate);
+    poolImage[threadIdx.xy] = float4(finalRes, reinterpret<float>(accumulatedSpp));
+
+    float3 gammaCorrected = sqrt(finalRes); // HACK:
+    resultImage[threadIdx.xy] = float4(gammaCorrected, 1.0);
 }
 
 [shader("miss")]
@@ -258,8 +280,8 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     if (instanceIndex % 3 == 1)
     {
         params.albedo    = float4(k::white, 1.0);
-        params.emissive  = 6.0 * k::white;
-        payload.emissive = 6.0 * k::white;
+        params.emissive  = 0.5 * k::white;
+        payload.emissive = 0.5 * k::white;
     }
     params.type   = MaterialType::Lambert;
 

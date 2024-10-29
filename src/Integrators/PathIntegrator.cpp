@@ -46,12 +46,13 @@ namespace palm
                 });
 
             SceneParams params{
-                .view       = view,
-                .proj       = proj,
-                .viewInv    = glm::inverse(view),
-                .projInv    = glm::inverse(proj),
-                .camPos     = glm::vec4(camPos, 1.0f),
-                .lightDir   = glm::normalize(glm::vec4(1.f, 1.f, 1.f, 0.f)),
+                .view           = view,
+                .proj           = proj,
+                .viewInv        = glm::inverse(view),
+                .projInv        = glm::inverse(proj),
+                .camPos         = glm::vec4(camPos, 1.0f),
+                .sppPerFrame    = 4,
+                .padding        = { 0.f },
             };
 
             mSceneBuffer->write(&params, sizeof(SceneParams));
@@ -59,19 +60,18 @@ namespace palm
 
         // create instance UB
         {
-            const auto size = sizeof(InstanceParams);
-            mInstanceBuffer    = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eUniformBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-
             std::vector<InstanceParams> params;
             mScene.each<Mesh, Transform>(
                 [&](const Mesh& mesh, const Transform& transform)
-                { 
-                    auto& p = params.emplace_back();
-                    p.world = transform.params.world;
+                {
+                    auto& p         = params.emplace_back();
+                    p.world         = transform.params.world;
                     p.worldInvTrans = transform.params.worldInvTranspose;
                 });
 
-            mInstanceBuffer->write(params.data(), sizeof(InstanceParams) * params.size());
+            const auto size = sizeof(InstanceParams) * params.size();
+            mInstanceBuffer = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eStorageBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+            mInstanceBuffer->write(params.data(), size);
         }
 
         //create pool image
@@ -135,14 +135,16 @@ namespace palm
             vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eAccelerationStructureKHR, 1, vk::ShaderStageFlagBits::eAll),
             // 1 : result image
             vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eAll),
-            // 2 : scene parameters
-            vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAll),
-            // 3: vertex buffers
-            vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eStorageBuffer, meshNum, vk::ShaderStageFlagBits::eAll),
-            // 4: index buffers
+            // 2 : result image
+            vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eAll),
+            // 3 : scene parameters
+            vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAll),
+            // 4: vertex buffers
             vk::DescriptorSetLayoutBinding(4, vk::DescriptorType::eStorageBuffer, meshNum, vk::ShaderStageFlagBits::eAll),
-            // 5: instance buffers
-            vk::DescriptorSetLayoutBinding(5, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
+            // 5: index buffers
+            vk::DescriptorSetLayoutBinding(5, vk::DescriptorType::eStorageBuffer, meshNum, vk::ShaderStageFlagBits::eAll),
+            // 6: instance buffers
+            vk::DescriptorSetLayoutBinding(6, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
         };
 
         mBindLayout = device.create<vk2s::BindLayout>(bindings);
@@ -182,14 +184,15 @@ namespace palm
                     mVertexBuffers.emplace_back(mesh.vertexBuffer);
                     mIndexBuffers.emplace_back(mesh.indexBuffer);
                 });
-            
+
             mBindGroup = device.create<vk2s::BindGroup>(mBindLayout.get());
             mBindGroup->bind(0, mTLAS.get());
             mBindGroup->bind(1, vk::DescriptorType::eStorageImage, mOutputImage);
-            mBindGroup->bind(2, vk::DescriptorType::eUniformBuffer, mSceneBuffer.get());
-            mBindGroup->bind(3, vk::DescriptorType::eStorageBuffer, mVertexBuffers);
-            mBindGroup->bind(4, vk::DescriptorType::eStorageBuffer, mIndexBuffers);
-            mBindGroup->bind(5, vk::DescriptorType::eStorageBuffer, mInstanceBuffer.get());
+            mBindGroup->bind(2, vk::DescriptorType::eStorageImage, mPoolImage);
+            mBindGroup->bind(3, vk::DescriptorType::eUniformBuffer, mSceneBuffer.get());
+            mBindGroup->bind(4, vk::DescriptorType::eStorageBuffer, mVertexBuffers);
+            mBindGroup->bind(5, vk::DescriptorType::eStorageBuffer, mIndexBuffers);
+            mBindGroup->bind(6, vk::DescriptorType::eStorageBuffer, mInstanceBuffer.get());
         }
     }
 
@@ -200,10 +203,35 @@ namespace palm
     void PathIntegrator::showConfigImGui()
     {
         ImGui::InputInt("spp", &mGUIParams.spp);
+        ImGui::Text("total spp: %d", mGUIParams.accumulatedSpp);
     }
 
     void PathIntegrator::sample(Handle<vk2s::Fence> fence, Handle<vk2s::Command> command)
     {
+        mGUIParams.accumulatedSpp = std::min(mGUIParams.accumulatedSpp + mGUIParams.spp, std::numeric_limits<int>::max());
+
+        glm::mat4 view, proj;
+        glm::vec3 camPos;
+        mScene.each<vk2s::Camera>(
+            [&](const vk2s::Camera& camera)
+            {
+                view   = camera.getViewMatrix();
+                proj   = camera.getProjectionMatrix();
+                camPos = camera.getPos();
+            });
+
+        SceneParams params{
+            .view           = view,
+            .proj           = proj,
+            .viewInv        = glm::inverse(view),
+            .projInv        = glm::inverse(proj),
+            .camPos         = glm::vec4(camPos, 1.0f),
+            .sppPerFrame    = static_cast<uint32_t>(mGUIParams.spp),
+            .padding        = { 0.f },
+        };
+
+        mSceneBuffer->write(&params, sizeof(SceneParams));
+
         const auto extent = mOutputImage->getVkExtent();
         // trace ray
         command->setPipeline(mRaytracePipeline);

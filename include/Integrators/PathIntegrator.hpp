@@ -39,7 +39,9 @@ namespace palm
             glm::mat4 viewInv;
             glm::mat4 projInv;
             glm::vec4 camPos;        
-            glm::vec4 lightDir;
+            
+            uint32_t sppPerFrame;
+            float padding[3];
         };
 
         struct InstanceParams
@@ -51,7 +53,8 @@ namespace palm
         // can be modified from ImGui
         struct GUIParams
         {
-            int spp = 0;
+            int spp = 4;
+            int accumulatedSpp = 0;
         };
 
         GUIParams mGUIParams;
