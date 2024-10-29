@@ -4,7 +4,8 @@ import "../Sampler/Sampler";
 import "../Material/Material";
 import "../Emitter/Emitter";
 import "../Utility/SurfaceInteraction";
-
+import "../Utility/Frame";
+import "../Utility/Constants";
 
 struct SceneParams
 {
@@ -14,10 +15,17 @@ struct SceneParams
     float4x4 projInv;
     float4 cameraPos;
     float4 lightDir;
-};
+}
+
+struct InstanceParams
+{
+    float4x4 world;
+    float4x4 worldInvTrans;
+}
 
 struct Payload //<Sampler: ISampler> TODO:
 {
+    BSDFContext ctx;
     Optional<SurfaceInteraction> si;
     Optional<BSDFSample> bsdfSample;
     Optional<EmitterSample> emitterSample;
@@ -26,7 +34,7 @@ struct Payload //<Sampler: ISampler> TODO:
 
     bool continue()
     {
-        return si.hasValue && bsdfSample.hasValue && emitterSample.hasValue && emissive.hasValue;
+        return si.hasValue && bsdfSample.hasValue && emitterSample.hasValue && !emissive.hasValue;
     }
 
     [mutating]
@@ -37,7 +45,7 @@ struct Payload //<Sampler: ISampler> TODO:
         emitterSample   = none;
         emissive        = none;
     }
-};
+}
 
 struct Vertex// std140
 {
@@ -74,9 +82,9 @@ RayDesc getCameraRay(uint2 threadIdx, float2 u)
     
     // TODO: lens sampling
     //let d = (screenPos) * 2.0 - 1.0;
-    let d = (screenPos + offset) * 2.0 - 1.0;
-    let target = mul(float4(d.x, d.y, 1, 1), sceneParams.projInv);
-    let direction = mul(float4(target.xyz, 0), sceneParams.viewInv).xyz;
+    let d         = (screenPos + offset) * 2.0 - 1.0;
+    let target    = mul(sceneParams.projInv, float4(d.x, d.y, 1, 1));
+    let direction = mul(sceneParams.viewInv, float4(target.xyz, 0)).xyz;
 
     RayDesc ray;
     ray.Origin = sceneParams.cameraPos.xyz;
@@ -92,8 +100,8 @@ bool occluded(const float3 pos, const EmitterSample es)
     RayDesc shadowRay;
     shadowRay.Origin               = pos;//hitLocation;
     shadowRay.Direction            = es.to;
-    shadowRay.TMin                 = 0.001;// WARN: adhoc
-    shadowRay.TMax                 = es.distance - 0.0001;// WARN: adhoc
+    shadowRay.TMin                 = k::eps;// WARN: adhoc
+    shadowRay.TMax                 = es.distance - k::eps;// WARN: adhoc
     bool ret = false;// payload, 
     TraceRay(sceneBVH, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, ~0, 0, 0, 1, shadowRay, ret);
 
@@ -118,7 +126,7 @@ float3 sampleL(in int sampleID, in int pixelSeed)
     }
 
     // trace ray recursively
-    for (int depth = 0; depth < 8 && payload.continue(); depth++)
+    for (int depth = 1; depth < k::maxDepth && payload.continue(); ++depth)
     {
         {// russian roulette
             const float prr = max(max(beta.x, beta.y), beta.z);
@@ -134,46 +142,49 @@ float3 sampleL(in int sampleID, in int pixelSeed)
         let es = payload.emitterSample.value;
 
         // NEE
-        if (!bs.isSpecular()) 
-        {
-            if (!occluded(si.pos, es)) // HACK: Slang (HLSL) does not short circuit
-            {
-                // Add emitter directional contribution to L
+        // if (!bs.isSpecular()) 
+        // {
+        //     if (!occluded(si.pos, es)) // HACK: Slang (HLSL) does not short circuit
+        //     {
+        //         // Add emitter directional contribution to L
 
-                // const float pathpdf = ls.G * pdfPBRTBSDF(payload.mat, -wo, normalize(ls.to), payload.normal);
-                // const float cosine = abs(dot(payload.normal, normalize(ls.to)));
-                // const vec3 f = evalPBRTBSDF(payload.mat, -wo, normalize(ls.to), payload.normal);
-                // const float MISWeight = ls.pdf / (ls.pdf + pathpdf);
-                // L += MISWeight * beta * f * ls.G * cosine * ls.L / ls.pdf;
-            }
-        }
+        //         // const float pathpdf = ls.G * pdfPBRTBSDF(payload.mat, -wo, normalize(ls.to), payload.normal);
+        //         // const float cosine = abs(dot(payload.normal, normalize(ls.to)));
+        //         // const vec3 f = evalPBRTBSDF(payload.mat, -wo, normalize(ls.to), payload.normal);
+        //         // const float MISWeight = ls.pdf / (ls.pdf + pathpdf);
+        //         // L += MISWeight * beta * f * ls.G * cosine * ls.L / ls.pdf;
+        //     }
+        // }
 
         // BSDF sampling
-        {
-            Payload bsdfPayload;
-            bsdfPayload.sampler = payload.sampler;
-            TraceRay(sceneBVH, RAY_FLAG_NONE, ~0, 0, 0, 0, ray, bsdfPayload/**/);
+        // {
+        //     Payload bsdfPayload;
+        //     bsdfPayload.sampler = payload.sampler;
+        //     TraceRay(sceneBVH, RAY_FLAG_NONE, ~0, 0, 0, 0, ray, bsdfPayload/**/);
 
-            if (let emissive = bsdfPayload.emissive)
-            {
-                // Add BSDF directional contribution to L
+        //     if (let emissive = bsdfPayload.emissive)
+        //     {
+        //         // Add BSDF directional contribution to L
 
-            }
+        //     }
 
-            // reflects sampler transitions
-            payload.sampler = bsdfPayload.sampler;
-        }
+        //     // reflects sampler transitions
+        //     payload.sampler = bsdfPayload.sampler;
+        // }
 
         // update parameters
-        beta *= bs.f * abs(dot(si.normal, bs.wo)) / max(1e-4, bs.pdf); // HACK: avoid zero dividing
+        beta *= bs.f * abs(bs.wo.z) / max(k::eps, bs.pdf); // HACK: avoid zero dividing
         payload.resetForNextBounce();
         ray.Origin = si.pos;
-        ray.Direction = bs.wo;
+        ray.Direction = si.frame.toWorld(bs.wo);
+        ray.TMin      = k::eps;
+        ray.TMax      = k::infty;
 
         // trace next ray
         TraceRay(sceneBVH, RAY_FLAG_NONE, ~0, 0, 0, 0, ray, payload);
     }
 
+    // WARNING: to be removed when doing MIS
     if (let e = payload.emissive)
     {
         L += beta * e;
@@ -188,6 +199,7 @@ float3 sampleL(in int sampleID, in int pixelSeed)
 [[vk::binding(2, 0)]] ConstantBuffer<SceneParams> sceneParams;
 [[vk::binding(3, 0)]] StructuredBuffer<Vertex> vertices[];
 [[vk::binding(4, 0)]] StructuredBuffer<uint32_t> indices[];
+[[vk::binding(5, 0)]] StructuredBuffer<InstanceParams> instanceParams;
 
 [shader("raygeneration")]
 void rayGenShader()
@@ -196,7 +208,7 @@ void rayGenShader()
     if (threadIdx.x >= DispatchRaysDimensions().x) return;
     if (threadIdx.y >= DispatchRaysDimensions().y) return;
 
-    let spp = 1024; // TODO: change from scene parameter
+    let spp = 512; // TODO: change from scene parameter
     let pixelSeed = tea(threadIdx.x, threadIdx.y);
 
     float3 L = float3(0.);
@@ -218,7 +230,7 @@ void missShader(inout Payload payload : SV_RayPayload)
     // uniform emitter sample?
     payload.emitterSample = none;
     // lighting
-    payload.emissive = float3(0.3, 0.3, 0.3);
+    payload.emissive = k::black;//float3(0.1, 0.1, 0.1);
 }
 
 [shader("closesthit")]
@@ -233,14 +245,36 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     let index = uint3(indices[instanceIndex][primitiveIndex * 3 + 0], indices[instanceIndex][primitiveIndex * 3 + 1], indices[instanceIndex][primitiveIndex * 3 + 2]);
     let vertex = Vertex.barycentric(vertices[instanceIndex][index.x], vertices[instanceIndex][index.y], vertices[instanceIndex][index.z], attr.barycentrics);
 
-    let worldPos    = mul(float4(vertex.pos, 1.0), ObjectToWorld4x3());
-    let worldNormal = mul(float4(vertex.normal, 0.0), ObjectToWorld4x3());
+    //let worldPos    = mul(ObjectToWorld4x3(), vertex.pos).xyz;
+    //let worldNormal = normalize(mul(float3x3(ObjectToWorld4x3()), vertex.normal).xyz);
+    let worldPos = hitLocation;//mul(instanceParams[instanceIndex].world, float4(vertex.pos, 1.0)).xyz;
+    let worldNormal = normalize(mul(instanceParams[instanceIndex].worldInvTrans, float4(vertex.normal, 0.0)).xyz);
 
     // create SurfaceInteraction
-    SurfaceInteraction si = SurfaceInteraction(worldPos, worldRayDir, worldNormal);
+    payload.si = SurfaceInteraction(worldPos, worldRayDir, worldNormal, Frame(worldNormal));
     // sample BSDF and emitter? or where?
-    
 
+    // WARNING: for debug
+    MaterialParams params  = {};
+    params.albedo = float4(k::red, 1.0);
+    if (instanceIndex % 3 == 1)
+    {
+        params.albedo    = float4(k::white, 1.0);
+        params.emissive  = 18.0 * k::white;
+        payload.emissive = 18.0 * k::white;
+    }
+    params.type   = MaterialType::Lambert;
+
+    DynamicMaterial material = DynamicMaterial(params);
+    payload.bsdfSample = material.BSDF.sample(params, payload.ctx, payload.si.value.toLocal(), payload.sampler.next1D(), payload.sampler.next2D());
+
+    // DEBUG: emitter
+    EmitterSample debuges;
+    debuges.pdf           = 0.0;
+    debuges.distance      = 10.0;
+    debuges.emissive      = k::black;
+    debuges.to            = k::zeros.xyz;
+    payload.emitterSample = debuges;
 }
 
 [shader("miss")]

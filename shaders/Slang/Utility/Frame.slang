@@ -1,8 +1,11 @@
+module Frame;
 
 public struct Frame 
 {
-    __init(float3 n)
+    public __init(float3 n_)
     {
+        n = n_;
+
         if(n.z < 0.)
         {
             let c1 = 1.0 / (1.0 - n.z);
@@ -19,7 +22,7 @@ public struct Frame
         }
     }
 
-    __init(float3 n_, float3 t_, float3 b_)
+    public __init(float3 n_, float3 t_, float3 b_)
     {
         n = n_;
         t = t_;

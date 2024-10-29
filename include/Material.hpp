@@ -1,6 +1,6 @@
 /*****************************************************************/ /**
  * @file   Material.hpp
- * @brief  
+ * @brief  WARNING: Always synchronized with 
  * 
  * @author ichi-raven
  * @date   October 2024

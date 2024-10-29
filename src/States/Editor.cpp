@@ -108,8 +108,8 @@ namespace palm
 
             // transform
             {
-                transform.params.model             = glm::identity<glm::mat4>();
-                transform.params.modelInvTranspose = glm::transpose(glm::inverse(transform.params.model));
+                transform.params.world             = glm::identity<glm::mat4>();
+                transform.params.world             = glm::transpose(glm::inverse(transform.params.world));
                 transform.params.vel               = glm::vec3(0.f);
                 transform.params.padding           = { 0.f };
 
@@ -717,10 +717,10 @@ namespace palm
                     currentGizmoOperation = ImGuizmo::SCALE;
                 }
 
-                ImGuizmo::Manipulate(glm::value_ptr(viewMat), glm::value_ptr(projectionMat), currentGizmoOperation, ImGuizmo::WORLD, glm::value_ptr(transform.params.model));
+                ImGuizmo::Manipulate(glm::value_ptr(viewMat), glm::value_ptr(projectionMat), currentGizmoOperation, ImGuizmo::WORLD, glm::value_ptr(transform.params.world));
 
                 glm::vec3 translation, rotation, objectScale;
-                ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform.params.model), glm::value_ptr(translation), glm::value_ptr(rotation), glm::value_ptr(objectScale));
+                ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform.params.world), glm::value_ptr(translation), glm::value_ptr(rotation), glm::value_ptr(objectScale));
 
                 transform.pos   = translation;
                 transform.rot   = rotation;

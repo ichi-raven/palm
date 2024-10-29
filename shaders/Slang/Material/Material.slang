@@ -2,6 +2,7 @@ module Material;
 
 import "../Utility/Frame";
 import "../Utility/Warp";
+import "../Utility/Constants";
 import "../Utility/SurfaceInteraction";
 
 __include Lambert;
@@ -17,34 +18,36 @@ public enum MaterialType
 // all parameters bound from CPU, **always synchronize with CPU side**
 public struct MaterialParams // std140
 {
-    float4 albedo;
-    float roughness;
-    float metalness;
-    float flatness;
-    float specularTint;
+    public __init() {}
 
-    float sheen;
-    float3 sheenTint;
+    public float4 albedo = k::zeros;
+    public float roughness = 0.0;
+    public float metalness = 0.0;
+    public float flatness = 0.0;
+    public float specularTint = 0.0;
 
-    float anisotropic;
-    float clearcoat;
-    float clearcoatGloss;
-    float IOR;
+    public float sheen = 0.0;
+    public float3 sheenTint = k::zeros.xyz;
 
-    int32_t albedoTexIndex;
-    int32_t roughnessTexIndex;
-    int32_t metalnessTexIndex;
-    int32_t normalmapTexIndex;
+    public float anisotropic    = 0.5;
+    public float clearcoat      = 0.0;
+    public float clearcoatGloss = 0.0;
+    public float IOR            = 1.0;
 
-    int32_t type;
-    float3 emissive;
+    public int32_t albedoTexIndex    = k::invalidTexIndex;
+    public int32_t roughnessTexIndex = k::invalidTexIndex;
+    public int32_t metalnessTexIndex = k::invalidTexIndex;
+    public int32_t normalmapTexIndex = k::invalidTexIndex;
+
+    public int32_t type = MaterialType::Principle;
+    public float3 emissive = k::zeros.xyz;
 }
 
 public struct BSDFContext
 {
-    bool isRefracted;
-    bool hasBeenRefracted;
-    float lastIOR;
+    public bool isRefracted;
+    public bool hasBeenRefracted;
+    public float lastIOR;
 }
 
 public struct BSDFSample
@@ -75,17 +78,15 @@ public interface IMaterial
     public associatedtype BSDF : IBSDF;
 
     public __init(in MaterialParams params);
-
-    property MaterialParams params{ get; }
 }
 
 public interface IBSDF
 {
-    public static BSDFSample sample(BSDFContext ctx, SurfaceInteraction si, float sample1, float2 sample2);
+    public static BSDFSample sample(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float sample1, float2 sample2);
 
-    public static float pdf(BSDFContext ctx, SurfaceInteraction si, float3 wo);
+    public static float pdf(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float3 wo);
 
-    public static float3 eval(BSDFContext ctx, SurfaceInteraction si, float3 wo);
+    public static float3 eval(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float3 wo);
 }
 
 public struct DynamicMaterial : IMaterial
@@ -93,20 +94,19 @@ public struct DynamicMaterial : IMaterial
 
     public __init(MaterialParams params_)
     {
-        params = params_;
+
     }
 
     public struct BSDF: IBSDF
     {
-        public BSDFSample sample(BSDFContext ctx, SurfaceInteraction si, float sample1, float2 sample2)
+        public static BSDFSample sample(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float sample1, float2 sample2)
         {
-            switch (type)
+            switch (params.type)
             {
                 case MaterialType::Lambert:
-                    Lambert.BSDF.sample(ctx, si, sample1, sample2);
-                    break;
+                    return Lambert.BSDF.sample(params, ctx, si, sample1, sample2);
                 case MaterialType::Principle:
-                    // Principle.BSDF.sample(ctx, si, sample1, sample2);
+                    //return Principle.BSDF.sample(params, ctx, si, sample1, sample2);
                     break;
                 default: // invalid
             }
@@ -114,40 +114,35 @@ public struct DynamicMaterial : IMaterial
             return (BSDFSample){};
         }
 
-        public float pdf(BSDFContext ctx, SurfaceInteraction si, float3 wo)
+        public static float pdf(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float3 wo)
         {
-            switch (type)
+            switch (params.type)
             {
-                case MaterialType::Lambert:
-                    Lambert.BSDF.pdf(ctx, si, wo);
-                    break;
+            case MaterialType::Lambert:
+                    return Lambert.BSDF.pdf(params, ctx, si, wo);
                 case MaterialType::Principle:
-                    // Principle.BSDF.pdf(ctx, si, wo);
+                    //return Principle.BSDF.pdf(params, ctx, si, wo);
                     break;
                 default: // invalid
             }
+
+            return 0.0;
         }
 
-        public float3 eval(BSDFContext ctx, SurfaceInteraction si, float3 wo)
+        public static float3 eval(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float3 wo)
         {
-            switch (type)
+            switch (params.type)
             {
-                case MaterialType::Lambert:
-                    Lambert.BSDF.eval(ctx, si, wo);
-                    break;
-                case MaterialType::Principle:
-                    // Principle.BSDF.eval(ctx, si, wo);
-                    break;
+            case MaterialType::Lambert:
+                return Lambert.BSDF.eval(params, ctx, si, wo);
+            case MaterialType::Principle:
+                //return Principle.BSDF.eval(params, ctx, si, wo);
+                break;
                 default: // invalid
             }
+
+            return k::zeros.xyz;
         }
     }    
-
-    public property MaterialType type
-    {
-        get{MaterialType(params.type);}
-    }
-
-    MaterialParams params;
 }
 

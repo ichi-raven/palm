@@ -42,6 +42,12 @@ namespace palm
             glm::vec4 lightDir;
         };
 
+        struct InstanceParams
+        {
+            glm::mat4 world;
+            glm::mat4 worldInvTrans;
+        };
+
         // can be modified from ImGui
         struct GUIParams
         {
@@ -55,6 +61,7 @@ namespace palm
 
         // shader resources
         Handle<vk2s::Buffer> mSceneBuffer;
+        Handle<vk2s::Buffer> mInstanceBuffer;
         Handle<vk2s::Buffer> mSampleBuffer;
         Handle<vk2s::Image> mPoolImage;
         std::vector<Handle<vk2s::Buffer>> mVertexBuffers;

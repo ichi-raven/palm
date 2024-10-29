@@ -57,6 +57,23 @@ namespace palm
             mSceneBuffer->write(&params, sizeof(SceneParams));
         }
 
+        // create instance UB
+        {
+            const auto size = sizeof(InstanceParams);
+            mInstanceBuffer    = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eUniformBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+
+            std::vector<InstanceParams> params;
+            mScene.each<Mesh, Transform>(
+                [&](const Mesh& mesh, const Transform& transform)
+                { 
+                    auto& p = params.emplace_back();
+                    p.world = transform.params.world;
+                    p.worldInvTrans = transform.params.worldInvTranspose;
+                });
+
+            mInstanceBuffer->write(params.data(), sizeof(InstanceParams) * params.size());
+        }
+
         //create pool image
         {
             const auto format   = vk::Format::eR32G32B32A32Sfloat;
@@ -124,6 +141,8 @@ namespace palm
             vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eStorageBuffer, meshNum, vk::ShaderStageFlagBits::eAll),
             // 4: index buffers
             vk::DescriptorSetLayoutBinding(4, vk::DescriptorType::eStorageBuffer, meshNum, vk::ShaderStageFlagBits::eAll),
+            // 5: instance buffers
+            vk::DescriptorSetLayoutBinding(5, vk::DescriptorType::eStorageBuffer, meshNum, vk::ShaderStageFlagBits::eAll),
         };
 
         mBindLayout = device.create<vk2s::BindLayout>(bindings);
@@ -221,6 +240,8 @@ namespace palm
             mBindGroup->bind(2, vk::DescriptorType::eUniformBuffer, mSceneBuffer.get());
             mBindGroup->bind(3, vk::DescriptorType::eStorageBuffer, mVertexBuffers);
             mBindGroup->bind(4, vk::DescriptorType::eStorageBuffer, mIndexBuffers);
+            mBindGroup->bind(5, vk::DescriptorType::eStorageBuffer, mInstanceBuffer);
+
         }
     }
 
