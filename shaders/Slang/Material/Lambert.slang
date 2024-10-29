@@ -9,11 +9,6 @@ public struct Lambert : IMaterial
         //mParams = params_;
     }
 
-    // public property MaterialParams params
-    // {
-    //     get {return mParams;}
-    // }
-
     public struct BSDF : IBSDF
     {
         public static BSDFSample sample(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float sample1, float2 sample2)

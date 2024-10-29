@@ -81,8 +81,8 @@ RayDesc getCameraRay(uint2 threadIdx, float2 u)
     const float2 offset = u / DispatchRaysDimensions().xy;
     
     // TODO: lens sampling
-    //let d = (screenPos) * 2.0 - 1.0;
-    let d         = (screenPos + offset) * 2.0 - 1.0;
+    let d = (screenPos) * 2.0 - 1.0;
+    //let d         = (screenPos + offset) * 2.0 - 1.0;
     let target    = mul(sceneParams.projInv, float4(d.x, d.y, 1, 1));
     let direction = mul(sceneParams.viewInv, float4(target.xyz, 0)).xyz;
 
@@ -208,7 +208,7 @@ void rayGenShader()
     if (threadIdx.x >= DispatchRaysDimensions().x) return;
     if (threadIdx.y >= DispatchRaysDimensions().y) return;
 
-    let spp = 512; // TODO: change from scene parameter
+    let spp = 128; // TODO: change from scene parameter
     let pixelSeed = tea(threadIdx.x, threadIdx.y);
 
     float3 L = float3(0.);
@@ -245,10 +245,8 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     let index = uint3(indices[instanceIndex][primitiveIndex * 3 + 0], indices[instanceIndex][primitiveIndex * 3 + 1], indices[instanceIndex][primitiveIndex * 3 + 2]);
     let vertex = Vertex.barycentric(vertices[instanceIndex][index.x], vertices[instanceIndex][index.y], vertices[instanceIndex][index.z], attr.barycentrics);
 
-    //let worldPos    = mul(ObjectToWorld4x3(), vertex.pos).xyz;
-    //let worldNormal = normalize(mul(float3x3(ObjectToWorld4x3()), vertex.normal).xyz);
-    let worldPos = hitLocation;//mul(instanceParams[instanceIndex].world, float4(vertex.pos, 1.0)).xyz;
-    let worldNormal = normalize(mul(instanceParams[instanceIndex].worldInvTrans, float4(vertex.normal, 0.0)).xyz);
+    let worldPos = mul(instanceParams[instanceIndex].world, float4(vertex.pos, 1.0)).xyz;
+    let worldNormal = normalize(mul(instanceParams[instanceIndex].worldInvTrans, float4(vertex.normal, 1.0)).xyz);
 
     // create SurfaceInteraction
     payload.si = SurfaceInteraction(worldPos, worldRayDir, worldNormal, Frame(worldNormal));
@@ -260,8 +258,8 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     if (instanceIndex % 3 == 1)
     {
         params.albedo    = float4(k::white, 1.0);
-        params.emissive  = 18.0 * k::white;
-        payload.emissive = 18.0 * k::white;
+        params.emissive  = 6.0 * k::white;
+        payload.emissive = 6.0 * k::white;
     }
     params.type   = MaterialType::Lambert;
 

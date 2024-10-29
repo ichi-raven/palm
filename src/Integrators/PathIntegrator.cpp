@@ -142,7 +142,7 @@ namespace palm
             // 4: index buffers
             vk::DescriptorSetLayoutBinding(4, vk::DescriptorType::eStorageBuffer, meshNum, vk::ShaderStageFlagBits::eAll),
             // 5: instance buffers
-            vk::DescriptorSetLayoutBinding(5, vk::DescriptorType::eStorageBuffer, meshNum, vk::ShaderStageFlagBits::eAll),
+            vk::DescriptorSetLayoutBinding(5, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
         };
 
         mBindLayout = device.create<vk2s::BindLayout>(bindings);
@@ -170,57 +170,6 @@ namespace palm
         // create shader binding table
 
         mShaderBindingTable = device.create<vk2s::ShaderBindingTable>(mRaytracePipeline.get(), 1, 2, 1, 0, rpi.shaderGroups);
-        //mShaderBindingTable = [&]()
-        //{
-        //    vk2s::ShaderBindingTable::RegionInfo raygenInfo{
-        //        .shaderTypeNum       = 1,
-        //        .entryNum            = 1,
-        //        .additionalEntrySize = 0,
-        //        .entryWriter         = [](std::byte* pDst, std::byte* pSrc, const uint32_t handleSize, const uint32_t alignedHandleSize) { std::memcpy(pDst, pSrc, handleSize); },
-        //    };
-        //    vk2s::ShaderBindingTable::RegionInfo missInfo{
-        //        .shaderTypeNum       = 2,
-        //        .entryNum            = 2,
-        //        .additionalEntrySize = 0,
-        //        .entryWriter =
-        //            [](std::byte* pDst, std::byte* pSrc, const uint32_t handleSize, const uint32_t alignedHandleSize)
-        //        {
-        //            for (int i = 0; i < 2; ++i)
-        //            {
-        //                std::memcpy(pDst, pSrc, handleSize);
-        //                pDst += handleSize;
-        //                // Since each shader uses a different shader, the address on the handle side is also advanced simply
-        //                pSrc += alignedHandleSize;
-        //            }
-        //        },
-        //    };
-        //    vk2s::ShaderBindingTable::RegionInfo hitInfo{
-        //        .shaderTypeNum       = 1,
-        //        .entryNum            = static_cast<uint32_t>(mScene.size<Mesh>()),
-        //        .additionalEntrySize = sizeof(vk::DeviceAddress) * 2,
-        //        .entryWriter =
-        //            [&](std::byte* pDst, std::byte* pSrc, const uint32_t handleSize, const uint32_t alignedHandleSize)
-        //        {
-        //            mScene.each<Mesh>(
-        //                [&](const Mesh& mesh)
-        //                {
-        //                    std::memcpy(pDst, pSrc, handleSize);
-        //                    pDst += handleSize;
-
-        //                    auto deviceAddress = mesh.indexBuffer->getVkDeviceAddress();
-        //                    std::memcpy(pDst, &deviceAddress, sizeof(deviceAddress));
-        //                    pDst += sizeof(deviceAddress);
-
-        //                    deviceAddress = mesh.vertexBuffer->getVkDeviceAddress();
-        //                    std::memcpy(pDst, &deviceAddress, sizeof(deviceAddress));
-        //                    pDst += sizeof(deviceAddress);
-        //                });
-        //        },
-        //    };
-        //    vk2s::ShaderBindingTable::RegionInfo callableInfo{ .shaderTypeNum = 0, .additionalEntrySize = 0 };
-
-        //    return device.create<vk2s::ShaderBindingTable>(mRaytracePipeline.get(), raygenInfo, missInfo, hitInfo, callableInfo, rpi.shaderGroups);
-        //}();
 
         // create bindgroup
         {
@@ -228,20 +177,19 @@ namespace palm
             mIndexBuffers.reserve(meshNum);
 
             mScene.each<Mesh>(
-                [&](Mesh& mesh)
+                [&](const Mesh& mesh)
                 {
                     mVertexBuffers.emplace_back(mesh.vertexBuffer);
                     mIndexBuffers.emplace_back(mesh.indexBuffer);
                 });
-
+            
             mBindGroup = device.create<vk2s::BindGroup>(mBindLayout.get());
             mBindGroup->bind(0, mTLAS.get());
             mBindGroup->bind(1, vk::DescriptorType::eStorageImage, mOutputImage);
             mBindGroup->bind(2, vk::DescriptorType::eUniformBuffer, mSceneBuffer.get());
             mBindGroup->bind(3, vk::DescriptorType::eStorageBuffer, mVertexBuffers);
             mBindGroup->bind(4, vk::DescriptorType::eStorageBuffer, mIndexBuffers);
-            mBindGroup->bind(5, vk::DescriptorType::eStorageBuffer, mInstanceBuffer);
-
+            mBindGroup->bind(5, vk::DescriptorType::eStorageBuffer, mInstanceBuffer.get());
         }
     }
 

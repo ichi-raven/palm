@@ -38,13 +38,13 @@ namespace palm
 
             vk::TransformMatrixKHR convert() const
             {
-                vk::TransformMatrixKHR mtx;
-                auto mT = glm::transpose(world);
-                memcpy(&mtx.matrix[0], &mT[0], sizeof(float) * 4);
-                memcpy(&mtx.matrix[1], &mT[1], sizeof(float) * 4);
-                memcpy(&mtx.matrix[2], &mT[2], sizeof(float) * 4);
+                vk::TransformMatrixKHR ret;
+                const auto mT = glm::transpose(world);
+                memcpy(&ret.matrix[0], &mT[0], sizeof(float) * 4);
+                memcpy(&ret.matrix[1], &mT[1], sizeof(float) * 4);
+                memcpy(&ret.matrix[2], &mT[2], sizeof(float) * 4);
 
-                return mtx;
+                return ret;
             };
         };
 
