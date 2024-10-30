@@ -18,11 +18,11 @@ public struct Lambert : IMaterial
 
             ret.f = params.albedo.xyz * k::invPi;
             ret.wo = Warp::toCosineWeightedHemisphere(sample2);
-            if (ret.wo.z < 0.0)
+            if (si.wi.z < 0.0)
             {
                 ret.wo.z *= -1.0;
             }
-            ret.pdf = pdf(params, ctx, si, ret.wo);
+            ret.pdf = k::invPi * abs(ret.wo.z);
 
             return ret;
         }

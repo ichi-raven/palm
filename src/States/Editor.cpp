@@ -109,7 +109,7 @@ namespace palm
             // transform
             {
                 transform.params.world             = glm::identity<glm::mat4>();
-                transform.params.world             = glm::transpose(glm::inverse(transform.params.world));
+                transform.params.worldInvTranspose = glm::transpose(glm::inverse(transform.params.world));
                 transform.params.vel               = glm::vec3(0.f);
                 transform.params.padding           = { 0.f };
 

@@ -6,7 +6,7 @@ public namespace Warp
 {
     public float3 toUniformSphere(float2 u)
     {
-        float a = u.x * k::pi2;
+        float a = u.x * 2. * k::pi;
         float z = u.y * 2. - 1.;
         float r = sqrt(1 - z * z);
         return float3(r * cos(a), r * sin(a), z);
@@ -23,12 +23,39 @@ public namespace Warp
         return ret;
     }
 
+    public float2 toUniformDiskConcentric(float2 u)
+    {
+        float2 uOffset = 2. * u - float2(1., 1.);
+        if (uOffset.x == 0 && uOffset.y == 0)
+        {
+            return float2(0., 0.);
+        }
+
+        float theta = 0, r = 0;
+        if (abs(uOffset.x) > abs(uOffset.y))
+        {
+            r = uOffset.x;
+            theta = k::piOver4 * (uOffset.y / uOffset.x);
+        }
+        else
+        {
+            r = uOffset.y;
+            theta = k::piOver2 - k::piOver4 * (uOffset.x / uOffset.y);
+        }
+
+        return r * float2(cos(theta), sin(theta));
+    }
+
     public float3 toCosineWeightedHemisphere(float2 u)
     {
-        const float r2Sqrt = sqrt(u.y);
-        const float z      = sqrt(1 - u.y);
-        const float phi    = k::pi2 * u.x;
+        float2 d = toUniformDiskConcentric(u);
+        let z = sqrt(max(1 - (d.x * d.x) - (d.y * d.y), 0.));
+        return float3(d.x, d.y, z);
 
-        return float3(cos(phi) * r2Sqrt, sin(phi) * r2Sqrt, z);
+        // const float r2Sqrt = sqrt(u.y);
+        // const float z      = sqrt(1 - u.y);
+        // const float phi    = 2. * k::pi * u.x;
+
+        // return float3(cos(phi) * r2Sqrt, sin(phi) * r2Sqrt, z);
     }
 }

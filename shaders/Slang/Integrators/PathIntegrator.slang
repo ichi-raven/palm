@@ -123,10 +123,11 @@ float3 sampleL(in int sampleID, in int pixelSeed)
     RayDesc ray = getCameraRay(DispatchRaysIndex().xy, payload.sampler.next2D());
     TraceRay(sceneBVH, RAY_FLAG_NONE, ~0, 0, 0, 0, ray, payload);
 
-    if (let emissive = payload.emissive)
-    {
-        L += beta * emissive;
-    }
+    // WARNING: required for MIS
+    // if (let emissive = payload.emissive)
+    // {
+    //     L += beta * emissive;
+    // }
 
     // trace ray recursively
     for (int depth = 1; depth < k::maxDepth && payload.continue(); ++depth)
@@ -176,11 +177,12 @@ float3 sampleL(in int sampleID, in int pixelSeed)
         // }
 
         // update parameters
-        beta *= bs.f * abs(dot(si.normal, bs.wo)) / max(k::eps, bs.pdf); // HACK: avoid zero dividing
-        ray.Origin = si.pos;
-        ray.Direction = si.frame.toWorld(bs.wo);
-        ray.TMin      = k::eps;
-        ray.TMax      = k::infty;
+        beta *= bs.f * abs(dot(si.normal, bs.wo)) / bs.pdf; // HACK: avoid zero dividing
+        
+        ray.Origin      = si.pos;
+        ray.Direction   = si.frame.toWorld(bs.wo);
+        ray.TMin        = k::eps;
+        ray.TMax        = k::infty;
         payload.resetForNextBounce();
 
         // trace next ray
@@ -231,9 +233,8 @@ void rayGenShader()
 
     for (int sampleID = 0; sampleID < sceneParams.sppPerFrame; ++sampleID)
     {
-        L += sampleL(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
+        L += correct(sampleL(sampleID, pixelSeed)) / float(sceneParams.sppPerFrame);
     }
-
 
     let rate = float(sceneParams.sppPerFrame) / accumulatedSpp;
 
@@ -271,7 +272,7 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     let worldNormal = normalize(mul(instanceParams[instanceIndex].worldInvTrans, float4(vertex.normal, 1.0)).xyz);
 
     // create SurfaceInteraction
-    payload.si = SurfaceInteraction(worldPos, worldRayDir, worldNormal, Frame(worldNormal));
+    payload.si = SurfaceInteraction(worldPos, -worldRayDir, worldNormal, Frame(worldNormal));
     // sample BSDF and emitter? or where?
 
     // WARNING: for debug
@@ -280,8 +281,8 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     if (instanceIndex % 3 == 1)
     {
         params.albedo    = float4(k::white, 1.0);
-        params.emissive  = 0.5 * k::white;
-        payload.emissive = 0.5 * k::white;
+        params.emissive  = 10.0 * k::white;
+        payload.emissive = 10.0 * k::white;
     }
     params.type   = MaterialType::Lambert;
 
