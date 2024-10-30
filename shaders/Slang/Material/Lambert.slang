@@ -11,18 +11,20 @@ public struct Lambert : IMaterial
 
     public struct BSDF : IBSDF
     {
-        public static BSDFSample sample(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float sample1, float2 sample2)
+        public static Optional<BSDFSample> sample(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float sample1, float2 sample2)
         {
             BSDFSample ret;
             ret.flags = BSDFSample::Flags::Diffuse | BSDFSample::Flags::Reflection;
 
-            ret.f = params.albedo.xyz * k::invPi;
             ret.wo = Warp::toCosineWeightedHemisphere(sample2);
-            if (si.wi.z < 0.0)
+            if (ret.wo.z * si.wi.z <= 0.)  // not in same hemisphere
             {
-                ret.wo.z *= -1.0;
+                return none;
             }
-            ret.pdf = k::invPi * abs(ret.wo.z);
+
+            ret.f = eval(params, ctx, si, ret.wo);
+
+            ret.pdf = pdf(params, ctx, si, ret.wo);
 
             return ret;
         }

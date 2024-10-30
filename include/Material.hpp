@@ -25,11 +25,16 @@ namespace palm
 
         struct Params  // std430
         {
-            glm::vec4 albedo;
+            glm::vec3 albedo;
             float roughness;
-            float metalness;
+
+            float metallic;
+            float specTrans;
+            float diffTrans;
             float flatness;
+
             float specularTint;
+            glm::vec3 padding;
 
             float sheen;
             glm::vec3 sheenTint;

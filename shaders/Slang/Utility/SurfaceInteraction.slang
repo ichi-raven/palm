@@ -11,21 +11,7 @@ public struct SurfaceInteraction
         normal  = normalize(normal_);
         frame   = frame_;
     }
-
-    [mutating]
-    public void toLocalSelf()
-    {
-        wi     = normalize(frame.toLocal(wi));
-        normal = normalize(frame.toLocal(normal));
-    }
-
-    [mutating]
-    public void toWorldSelf()
-    {
-        wi     = normalize(frame.toWorld(wi));
-        normal = normalize(frame.toWorld(normal));
-    }
-
+    
     public SurfaceInteraction toLocal()
     {
         return SurfaceInteraction(pos, normalize(frame.toLocal(wi)), normalize(frame.toLocal(normal)), frame);

@@ -68,7 +68,7 @@ struct Vertex// std140
 
         Vertex ret;
         ret.pos = v1.pos * w.x + v2.pos * w.y + v3.pos * w.z;
-        ret.normal = v1.normal * w.x + v2.normal * w.y + v3.normal * w.z;
+        ret.normal = normalize(v1.normal * w.x + v2.normal * w.y + v3.normal * w.z);
         ret.uv = v1.uv * w.x + v2.uv * w.y + v3.uv * w.z;
 
         return ret;
@@ -91,8 +91,8 @@ RayDesc getCameraRay(uint2 threadIdx, float2 u)
     RayDesc ray;
     ray.Origin = sceneParams.cameraPos.xyz;
     ray.Direction = normalize(direction);
-    ray.TMin = 0.001;
-    ray.TMax = 10000.0;
+    ray.TMin = k::eps;
+    ray.TMax = k::infty;
     return ray;
 }
 
@@ -177,8 +177,8 @@ float3 sampleL(in int sampleID, in int pixelSeed)
         // }
 
         // update parameters
-        beta *= bs.f * abs(dot(si.normal, bs.wo)) / bs.pdf; // HACK: avoid zero dividing
-        
+        beta *= bs.f * abs(dot(si.normal, si.frame.toWorld(bs.wo))) / bs.pdf; // HACK: avoid zero dividing
+
         ray.Origin      = si.pos;
         ray.Direction   = si.frame.toWorld(bs.wo);
         ray.TMin        = k::eps;
@@ -271,23 +271,41 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     let worldPos = mul(instanceParams[instanceIndex].world, float4(vertex.pos, 1.0)).xyz;
     let worldNormal = normalize(mul(instanceParams[instanceIndex].worldInvTrans, float4(vertex.normal, 1.0)).xyz);
 
-    // create SurfaceInteraction
+    // create SurfaceInteraction (world)
     payload.si = SurfaceInteraction(worldPos, -worldRayDir, worldNormal, Frame(worldNormal));
     // sample BSDF and emitter? or where?
 
     // WARNING: for debug
-    MaterialParams params  = {};
-    params.albedo = float4(k::red, 1.0);
-    if (instanceIndex % 3 == 1)
+    MaterialParams params = {};
+    params.albedo = k::green;
+    params.metallic = 0.5;
+    params.roughness = 0.1;
+    params.sheen = 0.1;
+    params.IOR = 1.0;
+    params.flatness = 0.0;
+    params.specularTint = 0.1;
+    params.specTrans = 1.0;
+    params.diffTrans = 0.0;
+    params.clearcoat = 0.2;
+
+    if (instanceIndex % 4 == 1)
     {
-        params.albedo    = float4(k::white, 1.0);
-        params.emissive  = 10.0 * k::white;
-        payload.emissive = 10.0 * k::white;
+        params.albedo    = k::white;
+        params.emissive  = 5.0 * k::white;
+        payload.emissive = 5.0 * k::white;
     }
-    params.type   = MaterialType::Lambert;
+    params.type   = MaterialType::Principle;
 
     DynamicMaterial material = DynamicMaterial(params);
     payload.bsdfSample = material.BSDF.sample(params, payload.ctx, payload.si.value.toLocal(), payload.sampler.next1D(), payload.sampler.next2D());
+    if (let bs = payload.bsdfSample)// update BSDFContext
+    {
+        payload.ctx.lastIOR = params.IOR;
+        if (bs.pdf == 0.)
+        {
+            payload.bsdfSample = none;
+        }
+    }
 
     // DEBUG: emitter
     EmitterSample debuges;
