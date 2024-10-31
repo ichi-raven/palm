@@ -1,6 +1,7 @@
 implementing Material;
 
 import "../Utility/Constants";
+import "../Utility/Warp";
 import PBR;
 
 public struct Principle : IMaterial
@@ -69,21 +70,21 @@ public struct Principle : IMaterial
             return k::invPi * (retro + subsurfaceApprox * (1.0 - 0.5 * fl) * (1.0 - 0.5 * fv));
         }
 
-        public static float3 sampleGgxVndfAnisotropic(const float3 wi, float ax, float ay, float2 u2)
+        public static float3 sampleGGXVNDFAnisotropic(const float3 wi, float ax, float ay, float2 u2)
         {
             // -- Stretch the view vector so we are sampling as though roughness==1
             let v = normalize(float3(wi.x * ax, wi.y * ay, wi.z));
             // -- Build an orthonormal basis with v, t1, and t2
-            let t1 = (v.y < 0.99999) ? normalize(cross(v, float3(0.0, 1.0, 0.0))) : float3(1.0, 0.0, 0.0);
+            let t1 = (v.z < 1. - k::eps) ? normalize(cross(v, float3(0., 0., 1.))) : float3(1., 0., 0.);
             let t2 = cross(t1, v);
             // -- Choose a point on a disk with each half of the disk weighted proportionally to its projection onto direction v
-            let a = 1.0 / (1.0 + v.y);
+            let a = 1. / (1. + v.z);
             let r = sqrt(u2.x);
-            let phi = (u2.y < a) ? (u2.y / a) * k::pi : k::pi + (u2.y - a) / (1.0 - a) * k::pi;
+            let phi = (u2.y < a) ? (u2.y / a) * k::pi : k::pi + (u2.y - a) / (1. - a) * k::pi;
             let p1 = r * cos(phi);
-            let p2 = r * sin(phi) * ((u2.y < a) ? 1.0 : v.y);
+            let p2 = r * sin(phi) * ((u2.y < a) ? 1. : v.z);
             // -- Calculate the normal in this stretched tangent space
-            float3 n = p1 * t1 + p2 * t2 + sqrt(max(0.0, 1.0 - p1 * p1 - p2 * p2)) * v;
+            float3 n = p1 * t1 + p2 * t2 + sqrt(max(0., 1. - p1 * p1 - p2 * p2)) * v;
             // -- unstretch and normalize the normal
             return normalize(float3(ax * n.x, ay * n.y, n.z));
         }
@@ -105,7 +106,7 @@ public struct Principle : IMaterial
             pbr::calcAnisotropic(rscaled, params.anisotropic, tax, tay);
             
             // -- Sample visible distribution of normals
-            let wm = sampleGgxVndfAnisotropic(wi, tax, tay, u2);
+            let wm = sampleGGXVNDFAnisotropic(wi, tax, tay, u2);
 
             float dotVH = dot(wi, wm);
             if(wm.y < 0.0) 
@@ -292,7 +293,7 @@ public struct Principle : IMaterial
             pbr::calcAnisotropic(params.roughness, params.anisotropic, ax, ay);
 
             // -- Sample visible distribution of normals
-            let wm = sampleGgxVndfAnisotropic(wi, ax, ay, u2);
+            let wm = sampleGGXVNDFAnisotropic(wi, ax, ay, u2);
 
             // -- Reflect over wm
             ret.wo = normalize(reflect(-wi, wm));
@@ -315,7 +316,7 @@ public struct Principle : IMaterial
             ret.f = specular;
             ret.pdf = pbr::GGXVNDFAnisotropicPdf(ret.wo, wm, wi, ax, ay);
 
-            ret.pdf *= (1.0 / (4. * abs(dot(wi, wm))));
+            //ret.pdf *= (1.0 / (4. * abs(dot(ret.wo, wm))));
 
             return ret;
         }

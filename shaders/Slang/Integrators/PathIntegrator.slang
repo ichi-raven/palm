@@ -64,11 +64,11 @@ struct Vertex// std140
 
     static Vertex barycentric(Vertex v1, Vertex v2, Vertex v3, float2 barycentric)
     {
-        let w = float3(1.f - barycentric.x - barycentric.y, barycentric.x, barycentric.y);
+        let w = float3(1. - (barycentric.x + barycentric.y), barycentric.x, barycentric.y);
 
         Vertex ret;
         ret.pos = v1.pos * w.x + v2.pos * w.y + v3.pos * w.z;
-        ret.normal = normalize(v1.normal * w.x + v2.normal * w.y + v3.normal * w.z);
+        ret.normal = v1.normal * w.x + v2.normal * w.y + v3.normal * w.z;
         ret.uv = v1.uv * w.x + v2.uv * w.y + v3.uv * w.z;
 
         return ret;
@@ -177,7 +177,7 @@ float3 sampleL(in int sampleID, in int pixelSeed)
         // }
 
         // update parameters
-        beta *= bs.f * abs(dot(si.normal, si.frame.toWorld(bs.wo))) / bs.pdf; // HACK: avoid zero dividing
+        beta *= bs.f * abs(dot(si.normal, si.frame.toWorld(bs.wo))) / max(k::eps, bs.pdf); // HACK: avoid zero dividing
 
         ray.Origin      = si.pos;
         ray.Direction   = si.frame.toWorld(bs.wo);
@@ -253,7 +253,7 @@ void missShader(inout Payload payload : SV_RayPayload)
     // uniform emitter sample?
     payload.emitterSample = none;
     // lighting
-    payload.emissive = k::black;//float3(0.1, 0.1, 0.1);
+    payload.emissive = k::black;
 }
 
 [shader("closesthit")]
@@ -268,8 +268,8 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     let index = uint3(indices[instanceIndex][primitiveIndex * 3 + 0], indices[instanceIndex][primitiveIndex * 3 + 1], indices[instanceIndex][primitiveIndex * 3 + 2]);
     let vertex = Vertex.barycentric(vertices[instanceIndex][index.x], vertices[instanceIndex][index.y], vertices[instanceIndex][index.z], attr.barycentrics);
 
-    let worldPos = mul(instanceParams[instanceIndex].world, float4(vertex.pos, 1.0)).xyz;
-    let worldNormal = normalize(mul(instanceParams[instanceIndex].worldInvTrans, float4(vertex.normal, 1.0)).xyz);
+    let worldPos = hitLocation;//mul(instanceParams[instanceIndex].world, float4(vertex.pos, 1.0)).xyz;
+    let worldNormal = normalize(mul(instanceParams[instanceIndex].worldInvTrans, float4(vertex.normal, 0.)).xyz);
 
     // create SurfaceInteraction (world)
     payload.si = SurfaceInteraction(worldPos, -worldRayDir, worldNormal, Frame(worldNormal));
@@ -277,16 +277,16 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
 
     // WARNING: for debug
     MaterialParams params = {};
-    params.albedo = k::green;
-    params.metallic = 0.5;
-    params.roughness = 0.1;
-    params.sheen = 0.1;
+    params.albedo = k::blue;
+    params.metallic = 0.75;
+    params.roughness = 0.03;
+    params.sheen = 0.0;
     params.IOR = 1.0;
-    params.flatness = 0.0;
+    params.flatness = 0.2;
     params.specularTint = 0.1;
-    params.specTrans = 1.0;
+    params.specTrans = 0.0;
     params.diffTrans = 0.0;
-    params.clearcoat = 0.2;
+    params.clearcoat = 0.02;
 
     if (instanceIndex % 4 == 1)
     {

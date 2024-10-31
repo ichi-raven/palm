@@ -19,10 +19,10 @@ public namespace k
     public static let zeros = float4(0.0);
     public static let ones  = float4(1.0);
 
-    public static let red    = float3(0.85, 0.1, 0.1);
-    public static let green  = float3(0.1, 0.85, 0.1);
-    public static let blue   = float3(0.1, 0.1, 0.85);
-    public static let yellow = float3(0.85, 0.85, 0.1);
+    public static let red    = float3(0.8, 0.1, 0.1);
+    public static let green  = float3(0.1, 0.8, 0.1);
+    public static let blue   = float3(0.1, 0.1, 0.8);
+    public static let yellow = float3(0.8, 0.8, 0.1);
     public static let black  = float3(0.0);
     public static let white  = float3(1.0);
 
