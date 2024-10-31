@@ -241,7 +241,7 @@ void rayGenShader()
     let finalRes = lerp(pool, L, rate);
     poolImage[threadIdx.xy] = float4(finalRes, reinterpret<float>(accumulatedSpp));
 
-    float3 gammaCorrected = sqrt(finalRes); // HACK:
+    float3 gammaCorrected = pow(finalRes, 1. / 2.2); // HACK:
     resultImage[threadIdx.xy] = float4(gammaCorrected, 1.0);
 }
 
@@ -279,7 +279,7 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     MaterialParams params = {};
     params.albedo = k::blue;
     params.metallic = 0.75;
-    params.roughness = 0.03;
+    params.roughness = 0.1;
     params.sheen = 0.0;
     params.IOR = 1.0;
     params.flatness = 0.2;
@@ -287,12 +287,13 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     params.specTrans = 0.0;
     params.diffTrans = 0.0;
     params.clearcoat = 0.02;
+    params.anisotropic = 0.0;
 
     if (instanceIndex % 4 == 1)
     {
         params.albedo    = k::white;
-        params.emissive  = 5.0 * k::white;
-        payload.emissive = 5.0 * k::white;
+        params.emissive  = 6.0 * k::white;
+        payload.emissive = 6.0 * k::white;
     }
     params.type   = MaterialType::Principle;
 

@@ -165,19 +165,19 @@ namespace pbr
 
     public float GGXAnisotropicD(const float3 wm, const float ax, const float ay)
     {
-        let dotHX2 = cos2Phi(wm);
-        let dotHY2 = sin2Phi(wm);
-        let ax2 = ax * ax;
-        let ay2 = ay * ay;
+        // let dotHX2 = cos2Phi(wm);
+        // let dotHY2 = sin2Phi(wm);
+        // let ax2 = ax * ax;
+        // let ay2 = ay * ay;
 
-        let tmp = dotHX2 / ax2 + dotHY2 / ay2 + cos2Theta(wm);
-        return 1.0 / (k::pi * ax * ay * tmp * tmp);
+        // let tmp = dotHX2 / ax2 + dotHY2 / ay2 + cos2Theta(wm);
+        // return 1.0 / (k::pi * ax * ay * tmp * tmp);
 
-        // let t = tan2Theta(wm) * (cos2Phi(wm) / ax / ax + sin2Phi(wm) / ay / ay);
-        // let c2 = cos2Theta(wm);
-        // let denom = k::pi * ax * ay * c2 * c2 * (1 + t) * (1 + t);
+        let t = tan2Theta(wm) * (cos2Phi(wm) / ax / ax + sin2Phi(wm) / ay / ay);
+        let c2 = cos2Theta(wm);
+        let denom = k::pi * ax * ay * c2 * c2 * (1 + t) * (1 + t);
 
-        // return 1. / denom;
+        return 1. / denom;
     }
 
     public float separableSmithGGXG1(const float3 w, const float3 wm, const float ax, const float ay)
