@@ -74,6 +74,21 @@ namespace palm
             mInstanceBuffer->write(params.data(), size);
         }
 
+        // create material UB
+        {
+            std::vector<Material::Params> params;
+            mScene.each<Material>(
+                [&](const Material& mat)
+                {
+                    params.emplace_back(mat.materialParams);
+                    std::cout << params.back().albedo.r << params.back().albedo.g << params.back().albedo.b << "\n";
+                });
+
+            const auto size = sizeof(Material::Params) * params.size();
+            mMaterialBuffer = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eStorageBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+            mMaterialBuffer->write(params.data(), size);
+        }
+
         //create pool image
         {
             const auto format   = vk::Format::eR32G32B32A32Sfloat;
@@ -145,6 +160,8 @@ namespace palm
             vk::DescriptorSetLayoutBinding(5, vk::DescriptorType::eStorageBuffer, meshNum, vk::ShaderStageFlagBits::eAll),
             // 6: instance buffers
             vk::DescriptorSetLayoutBinding(6, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
+            // 7: material buffers
+            vk::DescriptorSetLayoutBinding(7, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
         };
 
         mBindLayout = device.create<vk2s::BindLayout>(bindings);
@@ -193,6 +210,7 @@ namespace palm
             mBindGroup->bind(4, vk::DescriptorType::eStorageBuffer, mVertexBuffers);
             mBindGroup->bind(5, vk::DescriptorType::eStorageBuffer, mIndexBuffers);
             mBindGroup->bind(6, vk::DescriptorType::eStorageBuffer, mInstanceBuffer.get());
+            mBindGroup->bind(7, vk::DescriptorType::eStorageBuffer, mMaterialBuffer.get());
         }
     }
 

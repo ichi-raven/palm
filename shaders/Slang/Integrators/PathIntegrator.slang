@@ -216,6 +216,7 @@ float3 correct(const float3 L)
 [[vk::binding(4, 0)]] StructuredBuffer<Vertex> vertices[];
 [[vk::binding(5, 0)]] StructuredBuffer<uint32_t> indices[];
 [[vk::binding(6, 0)]] StructuredBuffer<InstanceParams> instanceParams;
+[[vk::binding(7, 0)]] StructuredBuffer<MaterialParams> materialParams;
 
 [shader("raygeneration")]
 void rayGenShader()
@@ -273,32 +274,15 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
 
     // create SurfaceInteraction (world)
     payload.si = SurfaceInteraction(worldPos, -worldRayDir, worldNormal, Frame(worldNormal));
-    // sample BSDF and emitter? or where?
-
-    // WARNING: for debug
-    MaterialParams params = {};
-    params.albedo = k::blue;
-    params.metallic = 0.75;
-    params.roughness = 0.1;
-    params.sheen = 0.0;
-    params.IOR = 1.0;
-    params.flatness = 0.2;
-    params.specularTint = 0.1;
-    params.specTrans = 0.0;
-    params.diffTrans = 0.0;
-    params.clearcoat = 0.02;
-    params.anisotropic = 0.0;
-
-    if (instanceIndex % 4 == 1)
+    
+    // sample BSDF and emitter
+    MaterialParams params = materialParams[instanceIndex];
+    if (dot(params.emissive, params.emissive) > 0)// HACK:
     {
-        params.albedo    = k::white;
-        params.emissive  = 6.0 * k::white;
-        payload.emissive = 6.0 * k::white;
+        payload.emissive = params.emissive;
     }
-    params.type   = MaterialType::Principle;
 
-    DynamicMaterial material = DynamicMaterial(params);
-    payload.bsdfSample = material.BSDF.sample(params, payload.ctx, payload.si.value.toLocal(), payload.sampler.next1D(), payload.sampler.next2D());
+    payload.bsdfSample = DynamicMaterial.BSDF.sample(params, payload.ctx, payload.si.value.toLocal(), payload.sampler.next1D(), payload.sampler.next2D());
     if (let bs = payload.bsdfSample)// update BSDFContext
     {
         payload.ctx.lastIOR = params.IOR;

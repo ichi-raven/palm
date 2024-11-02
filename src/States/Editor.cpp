@@ -728,6 +728,13 @@ namespace palm
                 // re calculate
                 transform.params.update(transform.pos, glm::radians(transform.rot), transform.scale);
             }
+            
+            if (mPickedEntity)
+            {  // material
+                ImGui::Spacing();
+                ImGui::Text("Material");
+                Material::updateAndDrawMaterialUI(scene.get<Material>(*mPickedEntity).materialParams);
+            }
 
             ImGui::End();
         }

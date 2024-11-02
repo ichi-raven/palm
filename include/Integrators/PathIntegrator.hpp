@@ -65,6 +65,7 @@ namespace palm
         // shader resources
         Handle<vk2s::Buffer> mSceneBuffer;
         Handle<vk2s::Buffer> mInstanceBuffer;
+        Handle<vk2s::Buffer> mMaterialBuffer;
         Handle<vk2s::Buffer> mSampleBuffer;
         Handle<vk2s::Image> mPoolImage;
         std::vector<Handle<vk2s::Buffer>> mVertexBuffers;

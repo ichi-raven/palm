@@ -37,11 +37,11 @@ public struct MaterialParams // std140
     public float diffTrans = 0.0;
     public float flatness = 0.0;
 
-    public float specularTint = 0.0;
     public float3 padding = k::zeros.xyz;
+    public float specularTint = 0.0;
 
-    public float sheen = 0.0;
     public float3 sheenTint = k::zeros.xyz;
+    public float sheen = 0.0;
 
     public float anisotropic    = 0.0;
     public float clearcoat      = 0.0;
@@ -53,8 +53,8 @@ public struct MaterialParams // std140
     public int32_t metalnessTexIndex = k::invalidTexIndex;
     public int32_t normalmapTexIndex = k::invalidTexIndex;
 
-    public int32_t type = MaterialType::Principle;
     public float3 emissive = k::zeros.xyz;
+    public int32_t type = MaterialType::Principle;
 }
 
 public struct BSDFContext
