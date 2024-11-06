@@ -48,11 +48,7 @@ ${IMGUI_SOURCE_FILES}
 ${IMGUIZMO_SOURCE_FILES}
 )
 
-add_executable(${MAIN_EXE} ${EXEC_SRCS})
-target_sources(${MAIN_EXE}
-PUBLIC
-${EXEC_SRCS}
-# header files
+set (EXEC_HEADERS
 ../include/AppStates.hpp
 ../include/Film.hpp
 
@@ -64,10 +60,18 @@ ${EXEC_SRCS}
 ../include/Transform.hpp
 ../include/EntityInfo.hpp
 ../include/GraphicsPass.hpp
+../include/Emitter.hpp
 
 ../include/States/Editor.hpp
 ../include/States/Renderer.hpp
 ../include/States/MaterialViewer.hpp
+)
+
+add_executable(${MAIN_EXE} ${EXEC_SRCS})
+target_sources(${MAIN_EXE}
+PUBLIC
+${EXEC_SRCS}
+${EXEC_HEADERS}
 )
 
 # link libraries

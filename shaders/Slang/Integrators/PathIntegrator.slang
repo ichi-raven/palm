@@ -277,7 +277,7 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     
     // sample BSDF and emitter
     MaterialParams params = materialParams[instanceIndex];
-    if (dot(params.emissive, params.emissive) > 0)// HACK:
+    if (dot(params.emissive, params.emissive) > 0.)// HACK:
     {
         payload.emissive = params.emissive;
     }
