@@ -163,6 +163,113 @@ namespace palm
         scene.destroy(entity);
     }
 
+    void Editor::createGBufferPass()
+    {
+        auto& device = getCommonRegion()->device;
+        auto& window = getCommonRegion()->window;
+
+        const auto [windowWidth, windowHeight] = window->getWindowSize();
+        const auto frameCount                  = window->getFrameCount();
+
+        // create depth buffer
+        {
+            const auto format   = vk::Format::eD32Sfloat;
+            const uint32_t size = windowWidth * windowHeight * vk2s::Compiler::getSizeOfFormat(format);
+
+            vk::ImageCreateInfo ci;
+            ci.arrayLayers   = 1;
+            ci.extent        = vk::Extent3D(windowWidth, windowHeight, 1);
+            ci.format        = format;
+            ci.imageType     = vk::ImageType::e2D;
+            ci.mipLevels     = 1;
+            ci.usage         = vk::ImageUsageFlagBits::eDepthStencilAttachment;
+            ci.initialLayout = vk::ImageLayout::eUndefined;
+
+            mGBuffer.depthBuffer = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eDepth);
+        }
+
+        // create G-Buffer
+        {
+            const auto format   = vk::Format::eR32G32B32A32Sfloat;
+            const uint32_t size = windowWidth * windowHeight * vk2s::Compiler::getSizeOfFormat(format);
+
+            vk::ImageCreateInfo ci;
+            ci.arrayLayers   = 1;
+            ci.extent        = vk::Extent3D(windowWidth, windowHeight, 1);
+            ci.format        = format;
+            ci.imageType     = vk::ImageType::e2D;
+            ci.mipLevels     = 1;
+            ci.usage         = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eColorAttachment;
+            ci.initialLayout = vk::ImageLayout::eUndefined;
+
+            mGBuffer.albedoTex   = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+            mGBuffer.worldPosTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+            mGBuffer.normalTex   = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+
+            UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
+            cmd->begin(true);
+            cmd->transitionImageLayout(mGBuffer.albedoTex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
+            cmd->transitionImageLayout(mGBuffer.worldPosTex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
+            cmd->transitionImageLayout(mGBuffer.normalTex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
+            cmd->end();
+            cmd->execute();
+        }
+
+        // geometry pass
+        {
+            std::vector<Handle<vk2s::Image>> images = { mGBuffer.albedoTex, mGBuffer.worldPosTex, mGBuffer.normalTex };
+
+            mGeometryPass.renderpass = device.create<vk2s::RenderPass>(images, mGBuffer.depthBuffer, vk::AttachmentLoadOp::eClear);
+
+            mGeometryPass.vs = device.create<vk2s::Shader>("../../shaders/Slang/rasterize/Geometry.slang", "vsmain");
+            mGeometryPass.fs = device.create<vk2s::Shader>("../../shaders/Slang/rasterize/Geometry.slang", "fsmain");
+
+            std::vector bindings0 = {
+                // Scene MVP information
+                // VP
+                vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
+            };
+
+            std::vector bindings1 = {
+                // Entity information
+                vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
+            };
+
+            mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
+            mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings1));
+
+            vk::VertexInputBindingDescription inputBinding(0, sizeof(Mesh::Vertex));
+            const auto& inputAttributes = std::get<0>(mGeometryPass.vs->getReflection());
+            vk::Viewport viewport(0.f, 0.f, static_cast<float>(windowWidth), static_cast<float>(windowHeight), 0.f, 1.f);
+            vk::Rect2D scissor({ 0, 0 }, window->getVkSwapchainExtent());
+            vk::PipelineColorBlendAttachmentState colorBlendAttachment(VK_FALSE);
+            colorBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
+            std::array attachments = { colorBlendAttachment, colorBlendAttachment, colorBlendAttachment };
+
+            vk2s::Pipeline::GraphicsPipelineInfo gpi{
+                .vs            = mGeometryPass.vs,
+                .fs            = mGeometryPass.fs,
+                .bindLayouts   = mGeometryPass.bindLayouts,
+                .renderPass    = mGeometryPass.renderpass,
+                .inputState    = vk::PipelineVertexInputStateCreateInfo({}, inputBinding, inputAttributes),
+                .inputAssembly = vk::PipelineInputAssemblyStateCreateInfo({}, vk::PrimitiveTopology::eTriangleList),
+                .viewportState = vk::PipelineViewportStateCreateInfo({}, 1, &viewport, 1, &scissor),
+                .rasterizer    = vk::PipelineRasterizationStateCreateInfo({}, VK_FALSE, VK_FALSE, vk::PolygonMode::eFill, vk::CullModeFlagBits::eNone, vk::FrontFace::eClockwise, VK_FALSE, 0.0f, 0.0f, 0.0f, 1.0f),
+                .multiSampling = vk::PipelineMultisampleStateCreateInfo({}, vk::SampleCountFlagBits::e1, VK_FALSE),
+                .depthStencil  = vk::PipelineDepthStencilStateCreateInfo({}, VK_TRUE, VK_TRUE, vk::CompareOp::eLess, VK_FALSE),
+                .colorBlending = vk::PipelineColorBlendStateCreateInfo({}, VK_FALSE, vk::LogicOp::eCopy, attachments),
+            };
+
+            mGeometryPass.pipeline = device.create<vk2s::Pipeline>(gpi);
+        }
+
+        mGBuffer.bindGroup = device.create<vk2s::BindGroup>(mLightingPass.bindLayouts[0].get());
+        mGBuffer.bindGroup->bind(0, vk::DescriptorType::eSampledImage, mGBuffer.albedoTex);
+        mGBuffer.bindGroup->bind(1, vk::DescriptorType::eSampledImage, mGBuffer.worldPosTex);
+        mGBuffer.bindGroup->bind(2, vk::DescriptorType::eSampledImage, mGBuffer.normalTex);
+        mGBuffer.bindGroup->bind(3, mDefaultSampler.get());
+    }
+
     void Editor::initVulkan()
     {
         auto& device = getCommonRegion()->device;
@@ -176,97 +283,8 @@ namespace palm
             // default sampler
             mDefaultSampler = device.create<vk2s::Sampler>(vk::SamplerCreateInfo());
 
-            // create depth buffer
-            {
-                const auto format   = vk::Format::eD32Sfloat;
-                const uint32_t size = windowWidth * windowHeight * vk2s::Compiler::getSizeOfFormat(format);
-
-                vk::ImageCreateInfo ci;
-                ci.arrayLayers   = 1;
-                ci.extent        = vk::Extent3D(windowWidth, windowHeight, 1);
-                ci.format        = format;
-                ci.imageType     = vk::ImageType::e2D;
-                ci.mipLevels     = 1;
-                ci.usage         = vk::ImageUsageFlagBits::eDepthStencilAttachment;
-                ci.initialLayout = vk::ImageLayout::eUndefined;
-
-                mGBuffer.depthBuffer = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eDepth);
-            }
-
             // create G-Buffer
-            {
-                const auto format   = vk::Format::eR32G32B32A32Sfloat;
-                const uint32_t size = windowWidth * windowHeight * vk2s::Compiler::getSizeOfFormat(format);
-
-                vk::ImageCreateInfo ci;
-                ci.arrayLayers   = 1;
-                ci.extent        = vk::Extent3D(windowWidth, windowHeight, 1);
-                ci.format        = format;
-                ci.imageType     = vk::ImageType::e2D;
-                ci.mipLevels     = 1;
-                ci.usage         = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eColorAttachment;
-                ci.initialLayout = vk::ImageLayout::eUndefined;
-
-                mGBuffer.albedoTex   = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
-                mGBuffer.worldPosTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
-                mGBuffer.normalTex   = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
-
-                UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
-                cmd->begin(true);
-                cmd->transitionImageLayout(mGBuffer.albedoTex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
-                cmd->transitionImageLayout(mGBuffer.worldPosTex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
-                cmd->transitionImageLayout(mGBuffer.normalTex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
-                cmd->end();
-                cmd->execute();
-            }
-
-            // geometry pass
-            {
-                std::vector<Handle<vk2s::Image>> images = { mGBuffer.albedoTex, mGBuffer.worldPosTex, mGBuffer.normalTex };
-
-                mGeometryPass.renderpass = device.create<vk2s::RenderPass>(images, mGBuffer.depthBuffer, vk::AttachmentLoadOp::eClear);
-
-                mGeometryPass.vs = device.create<vk2s::Shader>("../../shaders/Slang/rasterize/Geometry.slang", "vsmain");
-                mGeometryPass.fs = device.create<vk2s::Shader>("../../shaders/Slang/rasterize/Geometry.slang", "fsmain");
-
-                std::vector bindings0 = {
-                    // Scene MVP information
-                    // VP
-                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
-                };
-
-                std::vector bindings1 = {
-                    // Entity information
-                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
-                };
-
-                mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
-                mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings1));
-
-                vk::VertexInputBindingDescription inputBinding(0, sizeof(Mesh::Vertex));
-                const auto& inputAttributes = std::get<0>(mGeometryPass.vs->getReflection());
-                vk::Viewport viewport(0.f, 0.f, static_cast<float>(windowWidth), static_cast<float>(windowHeight), 0.f, 1.f);
-                vk::Rect2D scissor({ 0, 0 }, window->getVkSwapchainExtent());
-                vk::PipelineColorBlendAttachmentState colorBlendAttachment(VK_FALSE);
-                colorBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
-                std::array attachments = { colorBlendAttachment, colorBlendAttachment, colorBlendAttachment };
-
-                vk2s::Pipeline::GraphicsPipelineInfo gpi{
-                    .vs            = mGeometryPass.vs,
-                    .fs            = mGeometryPass.fs,
-                    .bindLayouts   = mGeometryPass.bindLayouts,
-                    .renderPass    = mGeometryPass.renderpass,
-                    .inputState    = vk::PipelineVertexInputStateCreateInfo({}, inputBinding, inputAttributes),
-                    .inputAssembly = vk::PipelineInputAssemblyStateCreateInfo({}, vk::PrimitiveTopology::eTriangleList),
-                    .viewportState = vk::PipelineViewportStateCreateInfo({}, 1, &viewport, 1, &scissor),
-                    .rasterizer    = vk::PipelineRasterizationStateCreateInfo({}, VK_FALSE, VK_FALSE, vk::PolygonMode::eFill, vk::CullModeFlagBits::eNone, vk::FrontFace::eClockwise, VK_FALSE, 0.0f, 0.0f, 0.0f, 1.0f),
-                    .multiSampling = vk::PipelineMultisampleStateCreateInfo({}, vk::SampleCountFlagBits::e1, VK_FALSE),
-                    .depthStencil  = vk::PipelineDepthStencilStateCreateInfo({}, VK_TRUE, VK_TRUE, vk::CompareOp::eLess, VK_FALSE),
-                    .colorBlending = vk::PipelineColorBlendStateCreateInfo({}, VK_FALSE, vk::LogicOp::eCopy, attachments),
-                };
-
-                mGeometryPass.pipeline = device.create<vk2s::Pipeline>(gpi);
-            }
+            createGBufferPass();
 
             {  // lighting pass
                 mLightingPass.renderpass = device.create<vk2s::RenderPass>(window.get(), vk::AttachmentLoadOp::eClear);
@@ -324,12 +342,6 @@ namespace palm
             mSceneBindGroup = device.create<vk2s::BindGroup>(mGeometryPass.bindLayouts[0].get());
 
             mSceneBindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, mSceneBuffer.get());
-
-            mGBuffer.bindGroup = device.create<vk2s::BindGroup>(mLightingPass.bindLayouts[0].get());
-            mGBuffer.bindGroup->bind(0, vk::DescriptorType::eSampledImage, mGBuffer.albedoTex);
-            mGBuffer.bindGroup->bind(1, vk::DescriptorType::eSampledImage, mGBuffer.worldPosTex);
-            mGBuffer.bindGroup->bind(2, vk::DescriptorType::eSampledImage, mGBuffer.normalTex);
-            mGBuffer.bindGroup->bind(3, mDefaultSampler.get());
 
             // create commands and sync objects
 
@@ -728,7 +740,7 @@ namespace palm
                 // re calculate
                 transform.params.update(transform.pos, glm::radians(transform.rot), transform.scale);
             }
-            
+
             if (mPickedEntity)
             {  // material
                 ImGui::Spacing();
@@ -748,6 +760,8 @@ namespace palm
         auto& window = getCommonRegion()->window;
 
         window->resize();
+
+        createGBufferPass();
 
         mLightingPass.renderpass->recreateFrameBuffers(window.get());
     }

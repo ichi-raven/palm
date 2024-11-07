@@ -69,6 +69,8 @@ namespace palm
 
         void initVulkan();
 
+        void createGBufferPass();
+
         void updateAndRenderImGui(const double deltaTime);
 
         void updateShaderResources();
