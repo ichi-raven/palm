@@ -58,7 +58,7 @@ namespace palm
             int32_t materialType = static_cast<std::underlying_type_t<Type>>(Type::eLambert);
         };
 
-        inline static void updateAndDrawMaterialUI(Params& params)
+        inline static void updateAndDrawMaterialUI(Params& params, bool& enabledEmissive)
         {
             // Albedo color
             ImGui::ColorEdit3("Albedo", glm::value_ptr(params.albedo), ImGuiColorEditFlags_Float);
@@ -115,7 +115,10 @@ namespace palm
             }
 
             // Emissive color
-            ImGui::ColorEdit3("Emissive", glm::value_ptr(params.emissive), ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
+            if (ImGui::ColorEdit3("Emissive", glm::value_ptr(params.emissive), ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR))
+            {
+                enabledEmissive = params.emissive.length() > 0.;
+            }
 
         }
 

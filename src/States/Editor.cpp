@@ -163,13 +163,12 @@ namespace palm
         scene.destroy(entity);
     }
 
-    void Editor::createGBufferPass()
+    void Editor::createGBuffer()
     {
         auto& device = getCommonRegion()->device;
         auto& window = getCommonRegion()->window;
 
         const auto [windowWidth, windowHeight] = window->getWindowSize();
-        const auto frameCount                  = window->getFrameCount();
 
         // create depth buffer
         {
@@ -214,60 +213,6 @@ namespace palm
             cmd->end();
             cmd->execute();
         }
-
-        // geometry pass
-        {
-            std::vector<Handle<vk2s::Image>> images = { mGBuffer.albedoTex, mGBuffer.worldPosTex, mGBuffer.normalTex };
-
-            mGeometryPass.renderpass = device.create<vk2s::RenderPass>(images, mGBuffer.depthBuffer, vk::AttachmentLoadOp::eClear);
-
-            mGeometryPass.vs = device.create<vk2s::Shader>("../../shaders/Slang/rasterize/Geometry.slang", "vsmain");
-            mGeometryPass.fs = device.create<vk2s::Shader>("../../shaders/Slang/rasterize/Geometry.slang", "fsmain");
-
-            std::vector bindings0 = {
-                // Scene MVP information
-                // VP
-                vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
-            };
-
-            std::vector bindings1 = {
-                // Entity information
-                vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
-            };
-
-            mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
-            mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings1));
-
-            vk::VertexInputBindingDescription inputBinding(0, sizeof(Mesh::Vertex));
-            const auto& inputAttributes = std::get<0>(mGeometryPass.vs->getReflection());
-            vk::Viewport viewport(0.f, 0.f, static_cast<float>(windowWidth), static_cast<float>(windowHeight), 0.f, 1.f);
-            vk::Rect2D scissor({ 0, 0 }, window->getVkSwapchainExtent());
-            vk::PipelineColorBlendAttachmentState colorBlendAttachment(VK_FALSE);
-            colorBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
-            std::array attachments = { colorBlendAttachment, colorBlendAttachment, colorBlendAttachment };
-
-            vk2s::Pipeline::GraphicsPipelineInfo gpi{
-                .vs            = mGeometryPass.vs,
-                .fs            = mGeometryPass.fs,
-                .bindLayouts   = mGeometryPass.bindLayouts,
-                .renderPass    = mGeometryPass.renderpass,
-                .inputState    = vk::PipelineVertexInputStateCreateInfo({}, inputBinding, inputAttributes),
-                .inputAssembly = vk::PipelineInputAssemblyStateCreateInfo({}, vk::PrimitiveTopology::eTriangleList),
-                .viewportState = vk::PipelineViewportStateCreateInfo({}, 1, &viewport, 1, &scissor),
-                .rasterizer    = vk::PipelineRasterizationStateCreateInfo({}, VK_FALSE, VK_FALSE, vk::PolygonMode::eFill, vk::CullModeFlagBits::eNone, vk::FrontFace::eClockwise, VK_FALSE, 0.0f, 0.0f, 0.0f, 1.0f),
-                .multiSampling = vk::PipelineMultisampleStateCreateInfo({}, vk::SampleCountFlagBits::e1, VK_FALSE),
-                .depthStencil  = vk::PipelineDepthStencilStateCreateInfo({}, VK_TRUE, VK_TRUE, vk::CompareOp::eLess, VK_FALSE),
-                .colorBlending = vk::PipelineColorBlendStateCreateInfo({}, VK_FALSE, vk::LogicOp::eCopy, attachments),
-            };
-
-            mGeometryPass.pipeline = device.create<vk2s::Pipeline>(gpi);
-        }
-
-        mGBuffer.bindGroup = device.create<vk2s::BindGroup>(mLightingPass.bindLayouts[0].get());
-        mGBuffer.bindGroup->bind(0, vk::DescriptorType::eSampledImage, mGBuffer.albedoTex);
-        mGBuffer.bindGroup->bind(1, vk::DescriptorType::eSampledImage, mGBuffer.worldPosTex);
-        mGBuffer.bindGroup->bind(2, vk::DescriptorType::eSampledImage, mGBuffer.normalTex);
-        mGBuffer.bindGroup->bind(3, mDefaultSampler.get());
     }
 
     void Editor::initVulkan()
@@ -284,7 +229,62 @@ namespace palm
             mDefaultSampler = device.create<vk2s::Sampler>(vk::SamplerCreateInfo());
 
             // create G-Buffer
-            createGBufferPass();
+            auto& device = getCommonRegion()->device;
+            auto& window = getCommonRegion()->window;
+
+            const auto [windowWidth, windowHeight] = window->getWindowSize();
+            const auto frameCount                  = window->getFrameCount();
+
+            // to share implementation with swap chain recreation
+            createGBuffer();
+
+            // geometry pass
+            {
+                std::vector<Handle<vk2s::Image>> images = { mGBuffer.albedoTex, mGBuffer.worldPosTex, mGBuffer.normalTex };
+
+                mGeometryPass.renderpass = device.create<vk2s::RenderPass>(images, mGBuffer.depthBuffer, vk::AttachmentLoadOp::eClear);
+
+                mGeometryPass.vs = device.create<vk2s::Shader>("../../shaders/Slang/rasterize/Geometry.slang", "vsmain");
+                mGeometryPass.fs = device.create<vk2s::Shader>("../../shaders/Slang/rasterize/Geometry.slang", "fsmain");
+
+                std::vector bindings0 = {
+                    // Scene MVP information
+                    // VP
+                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
+                };
+
+                std::vector bindings1 = {
+                    // Entity information
+                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
+                };
+
+                mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
+                mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings1));
+
+                vk::VertexInputBindingDescription inputBinding(0, sizeof(Mesh::Vertex));
+                const auto& inputAttributes = std::get<0>(mGeometryPass.vs->getReflection());
+                vk::Viewport viewport(0.f, 0.f, static_cast<float>(windowWidth), static_cast<float>(windowHeight), 0.f, 1.f);
+                vk::Rect2D scissor({ 0, 0 }, window->getVkSwapchainExtent());
+                vk::PipelineColorBlendAttachmentState colorBlendAttachment(VK_FALSE);
+                colorBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
+                std::array attachments = { colorBlendAttachment, colorBlendAttachment, colorBlendAttachment };
+
+                vk2s::Pipeline::GraphicsPipelineInfo gpi{
+                    .vs            = mGeometryPass.vs,
+                    .fs            = mGeometryPass.fs,
+                    .bindLayouts   = mGeometryPass.bindLayouts,
+                    .renderPass    = mGeometryPass.renderpass,
+                    .inputState    = vk::PipelineVertexInputStateCreateInfo({}, inputBinding, inputAttributes),
+                    .inputAssembly = vk::PipelineInputAssemblyStateCreateInfo({}, vk::PrimitiveTopology::eTriangleList),
+                    .viewportState = vk::PipelineViewportStateCreateInfo({}, 1, &viewport, 1, &scissor),
+                    .rasterizer    = vk::PipelineRasterizationStateCreateInfo({}, VK_FALSE, VK_FALSE, vk::PolygonMode::eFill, vk::CullModeFlagBits::eNone, vk::FrontFace::eClockwise, VK_FALSE, 0.0f, 0.0f, 0.0f, 1.0f),
+                    .multiSampling = vk::PipelineMultisampleStateCreateInfo({}, vk::SampleCountFlagBits::e1, VK_FALSE),
+                    .depthStencil  = vk::PipelineDepthStencilStateCreateInfo({}, VK_TRUE, VK_TRUE, vk::CompareOp::eLess, VK_FALSE),
+                    .colorBlending = vk::PipelineColorBlendStateCreateInfo({}, VK_FALSE, vk::LogicOp::eCopy, attachments),
+                };
+
+                mGeometryPass.pipeline = device.create<vk2s::Pipeline>(gpi);
+            }
 
             {  // lighting pass
                 mLightingPass.renderpass = device.create<vk2s::RenderPass>(window.get(), vk::AttachmentLoadOp::eClear);
@@ -343,6 +343,12 @@ namespace palm
 
             mSceneBindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, mSceneBuffer.get());
 
+            mGBuffer.bindGroup = device.create<vk2s::BindGroup>(mLightingPass.bindLayouts[0].get());
+            mGBuffer.bindGroup->bind(0, vk::DescriptorType::eSampledImage, mGBuffer.albedoTex);
+            mGBuffer.bindGroup->bind(1, vk::DescriptorType::eSampledImage, mGBuffer.worldPosTex);
+            mGBuffer.bindGroup->bind(2, vk::DescriptorType::eSampledImage, mGBuffer.normalTex);
+            mGBuffer.bindGroup->bind(3, mDefaultSampler.get());
+
             // create commands and sync objects
 
             mCommands.resize(frameCount);
@@ -393,7 +399,7 @@ namespace palm
     void Editor::update()
     {
         constexpr auto colorClearValue   = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 1.0f });
-        constexpr auto gbufferClearValue = vk::ClearValue(std::array{ 0.1f, 0.1f, 0.1f, 1.0f });
+        constexpr auto gbufferClearValue = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 1.0f });
         constexpr auto depthClearValue   = vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0));
         constexpr std::array clearValues = { gbufferClearValue, gbufferClearValue, gbufferClearValue, depthClearValue };
 
@@ -701,15 +707,15 @@ namespace palm
                 projectionMat[1][1] *= -1.f;  // HACK: too adhoc
 
                 ImGui::Text("Manipulation (Picked: %s)", scene.get<EntityInfo>(*mPickedEntity).entityName.c_str());
-                // Position editor (Translation)
+                // position editor (translation)
                 ImGui::Text("Position");
                 ImGui::InputFloat3("Translate", glm::value_ptr(transform.pos));
 
-                // Rotation editor (Euler Angles)
+                // rotation editor (Euler angles)
                 ImGui::Text("Rotation");
                 ImGui::InputFloat3("Rotate", glm::value_ptr(transform.rot));
 
-                // Scale editor
+                // scale editor
                 ImGui::Text("Scale");
                 ImGui::InputFloat3("Scale", glm::value_ptr(transform.scale));
 
@@ -731,21 +737,27 @@ namespace palm
 
                 ImGuizmo::Manipulate(glm::value_ptr(viewMat), glm::value_ptr(projectionMat), currentGizmoOperation, ImGuizmo::WORLD, glm::value_ptr(transform.params.world));
 
-                glm::vec3 translation, rotation, objectScale;
-                ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform.params.world), glm::value_ptr(translation), glm::value_ptr(rotation), glm::value_ptr(objectScale));
+                glm::vec3 translation, rotation, scale;
+                ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform.params.world), glm::value_ptr(translation), glm::value_ptr(rotation), glm::value_ptr(scale));
 
                 transform.pos   = translation;
                 transform.rot   = rotation;
-                transform.scale = objectScale;
+                transform.scale = scale;
                 // re calculate
                 transform.params.update(transform.pos, glm::radians(transform.rot), transform.scale);
             }
 
             if (mPickedEntity)
             {  // material
+                bool enableEmissive = false;
                 ImGui::Spacing();
                 ImGui::Text("Material");
-                Material::updateAndDrawMaterialUI(scene.get<Material>(*mPickedEntity).materialParams);
+                Material::updateAndDrawMaterialUI(scene.get<Material>(*mPickedEntity).materialParams, enableEmissive);
+
+                if (enableEmissive)
+                {
+                    std::cout << "enabled emissive!\n";
+                }
             }
 
             ImGui::End();
@@ -761,9 +773,18 @@ namespace palm
 
         window->resize();
 
-        createGBufferPass();
+        createGBuffer();
+
+        std::vector<Handle<vk2s::Image>> images = { mGBuffer.albedoTex, mGBuffer.worldPosTex, mGBuffer.normalTex };
+        mGeometryPass.renderpass->recreateFrameBuffers(images, mGBuffer.depthBuffer);
 
         mLightingPass.renderpass->recreateFrameBuffers(window.get());
+
+        // re-binding G-buffers
+        mGBuffer.bindGroup->bind(0, vk::DescriptorType::eSampledImage, mGBuffer.albedoTex);
+        mGBuffer.bindGroup->bind(1, vk::DescriptorType::eSampledImage, mGBuffer.worldPosTex);
+        mGBuffer.bindGroup->bind(2, vk::DescriptorType::eSampledImage, mGBuffer.normalTex);
+        mGBuffer.bindGroup->bind(3, mDefaultSampler.get());
     }
 
 }  // namespace palm

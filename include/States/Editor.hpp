@@ -69,7 +69,7 @@ namespace palm
 
         void initVulkan();
 
-        void createGBufferPass();
+        void createGBuffer();
 
         void updateAndRenderImGui(const double deltaTime);
 
