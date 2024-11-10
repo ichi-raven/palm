@@ -30,6 +30,8 @@ namespace palm
 
         virtual void showConfigImGui() = 0;
 
+        virtual void updateShaderResources() = 0;
+
         virtual void sample(Handle<vk2s::Fence> fence, Handle<vk2s::Command> command) = 0;
 
     protected:

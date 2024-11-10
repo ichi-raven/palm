@@ -99,7 +99,7 @@ namespace palm
         UniqueHandle<vk2s::BindGroup> mSceneBindGroup;
 
         std::optional<ec2s::Entity> mPickedEntity;
-        ec2s::Entity mCameraEntity;
+        ec2s::Entity mCameraEntity = ec2s::kInvalidEntity;
 
         std::optional<AppState> mChangeDst;
 

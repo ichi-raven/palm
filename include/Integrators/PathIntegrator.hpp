@@ -1,4 +1,4 @@
-/*****************************************************************//**
+/*****************************************************************/ /**
  * @file   PathIntegrator.hpp
  * @brief  
  * 
@@ -23,23 +23,24 @@ namespace palm
     {
     public:
         PathIntegrator(vk2s::Device& device, ec2s::Registry& scene, Handle<vk2s::Image> output);
-         
+
         virtual ~PathIntegrator() override;
 
         virtual void showConfigImGui() override;
 
+        virtual void updateShaderResources() override;
+
         virtual void sample(Handle<vk2s::Fence> fence, Handle<vk2s::Command> command) override;
 
     private:
-
         struct SceneParams  // std430
         {
             glm::mat4 view;
             glm::mat4 proj;
             glm::mat4 viewInv;
             glm::mat4 projInv;
-            glm::vec4 camPos;        
-            
+            glm::vec4 camPos;
+
             uint32_t sppPerFrame;
             float padding[3];
         };
@@ -53,7 +54,7 @@ namespace palm
         // can be modified from ImGui
         struct GUIParams
         {
-            int spp = 4;
+            int spp            = 4;
             int accumulatedSpp = 0;
         };
 
@@ -71,15 +72,13 @@ namespace palm
         std::vector<Handle<vk2s::Buffer>> mVertexBuffers;
         std::vector<Handle<vk2s::Buffer>> mIndexBuffers;
 
-        // binding 
+        // binding
         Handle<vk2s::BindLayout> mBindLayout;
         Handle<vk2s::BindGroup> mBindGroup;
 
         // pipeline and SBT
         Handle<vk2s::Pipeline> mRaytracePipeline;
         Handle<vk2s::ShaderBindingTable> mShaderBindingTable;
-        
-        
     };
 }  // namespace palm
 

@@ -38,6 +38,7 @@ namespace palm
             int32_t texIndex = -1;
         };
 
+        Params params;
         Handle<vk2s::Image> emissiveTex;
     };
 }  // namespace palm

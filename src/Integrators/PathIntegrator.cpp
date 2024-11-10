@@ -20,13 +20,6 @@ namespace palm
         : Integrator(device, scene, output)
     {
         // scene loading
-
-        //Handle<vk2s::Buffer> materialBuffer;
-        //Handle<vk2s::Buffer> emitterBuffer;
-        //Handle<vk2s::Buffer> triEmitterBuffer;
-        //Handle<vk2s::Buffer> infiniteEmitterBuffer;
-        //std::vector<Handle<vk2s::Image>> materialTextures;
-
         const auto extent = mOutputImage->getVkExtent();
         auto sampler      = device.create<vk2s::Sampler>(vk::SamplerCreateInfo());
 
@@ -80,8 +73,7 @@ namespace palm
             mScene.each<Material>(
                 [&](const Material& mat)
                 {
-                    params.emplace_back(mat.materialParams);
-                    std::cout << params.back().albedo.r << params.back().albedo.g << params.back().albedo.b << "\n";
+                    params.emplace_back(mat.params);
                 });
 
             const auto size = sizeof(Material::Params) * params.size();
@@ -224,7 +216,7 @@ namespace palm
         ImGui::Text("total spp: %d", mGUIParams.accumulatedSpp);
     }
 
-    void PathIntegrator::sample(Handle<vk2s::Fence> fence, Handle<vk2s::Command> command)
+    void PathIntegrator::updateShaderResources()
     {
         mGUIParams.accumulatedSpp = std::min(mGUIParams.accumulatedSpp + mGUIParams.spp, std::numeric_limits<int>::max());
 
@@ -239,17 +231,20 @@ namespace palm
             });
 
         SceneParams params{
-            .view           = view,
-            .proj           = proj,
-            .viewInv        = glm::inverse(view),
-            .projInv        = glm::inverse(proj),
-            .camPos         = glm::vec4(camPos, 1.0f),
-            .sppPerFrame    = static_cast<uint32_t>(mGUIParams.spp),
-            .padding        = { 0.f },
+            .view        = view,
+            .proj        = proj,
+            .viewInv     = glm::inverse(view),
+            .projInv     = glm::inverse(proj),
+            .camPos      = glm::vec4(camPos, 1.0f),
+            .sppPerFrame = static_cast<uint32_t>(mGUIParams.spp),
+            .padding     = { 0.f },
         };
 
         mSceneBuffer->write(&params, sizeof(SceneParams));
+    }
 
+    void PathIntegrator::sample(Handle<vk2s::Fence> fence, Handle<vk2s::Command> command)
+    {
         const auto extent = mOutputImage->getVkExtent();
         // trace ray
         command->setPipeline(mRaytracePipeline);

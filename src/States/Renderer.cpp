@@ -262,6 +262,10 @@ namespace palm
 
     void Renderer::updateShaderResources()
     {
+        if (mIntegrator)
+        {
+            mIntegrator->updateShaderResources();
+        }
     }
 
     void Renderer::onResized()

@@ -122,7 +122,7 @@ namespace palm
 
         }
 
-        Params materialParams;
+        Params params;
         Handle<vk2s::Buffer> uniformBuffer;
 
         constexpr static uint32_t kDefaultTexNum = 4;

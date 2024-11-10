@@ -13,6 +13,7 @@
 #include "../include/Material.hpp"
 #include "../include/EntityInfo.hpp"
 #include "../include/Transform.hpp"
+#include "../include/Emitter.hpp"
 
 #include <stb_image.h>
 #include <glm/glm.hpp>
@@ -97,6 +98,7 @@ namespace palm
             {
                 info.entityName = mesh.hostMesh.nodeName;
                 info.entityID   = entity;
+                info.editable   = true;
 
                 info.groupName       = path.filename().string();
                 const size_t dot_pos = info.groupName.find_last_of('.');
@@ -378,7 +380,7 @@ namespace palm
 
         if (scene.size<vk2s::Camera>() == 0)
         {
-            mCameraEntity = scene.create<vk2s::Camera>();
+            mCameraEntity = scene.create<vk2s::Camera, EntityInfo>();
 
             auto& camera                           = scene.get<vk2s::Camera>(mCameraEntity);
             const auto [windowWidth, windowHeight] = window->getWindowSize();
@@ -386,6 +388,11 @@ namespace palm
             camera = vk2s::Camera(60., 1. * windowWidth / windowHeight);
             camera.setPos(glm::vec3(0.0, 0.8, 3.0));
             camera.setLookAt(glm::vec3(0.0, 0.8, -2.0));
+
+            auto& entityInfo      = scene.get<EntityInfo>(mCameraEntity);
+            entityInfo.entityID   = mCameraEntity;
+            entityInfo.entityName = "Main Camera";
+            entityInfo.groupName  = "Camera";
         }
         else
         {
@@ -582,21 +589,40 @@ namespace palm
 
         if (ImGui::BeginMenuBar())
         {
-            if (ImGui::BeginMenu("File"))
-            {
-                ImGui::MenuItem("New", NULL);
-                ImGui::MenuItem("Open", NULL);
-                ImGui::MenuItem("Save", NULL);
-                ImGui::MenuItem("Save As", NULL);
-                ImGui::MenuItem("Exit", NULL);
-                ImGui::EndMenu();
-            }
+            // TODO:
+            //if (ImGui::BeginMenu("File"))
+            //{
+            //    ImGui::MenuItem("New", NULL);
+            //    ImGui::MenuItem("Open", NULL);
+            //    ImGui::MenuItem("Save", NULL);
+            //    ImGui::MenuItem("Save As", NULL);
+            //    ImGui::MenuItem("Exit", NULL);
+            //    ImGui::EndMenu();
+            //}
 
-            if (ImGui::BeginMenu("Edit"))
+            //if (ImGui::BeginMenu("Edit"))
+            //{
+            //    ImGui::MenuItem("Copy", NULL);
+            //    ImGui::MenuItem("Paste", NULL);
+            //    ImGui::EndMenu();
+            //}
+
+            if (ImGui::BeginMenu("Add"))
             {
-                ImGui::MenuItem("Cut", NULL);
-                ImGui::MenuItem("Copy", NULL);
-                ImGui::MenuItem("Paste", NULL);
+                if (ImGui::BeginMenu("Emitter"))
+                {
+                    if (ImGui::MenuItem("Point", NULL))
+                    {
+                        std::cout << "point light! (TODO)\n";
+                    }
+                    if (ImGui::MenuItem("Infinite", NULL))
+                    {
+                        std::cout << "infinite light! (TODO)\n";
+                    }
+
+                    ImGui::EndMenu();
+                }
+
                 ImGui::EndMenu();
             }
 
@@ -657,8 +683,8 @@ namespace palm
         }
 
         {
-            ImGui::SetNextWindowPos(ImVec2(windowWidth * 0.70, windowHeight * 0.03));  // right
-            ImGui::SetNextWindowSize(ImVec2(windowWidth * 0.30, windowHeight * 0.77));
+            ImGui::SetNextWindowPos(ImVec2(windowWidth * 0.70, windowHeight * 0.031));  // right
+            ImGui::SetNextWindowSize(ImVec2(windowWidth * 0.30, windowHeight * 0.769));
             ImGui::Begin("SceneEditor", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
             ImGui::SetWindowFontScale(kFontScale);
 
@@ -667,10 +693,10 @@ namespace palm
             scene.each<EntityInfo>(
                 [&](ec2s::Entity entity, EntityInfo& info)
                 {
-                    std::string viewing = info.groupName + "/" + info.entityName + " entity[" + std::to_string(entity & ec2s::kEntityIndexMask) + "]";
+                    std::string viewing = "[" + std::to_string(entity & ec2s::kEntityIndexMask) + "]: " + info.groupName + "/" + info.entityName;
                     const bool picked   = mPickedEntity && entity == *mPickedEntity;
 
-                    if (ImGui::Selectable(viewing.c_str(), picked))
+                    if (ImGui::Selectable(viewing.c_str(), picked) && info.editable)
                     {
                         mPickedEntity = entity;
                     }
@@ -749,14 +775,24 @@ namespace palm
 
             if (mPickedEntity)
             {  // material
+                Material& material = scene.get<Material>(*mPickedEntity);
+
                 bool enableEmissive = false;
                 ImGui::Spacing();
                 ImGui::Text("Material");
-                Material::updateAndDrawMaterialUI(scene.get<Material>(*mPickedEntity).materialParams, enableEmissive);
+                Material::updateAndDrawMaterialUI(material.params, enableEmissive);
 
-                if (enableEmissive)
+                if (enableEmissive)  // add emissive component
                 {
-                    std::cout << "enabled emissive!\n";
+                    if (!scene.contains<Emitter>(*mPickedEntity))
+                    {
+                        scene.add<Emitter>(*mPickedEntity);
+                    }
+                    auto& emitter = scene.get<Emitter>(*mPickedEntity);
+
+                    emitter.params.emissive = material.params.emissive;
+                    emitter.params.type     = static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::eArea);
+                    emitter.params.faceNum  = scene.get<Mesh>(*mPickedEntity).hostMesh.indices.size() / 3;
                 }
             }
 
