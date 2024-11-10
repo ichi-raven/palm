@@ -84,8 +84,8 @@ namespace palm
             {  // BLAS
                 mesh.blas = device.create<vk2s::AccelerationStructure>(mesh.hostMesh.vertices.size(), sizeof(Mesh::Vertex), mesh.vertexBuffer.get(), mesh.hostMesh.indices.size() / 3, mesh.indexBuffer.get());
             }
-            // materials
-            {
+
+            {  // materials
                 const auto ubSize = sizeof(vk2s::Material) * hostMaterials.size();
                 vk::BufferCreateInfo ci({}, ubSize, vk::BufferUsageFlagBits::eStorageBuffer);
                 vk::MemoryPropertyFlags fb = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
@@ -94,8 +94,7 @@ namespace palm
                 material.uniformBuffer->write(hostMaterials.data(), ubSize);
             }
 
-            // information
-            {
+            {  // information
                 info.entityName = mesh.hostMesh.nodeName;
                 info.entityID   = entity;
                 info.editable   = true;
@@ -108,10 +107,9 @@ namespace palm
                 }
             }
 
-            // transform
-            {
+            {  // transform
                 transform.params.world             = glm::identity<glm::mat4>();
-                transform.params.worldInvTranspose = glm::transpose(glm::inverse(transform.params.world));
+                transform.params.worldInvTranspose = glm::identity<glm::mat4>();
                 transform.params.vel               = glm::vec3(0.f);
                 transform.params.padding           = { 0.f };
 
@@ -405,7 +403,7 @@ namespace palm
 
     void Editor::update()
     {
-        constexpr auto colorClearValue   = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 1.0f });
+        constexpr auto colorClearValue   = vk::ClearValue(std::array{ 0.1f, 0.1f, 0.1f, 1.0f });
         constexpr auto gbufferClearValue = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 1.0f });
         constexpr auto depthClearValue   = vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0));
         constexpr std::array clearValues = { gbufferClearValue, gbufferClearValue, gbufferClearValue, depthClearValue };
@@ -613,11 +611,47 @@ namespace palm
                 {
                     if (ImGui::MenuItem("Point", NULL))
                     {
-                        std::cout << "point light! (TODO)\n";
+                        static uint32_t pointEmitterNum = 0;  // HACK:
+
+                        const auto added    = scene.create<Emitter, Transform, EntityInfo>();
+                        {
+                            auto& emitter       = scene.get<Emitter>(added);
+                            emitter.params.type = static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::ePoint);
+                            emitter.params.pos  = glm::vec3(0.);
+                        }
+
+                        {
+                            auto& info      = scene.get<EntityInfo>(added);
+                            info.entityID   = added;
+                            info.entityName = std::string("point emitter ") + std::to_string(pointEmitterNum);
+                        }
+
+                        {  // transform
+                            auto& transform = scene.get<Transform>(added);
+
+                            transform.params.world             = glm::identity<glm::mat4>();
+                            transform.params.worldInvTranspose = glm::identity<glm::mat4>();
+                            transform.params.vel               = glm::vec3(0.f);
+                            transform.params.padding           = { 0.f };
+
+                            const auto frameCount = window->getFrameCount();
+                            const auto size       = sizeof(Transform::Params) * frameCount;
+                            transform.entityBuffer =
+                                device.create<vk2s::DynamicBuffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eUniformBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, frameCount);
+                            for (int i = 0; i < frameCount; ++i)
+                            {
+                                transform.entityBuffer->write(&transform.params, sizeof(Transform::Params), i * transform.entityBuffer->getBlockSize());
+                            }
+
+                            transform.bindGroup = device.create<vk2s::BindGroup>(mGeometryPass.bindLayouts[1].get());
+                            transform.bindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, transform.entityBuffer.get());
+                        }
+
+                        ++pointEmitterNum;
                     }
                     if (ImGui::MenuItem("Infinite", NULL))
                     {
-                        std::cout << "infinite light! (TODO)\n";
+                        // TODO: select constant or envmap -> set color or load texture
                     }
 
                     ImGui::EndMenu();
@@ -712,19 +746,21 @@ namespace palm
                 removeEntity(*mPickedEntity);
             }
 
-            ImGui::Spacing();
-            ImGui::Text("Information");
-            ImGui::Text("device = %s", device.getPhysicalDeviceName().data());
-            ImGui::Text("fps = %lf", 1. / deltaTime);
+            ImGui::SeparatorText("Information");
+            ImGui::Text("device: %s", device.getPhysicalDeviceName().data());
+            ImGui::Text("fps: %.3lf", 1. / deltaTime);
             const auto& pos    = camera.getPos();
             const auto& lookAt = camera.getLookAt();
-            ImGui::Text("pos = (%lf, %lf, %lf)", pos.x, pos.y, pos.z);
-            ImGui::Text("lookat = (%lf, %lf, %lf)", lookAt.x, lookAt.y, lookAt.z);
+            ImGui::Text("pos: (%.3lf, %.3lf, %.3lf)", pos.x, pos.y, pos.z);
+            ImGui::Text("lookat: (%.3lf, %.3lf, %.3lf)", lookAt.x, lookAt.y, lookAt.z);
 
             ImGui::Spacing();
             // transform editing (experimental)
             if (mPickedEntity)
             {
+                ImGui::SeparatorText("Manipulation");
+                ImGui::Text("Picked: %s", scene.get<EntityInfo>(*mPickedEntity).entityName.c_str());
+
                 auto& transform = scene.get<Transform>(*mPickedEntity);
 
                 static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::TRANSLATE;
@@ -732,17 +768,11 @@ namespace palm
                 glm::mat4 projectionMat                          = camera.getProjectionMatrix();
                 projectionMat[1][1] *= -1.f;  // HACK: too adhoc
 
-                ImGui::Text("Manipulation (Picked: %s)", scene.get<EntityInfo>(*mPickedEntity).entityName.c_str());
                 // position editor (translation)
-                ImGui::Text("Position");
                 ImGui::InputFloat3("Translate", glm::value_ptr(transform.pos));
-
                 // rotation editor (Euler angles)
-                ImGui::Text("Rotation");
                 ImGui::InputFloat3("Rotate", glm::value_ptr(transform.rot));
-
                 // scale editor
-                ImGui::Text("Scale");
                 ImGui::InputFloat3("Scale", glm::value_ptr(transform.scale));
 
                 // update buffer value
@@ -769,17 +799,18 @@ namespace palm
                 transform.pos   = translation;
                 transform.rot   = rotation;
                 transform.scale = scale;
-                // re calculate
+                // re-calculate
                 transform.params.update(transform.pos, glm::radians(transform.rot), transform.scale);
             }
 
             if (mPickedEntity)
             {  // material
-                Material& material = scene.get<Material>(*mPickedEntity);
+                ImGui::SeparatorText("Material");
 
+                Material& material  = scene.get<Material>(*mPickedEntity);
                 bool enableEmissive = false;
-                ImGui::Spacing();
-                ImGui::Text("Material");
+
+                // show material editing UI
                 Material::updateAndDrawMaterialUI(material.params, enableEmissive);
 
                 if (enableEmissive)  // add emissive component
@@ -820,7 +851,6 @@ namespace palm
         mGBuffer.bindGroup->bind(0, vk::DescriptorType::eSampledImage, mGBuffer.albedoTex);
         mGBuffer.bindGroup->bind(1, vk::DescriptorType::eSampledImage, mGBuffer.worldPosTex);
         mGBuffer.bindGroup->bind(2, vk::DescriptorType::eSampledImage, mGBuffer.normalTex);
-        mGBuffer.bindGroup->bind(3, mDefaultSampler.get());
     }
 
 }  // namespace palm
