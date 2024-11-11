@@ -23,8 +23,9 @@ public struct EmitterParams
     float3 pos = k::zeros.xyz;
     int32_t type = Type::Point;
 
-    uint32_t faceNum = 0;
-    float3 padding = k::zeros.xyz;
+    uint32_t faceNum  = 0;
+    int32_t meshIndex = -1;
+    float2 padding = k::zeros.xy;
 
     float3 emissive = k::zeros.xyz;
     int32_t texIndex = -1;

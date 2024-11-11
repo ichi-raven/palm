@@ -391,6 +391,7 @@ namespace palm
             entityInfo.entityID   = mCameraEntity;
             entityInfo.entityName = "Main Camera";
             entityInfo.groupName  = "Camera";
+            entityInfo.editable   = false;
         }
         else
         {
@@ -543,8 +544,6 @@ namespace palm
 
         // scene information
         {
-            //const auto& view = glm::transpose(mCamera.getViewMatrix()); // DEBUG!!
-            //const auto& proj = glm::transpose(mCamera.getProjectionMatrix()); // DEBUG!!
             const auto& view = camera.getViewMatrix();
             const auto& proj = camera.getProjectionMatrix();
 
@@ -578,7 +577,7 @@ namespace palm
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
-        ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, windowWidth, windowHeight);
+        ImGuizmo::SetRect(0, 0, windowWidth, windowHeight);
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));  // left
         ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.03));
@@ -624,6 +623,8 @@ namespace palm
                             auto& info      = scene.get<EntityInfo>(added);
                             info.entityID   = added;
                             info.entityName = std::string("point emitter ") + std::to_string(pointEmitterNum);
+                            info.groupName  = "emitter";
+                            info.editable   = true;
                         }
 
                         {  // transform
@@ -687,7 +688,7 @@ namespace palm
 
             ImGui::Text(current.string().c_str());
 
-            if (ImGui::Button("<-"))
+            if (ImGui::Button("<="))
             {
                 current = current.parent_path();
             }
@@ -803,7 +804,7 @@ namespace palm
                 transform.params.update(transform.pos, glm::radians(transform.rot), transform.scale);
             }
 
-            if (mPickedEntity)
+            if (mPickedEntity && scene.contains<Material>(*mPickedEntity))
             {  // material
                 ImGui::SeparatorText("Material");
 

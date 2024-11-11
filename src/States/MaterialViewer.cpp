@@ -147,14 +147,11 @@ namespace palm
 
         const auto [windowWidth, windowHeight] = window->getWindowSize();
 
-        constexpr auto kFontScale = 1.5f;
-
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
         ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, windowWidth, windowHeight);
-        ImGui::SetWindowFontScale(kFontScale);
 
         ImGui::Begin("Notice", NULL);
         ImGui::Text("Under construction!");

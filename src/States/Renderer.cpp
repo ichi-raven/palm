@@ -197,35 +197,19 @@ namespace palm
 
         const auto [windowWidth, windowHeight] = window->getWindowSize();
 
-        constexpr auto kFontScale = 1.5f;
-
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-        ImGui::SetWindowFontScale(kFontScale);
-
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));  // left
         ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.03));
         ImGui::Begin("MenuBar", NULL, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
-        ImGui::SetWindowFontScale(kFontScale);
         if (ImGui::BeginMenuBar())
         {
             if (ImGui::BeginMenu("File"))
             {
-                ImGui::MenuItem("New", NULL);
-                ImGui::MenuItem("Open", NULL);
-                ImGui::MenuItem("Save", NULL);
+                ImGui::MenuItem("Save Rendered Image", NULL);
                 ImGui::MenuItem("Save As", NULL);
-                ImGui::MenuItem("Exit", NULL);
-                ImGui::EndMenu();
-            }
-
-            if (ImGui::BeginMenu("Edit"))
-            {
-                ImGui::MenuItem("Cut", NULL);
-                ImGui::MenuItem("Copy", NULL);
-                ImGui::MenuItem("Paste", NULL);
                 ImGui::EndMenu();
             }
 
@@ -248,14 +232,13 @@ namespace palm
             mIntegrator = std::make_unique<PathIntegrator>(device, scene, mOutputImage);
         }
 
-        ImGui::End();
-
         if (mIntegrator)
         {
-            ImGui::Begin("Integrator Config");
+            ImGui::SeparatorText("Integrator Config");
             mIntegrator->showConfigImGui();
-            ImGui::End();
         }
+
+        ImGui::End();
 
         ImGui::Render();
     }

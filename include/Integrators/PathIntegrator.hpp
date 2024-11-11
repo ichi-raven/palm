@@ -33,7 +33,7 @@ namespace palm
         virtual void sample(Handle<vk2s::Fence> fence, Handle<vk2s::Command> command) override;
 
     private:
-        struct SceneParams  // std430
+        struct SceneParams  // std140
         {
             glm::mat4 view;
             glm::mat4 proj;
@@ -68,6 +68,7 @@ namespace palm
         Handle<vk2s::Buffer> mInstanceBuffer;
         Handle<vk2s::Buffer> mMaterialBuffer;
         Handle<vk2s::Buffer> mSampleBuffer;
+        Handle<vk2s::Buffer> mEmittersBuffer;
         Handle<vk2s::Image> mPoolImage;
         std::vector<Handle<vk2s::Buffer>> mVertexBuffers;
         std::vector<Handle<vk2s::Buffer>> mIndexBuffers;
