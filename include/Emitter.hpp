@@ -9,7 +9,7 @@
 #define PALM_INCLUDE_EMITTER_HPP_
 
 #include <vk2s/Device.hpp>
-
+#include <EC2S.hpp>
 #include <glm/glm.hpp>
 
 #include <utility>
@@ -41,6 +41,7 @@ namespace palm
 
         Params params;
         Handle<vk2s::Image> emissiveTex;
+        std::optional<ec2s::Entity> attachedEntity;
     };
 }  // namespace palm
 

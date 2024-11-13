@@ -9,6 +9,7 @@ public struct EmitterSample
     public float3 emissive;
     public float3 to;
     public float distance;
+    public float3 normal;
 }
 
 public enum Type
@@ -20,20 +21,19 @@ public enum Type
 
 public struct EmitterParams
 {
-    float3 pos = k::zeros.xyz;
-    int32_t type = Type::Point;
+    public float3 pos = k::zeros.xyz;
+    public int32_t type = Type::Point;
 
-    uint32_t faceNum  = 0;
-    int32_t meshIndex = -1;
-    float2 padding = k::zeros.xy;
+    public uint32_t faceNum  = 0;
+    public int32_t meshIndex = -1;
+    public float2 padding = k::zeros.xy;
 
-    float3 emissive = k::zeros.xyz;
-    int32_t texIndex = -1;
+    public float3 emissive = k::zeros.xyz;
+    public int32_t texIndex = -1;
 }
 
-interface IEmitter
+interface IEmitterSampler
 {
     __init();
 
-    
 }

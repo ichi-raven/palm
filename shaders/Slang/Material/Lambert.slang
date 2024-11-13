@@ -41,7 +41,6 @@ public struct Lambert : IMaterial
 
         public static float3 eval(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float3 wo)
         {
-
             if (wo.z * si.wi.z <= 0.)  // not in same hemisphere
             {
                 return float3(0.);

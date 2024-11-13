@@ -612,7 +612,7 @@ namespace palm
                     {
                         static uint32_t pointEmitterNum = 0;  // HACK:
 
-                        const auto added    = scene.create<Emitter, Transform, EntityInfo>();
+                        const auto added = scene.create<Emitter, Transform, EntityInfo>();
                         {
                             auto& emitter       = scene.get<Emitter>(added);
                             emitter.params.type = static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::ePoint);
@@ -757,7 +757,7 @@ namespace palm
 
             ImGui::Spacing();
             // transform editing (experimental)
-            if (mPickedEntity)
+            if (mPickedEntity && scene.contains<Transform>(*mPickedEntity))
             {
                 ImGui::SeparatorText("Manipulation");
                 ImGui::Text("Picked: %s", scene.get<EntityInfo>(*mPickedEntity).entityName.c_str());
@@ -804,11 +804,12 @@ namespace palm
                 transform.params.update(transform.pos, glm::radians(transform.rot), transform.scale);
             }
 
-            if (mPickedEntity && scene.contains<Material>(*mPickedEntity))
+            if (mPickedEntity && scene.contains<Material>(*mPickedEntity) && scene.contains<Transform>(*mPickedEntity))
             {  // material
                 ImGui::SeparatorText("Material");
 
-                Material& material  = scene.get<Material>(*mPickedEntity);
+                auto& material      = scene.get<Material>(*mPickedEntity);
+                auto& transform     = scene.get<Transform>(*mPickedEntity);
                 bool enableEmissive = false;
 
                 // show material editing UI
@@ -820,14 +821,22 @@ namespace palm
                     {
                         scene.add<Emitter>(*mPickedEntity);
                     }
-                    auto& emitter = scene.get<Emitter>(*mPickedEntity);
+                    auto& emitter          = scene.get<Emitter>(*mPickedEntity);
+                    emitter.attachedEntity = *mPickedEntity;
 
                     emitter.params.emissive = material.params.emissive;
                     emitter.params.type     = static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::eArea);
                     emitter.params.faceNum  = scene.get<Mesh>(*mPickedEntity).hostMesh.indices.size() / 3;
+                    emitter.params.pos      = transform.pos;
                 }
             }
 
+            if (mPickedEntity && !scene.contains<Material>(*mPickedEntity) && scene.contains<Emitter>(*mPickedEntity))
+            {
+                auto& emitter = scene.get<Emitter>(*mPickedEntity);
+                ImGui::ColorEdit3("Emissive", glm::value_ptr(emitter.params.emissive), ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
+            }
+            
             ImGui::End();
         }
 

@@ -124,10 +124,10 @@ float3 sampleL(in int sampleID, in int pixelSeed)
     TraceRay(sceneBVH, RAY_FLAG_NONE, ~0, 0, 0, 0, ray, payload);
 
     // WARNING: required for MIS
-    // if (let emissive = payload.emissive)
-    // {
-    //     L += beta * emissive;
-    // }
+    if (let emissive = payload.emissive)
+    {
+        L += beta * emissive;
+    }
 
     // trace ray recursively
     for (int depth = 1; depth < k::maxDepth && payload.continue(); ++depth)
@@ -146,19 +146,25 @@ float3 sampleL(in int sampleID, in int pixelSeed)
         let es = payload.emitterSample.value;
 
         // NEE
-        // if (!bs.isSpecular()) 
-        // {
-        //     if (!occluded(si.pos, es)) // HACK: Slang (HLSL) does not short circuit
-        //     {
-        //         // Add emitter directional contribution to L
+        if (!bs.isSpecular()) 
+        {
+            if (!occluded(si.pos, es)) // HACK: Slang (HLSL) does not short circuit
+            {
+                MaterialParams params = materialParams[si.instanceIndex];
 
-        //         // const float pathpdf = ls.G * pdfPBRTBSDF(payload.mat, -wo, normalize(ls.to), payload.normal);
-        //         // const float cosine = abs(dot(payload.normal, normalize(ls.to)));
-        //         // const vec3 f = evalPBRTBSDF(payload.mat, -wo, normalize(ls.to), payload.normal);
-        //         // const float MISWeight = ls.pdf / (ls.pdf + pathpdf);
-        //         // L += MISWeight * beta * f * ls.G * cosine * ls.L / ls.pdf;
-        //     }
-        // }
+                // Add emitter directional contribution to L
+                let wo = si.frame.toLocal(normalize(es.to));
+                let lightCos = abs(dot(normalize(es.to), es.normal));
+                let G = lightCos / (es.distance * es.distance);
+                //let pathpdf = G * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
+                let cosine = abs(dot(si.normal, normalize(es.to)));
+                let f = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
+                let MISWeight = 1.0;//ls.pdf / (ls.pdf + pathpdf); // TODO: NEE only
+                L += MISWeight * beta * f * G * cosine * es.emissive / es.pdf;
+                // L = wo;
+                // break;
+            }
+        }
 
         // BSDF sampling
         // {
@@ -190,10 +196,10 @@ float3 sampleL(in int sampleID, in int pixelSeed)
     }
 
     // WARNING: to be removed when doing MIS
-    if (let e = payload.emissive)
-    {
-        L += beta * e;
-    }
+    // if (let e = payload.emissive)
+    // {
+    //     L += beta * e;
+    // }
 
     return L;
 }
@@ -274,7 +280,7 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     let worldNormal = normalize(mul(instanceParams[instanceIndex].worldInvTrans, float4(vertex.normal, 0.)).xyz);
 
     // create SurfaceInteraction (world)
-    payload.si = SurfaceInteraction(worldPos, -worldRayDir, worldNormal, Frame(worldNormal));
+    payload.si = SurfaceInteraction(worldPos, -worldRayDir, worldNormal, instanceIndex, Frame(worldNormal));
     
     // sample BSDF and emitter
     MaterialParams params = materialParams[instanceIndex];
@@ -293,13 +299,15 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
         }
     }
 
-    // DEBUG: emitter
-    EmitterSample debuges;
-    debuges.pdf           = 0.0;
-    debuges.distance      = 10.0;
-    debuges.emissive      = k::black;
-    debuges.to            = k::zeros.xyz;
-    payload.emitterSample = debuges;
+    // DEBUG: point emitter
+    EmitterParams emitter = emitterParams[0];
+    EmitterSample es;
+    es.pdf           = 1.0;
+    es.distance      = distance(worldPos, emitter.pos);
+    es.emissive      = emitter.emissive;
+    es.to            = worldPos - emitter.pos;
+    es.normal        = -normalize(es.to);
+    payload.emitterSample = es;
 }
 
 [shader("miss")]

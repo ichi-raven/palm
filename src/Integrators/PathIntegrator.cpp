@@ -79,7 +79,25 @@ namespace palm
         // create emitter UB
         {
             std::vector<Emitter::Params> params;
-            mScene.each<Emitter>([&](const Emitter& emitter) { params.emplace_back(emitter.params); });
+            mScene.each<Emitter>(
+                [&](const ec2s::Entity entity, Emitter& emitter)
+                {
+                    if (emitter.attachedEntity)
+                    {
+                        int32_t idx = 0;
+                        scene.each<Mesh>(
+                            [&](const ec2s::Entity entity, const Mesh& mesh)
+                            {
+                                if (entity == *emitter.attachedEntity)
+                                {
+                                    emitter.params.meshIndex = idx;
+                                }
+                                ++idx;
+                            });
+                    }
+
+                    params.emplace_back(emitter.params);
+                });
 
             const auto size = sizeof(Emitter::Params) * params.size();
             mEmittersBuffer = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eStorageBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
@@ -159,6 +177,8 @@ namespace palm
             vk::DescriptorSetLayoutBinding(6, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
             // 7: material buffers
             vk::DescriptorSetLayoutBinding(7, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
+            // 8: emissive buffers
+            vk::DescriptorSetLayoutBinding(8, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
         };
 
         mBindLayout = device.create<vk2s::BindLayout>(bindings);
