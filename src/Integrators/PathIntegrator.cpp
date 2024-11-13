@@ -12,6 +12,7 @@
 #include "../include/Material.hpp"
 #include "../include/EntityInfo.hpp"
 #include "../include/Transform.hpp"
+#include "../include/Emitter.hpp"
 
 namespace palm
 {
@@ -19,9 +20,7 @@ namespace palm
     PathIntegrator::PathIntegrator(vk2s::Device& device, ec2s::Registry& scene, Handle<vk2s::Image> output)
         : Integrator(device, scene, output)
     {
-        // scene loading
         const auto extent = mOutputImage->getVkExtent();
-        auto sampler      = device.create<vk2s::Sampler>(vk::SamplerCreateInfo());
 
         // create scene UB
         {
@@ -39,13 +38,13 @@ namespace palm
                 });
 
             SceneParams params{
-                .view           = view,
-                .proj           = proj,
-                .viewInv        = glm::inverse(view),
-                .projInv        = glm::inverse(proj),
-                .camPos         = glm::vec4(camPos, 1.0f),
-                .sppPerFrame    = 4,
-                .padding        = { 0.f },
+                .view        = view,
+                .proj        = proj,
+                .viewInv     = glm::inverse(view),
+                .projInv     = glm::inverse(proj),
+                .camPos      = glm::vec4(camPos, 1.0f),
+                .sppPerFrame = 4,
+                .padding     = { 0.f },
             };
 
             mSceneBuffer->write(&params, sizeof(SceneParams));
@@ -70,15 +69,21 @@ namespace palm
         // create material UB
         {
             std::vector<Material::Params> params;
-            mScene.each<Material>(
-                [&](const Material& mat)
-                {
-                    params.emplace_back(mat.params);
-                });
+            mScene.each<Material>([&](const Material& mat) { params.emplace_back(mat.params); });
 
             const auto size = sizeof(Material::Params) * params.size();
             mMaterialBuffer = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eStorageBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
             mMaterialBuffer->write(params.data(), size);
+        }
+
+        // create emitter UB
+        {
+            std::vector<Emitter::Params> params;
+            mScene.each<Emitter>([&](const Emitter& emitter) { params.emplace_back(emitter.params); });
+
+            const auto size = sizeof(Emitter::Params) * params.size();
+            mEmittersBuffer = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eStorageBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+            mEmittersBuffer->write(params.data(), size);
         }
 
         //create pool image
@@ -203,6 +208,7 @@ namespace palm
             mBindGroup->bind(5, vk::DescriptorType::eStorageBuffer, mIndexBuffers);
             mBindGroup->bind(6, vk::DescriptorType::eStorageBuffer, mInstanceBuffer.get());
             mBindGroup->bind(7, vk::DescriptorType::eStorageBuffer, mMaterialBuffer.get());
+            mBindGroup->bind(8, vk::DescriptorType::eStorageBuffer, mEmittersBuffer.get());
         }
     }
 

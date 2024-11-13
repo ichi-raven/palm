@@ -217,6 +217,7 @@ float3 correct(const float3 L)
 [[vk::binding(5, 0)]] StructuredBuffer<uint32_t> indices[];
 [[vk::binding(6, 0)]] StructuredBuffer<InstanceParams> instanceParams;
 [[vk::binding(7, 0)]] StructuredBuffer<MaterialParams> materialParams;
+[[vk::binding(8, 0)]] StructuredBuffer<EmitterParams> emitterParams;
 
 [shader("raygeneration")]
 void rayGenShader()
