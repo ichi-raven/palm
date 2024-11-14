@@ -27,7 +27,7 @@ namespace palm
 
         struct Params  // std140
         {
-            glm::vec3 pos;
+            glm::vec3 pos = glm::vec3(0.);
             int32_t type     = static_cast<std::underlying_type_t<Type>>(Type::ePoint);
 
             // for area emitter
@@ -35,7 +35,7 @@ namespace palm
             int32_t meshIndex = -1;
             float padding[2];
 
-            glm::vec3 emissive;
+            glm::vec3 emissive = glm::vec3(0.);
             int32_t texIndex = -1;
         };
 

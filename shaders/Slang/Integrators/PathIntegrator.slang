@@ -23,6 +23,8 @@ struct InstanceParams
 {
     float4x4 world;
     float4x4 worldInvTrans;
+    float3 vel;
+    float padding;
 }
 
 struct Payload //<Sampler: ISampler> TODO:
@@ -101,7 +103,7 @@ bool occluded(const float3 pos, const EmitterSample es)
     // trace shadow ray
     RayDesc shadowRay;
     shadowRay.Origin               = pos;//hitLocation;
-    shadowRay.Direction            = es.to;
+    shadowRay.Direction            = normalize(es.to);
     shadowRay.TMin                 = k::eps;// WARN: adhoc
     shadowRay.TMax                 = es.distance - k::eps;// WARN: adhoc
 
@@ -157,13 +159,18 @@ float3 sampleL(in int sampleID, in int pixelSeed)
                 let lightCos = abs(dot(normalize(es.to), es.normal));
                 let G = lightCos / (es.distance * es.distance);
                 //let pathpdf = G * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
-                let cosine = abs(dot(si.normal, normalize(es.to)));
+                let cosine = (dot(si.normal, normalize(es.to)));
                 let f = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
                 let MISWeight = 1.0;//ls.pdf / (ls.pdf + pathpdf); // TODO: NEE only
                 L += MISWeight * beta * f * G * cosine * es.emissive / es.pdf;
-                // L = wo;
-                // break;
+                L = emitterParams[0].pos;//float3(cosine);
+                break;
             }
+        }
+        else
+        {
+            L = k::blue;
+            break;
         }
 
         // BSDF sampling
@@ -299,13 +306,13 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
         }
     }
 
-    // DEBUG: point emitter
+    // DEBUG: assume point emitter
     EmitterParams emitter = emitterParams[0];
     EmitterSample es;
     es.pdf           = 1.0;
     es.distance      = distance(worldPos, emitter.pos);
     es.emissive      = emitter.emissive;
-    es.to            = worldPos - emitter.pos;
+    es.to            = emitter.pos - worldPos;
     es.normal        = -normalize(es.to);
     payload.emitterSample = es;
 }

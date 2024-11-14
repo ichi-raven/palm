@@ -79,8 +79,8 @@ namespace palm
         // create emitter UB
         {
             std::vector<Emitter::Params> params;
-            mScene.each<Emitter>(
-                [&](const ec2s::Entity entity, Emitter& emitter)
+            mScene.each<Emitter, Transform>(
+                [&](const ec2s::Entity entity, Emitter& emitter, Transform& transform)
                 {
                     if (emitter.attachedEntity)
                     {
@@ -95,6 +95,8 @@ namespace palm
                                 ++idx;
                             });
                     }
+
+                    emitter.params.pos = transform.pos;
 
                     params.emplace_back(emitter.params);
                 });

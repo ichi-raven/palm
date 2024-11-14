@@ -100,10 +100,10 @@ namespace palm
                 info.editable   = true;
 
                 info.groupName       = path.filename().string();
-                const size_t dot_pos = info.groupName.find_last_of('.');
-                if (dot_pos != std::string_view::npos)
+                const size_t dotPos = info.groupName.find_last_of('.');
+                if (dotPos != std::string_view::npos)
                 {
-                    info.groupName = info.groupName.substr(0, dot_pos);
+                    info.groupName = info.groupName.substr(0, dotPos);
                 }
             }
 
@@ -627,7 +627,7 @@ namespace palm
                             info.editable   = true;
                         }
 
-                        {  // transform
+                        { 
                             auto& transform = scene.get<Transform>(added);
 
                             transform.params.world             = glm::identity<glm::mat4>();
@@ -755,7 +755,6 @@ namespace palm
             ImGui::Text("pos: (%.3lf, %.3lf, %.3lf)", pos.x, pos.y, pos.z);
             ImGui::Text("lookat: (%.3lf, %.3lf, %.3lf)", lookAt.x, lookAt.y, lookAt.z);
 
-            ImGui::Spacing();
             // transform editing (experimental)
             if (mPickedEntity && scene.contains<Transform>(*mPickedEntity))
             {
