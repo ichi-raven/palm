@@ -23,8 +23,6 @@ struct InstanceParams
 {
     float4x4 world;
     float4x4 worldInvTrans;
-    float3 vel;
-    float padding;
 }
 
 struct Payload //<Sampler: ISampler> TODO:
@@ -102,12 +100,12 @@ bool occluded(const float3 pos, const EmitterSample es)
 {
     // trace shadow ray
     RayDesc shadowRay;
-    shadowRay.Origin               = pos;//hitLocation;
+    shadowRay.Origin               = pos;
     shadowRay.Direction            = normalize(es.to);
     shadowRay.TMin                 = k::eps;// WARN: adhoc
     shadowRay.TMax                 = es.distance - k::eps;// WARN: adhoc
 
-    bool ret = false;// payload, 
+    bool ret = true;// payload, true if hit other object
     TraceRay(sceneBVH, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, ~0, 0, 0, 1, shadowRay, ret);
 
     return ret;
@@ -159,18 +157,11 @@ float3 sampleL(in int sampleID, in int pixelSeed)
                 let lightCos = abs(dot(normalize(es.to), es.normal));
                 let G = lightCos / (es.distance * es.distance);
                 //let pathpdf = G * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
-                let cosine = (dot(si.normal, normalize(es.to)));
+                let cosine = abs(dot(si.normal, normalize(es.to)));
                 let f = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
                 let MISWeight = 1.0;//ls.pdf / (ls.pdf + pathpdf); // TODO: NEE only
                 L += MISWeight * beta * f * G * cosine * es.emissive / es.pdf;
-                L = emitterParams[0].pos;//float3(cosine);
-                break;
             }
-        }
-        else
-        {
-            L = k::blue;
-            break;
         }
 
         // BSDF sampling
@@ -283,7 +274,7 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     let index = uint3(indices[instanceIndex][primitiveIndex * 3 + 0], indices[instanceIndex][primitiveIndex * 3 + 1], indices[instanceIndex][primitiveIndex * 3 + 2]);
     let vertex = Vertex.barycentric(vertices[instanceIndex][index.x], vertices[instanceIndex][index.y], vertices[instanceIndex][index.z], attr.barycentrics);
 
-    let worldPos = hitLocation;//mul(instanceParams[instanceIndex].world, float4(vertex.pos, 1.0)).xyz;
+    let worldPos = mul(instanceParams[instanceIndex].world, float4(vertex.pos, 1.0)).xyz;
     let worldNormal = normalize(mul(instanceParams[instanceIndex].worldInvTrans, float4(vertex.normal, 0.)).xyz);
 
     // create SurfaceInteraction (world)
@@ -320,5 +311,5 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
 [shader("miss")]
 void shadowMissShader(inout bool occluded : SV_RayPayload)
 {
-    occluded = true;
+    occluded = false;
 }

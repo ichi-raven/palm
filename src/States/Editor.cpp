@@ -663,7 +663,7 @@ namespace palm
 
             if (ImGui::BeginMenu("Mode"))
             {
-                if (ImGui::MenuItem("Renderer", NULL) && scene.size<Mesh>() != 0)
+                if (ImGui::MenuItem("Renderer", NULL) && scene.size<Mesh>() != 0 && scene.size<Emitter>() != 0)
                 {
                     mChangeDst = AppState::eRenderer;
                 }
@@ -820,6 +820,7 @@ namespace palm
                     {
                         scene.add<Emitter>(*mPickedEntity);
                     }
+
                     auto& emitter          = scene.get<Emitter>(*mPickedEntity);
                     emitter.attachedEntity = *mPickedEntity;
 

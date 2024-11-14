@@ -22,7 +22,7 @@ namespace palm
     {
         const auto extent = mOutputImage->getVkExtent();
 
-        // create scene UB
+        // create scene buffer
         {
             const auto size = sizeof(SceneParams);
             mSceneBuffer    = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eUniformBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
@@ -50,7 +50,7 @@ namespace palm
             mSceneBuffer->write(&params, sizeof(SceneParams));
         }
 
-        // create instance UB
+        // create instance buffer
         {
             std::vector<InstanceParams> params;
             mScene.each<Mesh, Transform>(
@@ -66,7 +66,7 @@ namespace palm
             mInstanceBuffer->write(params.data(), size);
         }
 
-        // create material UB
+        // create material buffer
         {
             std::vector<Material::Params> params;
             mScene.each<Material>([&](const Material& mat) { params.emplace_back(mat.params); });
@@ -76,7 +76,7 @@ namespace palm
             mMaterialBuffer->write(params.data(), size);
         }
 
-        // create emitter UB
+        // create emitter buffer
         {
             std::vector<Emitter::Params> params;
             mScene.each<Emitter, Transform>(
@@ -97,7 +97,6 @@ namespace palm
                     }
 
                     emitter.params.pos = transform.pos;
-
                     params.emplace_back(emitter.params);
                 });
 

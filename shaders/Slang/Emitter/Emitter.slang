@@ -1,7 +1,8 @@
 module Emitter;
 
 import "../Utility/Constants";
-
+import "../Utility/Warp";
+import "../Utility/SurfaceInteraction";
 
 public struct EmitterSample
 {
@@ -32,8 +33,44 @@ public struct EmitterParams
     public int32_t texIndex = -1;
 }
 
-interface IEmitterSampler
+public class EmitterSampler
 {
-    __init();
+    public static EmitterSample sample(EmitterParams params[], uint32_t emitterCount, SurfaceInteraction si, float sample1, float2 sample2)
+    {
+        // HACK: should be originally sampled based on distance and area.
+        let sampled   = params[uint32_t(emitterCount * sample1)];
+        let selectPdf = 1. / float(emitterCount);
 
+        EmitterSample ret;
+
+        switch (sampled.type)
+        {
+        case Type::Point:
+            ret.pdf      = 1.0;
+            ret.distance = distance(si.pos, sampled.pos);
+            ret.emissive = sampled.emissive;
+            ret.to       = sampled.pos - si.pos;
+            ret.normal   = -normalize(es.to);
+            break;
+
+        case Type::Area:
+            // have to calculate all areas
+
+            // ret.pdf      = 1.0 / sampled.faceNum / ;
+            // ret.distance = distance(si.pos, sampled.pos);
+            // ret.emissive = sampled.emissive;
+            // ret.to       = sampled.pos - si.pos;
+            // ret.normal   = -normalize(es.to);
+            break;
+
+        case Type::Infinite:  // TODO:
+            break;
+        default:
+            ret.
+            break;
+        }
+
+        ret.pdf *= selectPdf;
+        return ret;
+    }
 }
