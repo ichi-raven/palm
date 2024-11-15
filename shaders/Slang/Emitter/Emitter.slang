@@ -33,9 +33,45 @@ public struct EmitterParams
     public int32_t texIndex = -1;
 }
 
+public interface IVertex
+{
+    public property float3 pos {get; set;}
+    public property float3 normal {get; set;}
+}
+
 public class EmitterSampler
 {
-    public static EmitterSample sample(EmitterParams params[], uint32_t emitterCount, SurfaceInteraction si, float sample1, float2 sample2)
+    struct Face<V: IVertex>
+    {
+        V v0;
+        V v1;
+        V v2;
+
+        property float area
+        {
+            get
+            {
+                return 0.5 * length(cross(v2.pos - v0.pos, v1.pos - v0.pos));
+            }
+        };
+
+        property float3 normal
+        {
+            get
+            {
+                return 1. / 3. * (v0.normal + v1.normal + v2.normal);
+            }
+        }
+
+        float3 samplePos(float2 sample2)
+        {
+            let w = float3(1. - (sample2.x + sample2.y), sample2.x, sample2.y);
+
+            return (v0.pos * w.x + v1.pos * w.y + v2.pos * w.z);
+        }
+    }
+
+    public static EmitterSample sample<V: IVertex>(StructuredBuffer<EmitterParams> params, const uint32_t emitterCount, StructuredBuffer<V> vertices[], StructuredBuffer<uint32_t> indices[], const SurfaceInteraction si, const float sample1, const float2 sample2)
     {
         // HACK: should be originally sampled based on distance and area.
         let sampled   = params[uint32_t(emitterCount * sample1)];
@@ -50,23 +86,30 @@ public class EmitterSampler
             ret.distance = distance(si.pos, sampled.pos);
             ret.emissive = sampled.emissive;
             ret.to       = sampled.pos - si.pos;
-            ret.normal   = -normalize(es.to);
+            ret.normal   = -normalize(ret.to);
             break;
 
         case Type::Area:
-            // have to calculate all areas
+            
+            let faceIndex = uint(sample2.x * sampled.faceNum);
 
-            // ret.pdf      = 1.0 / sampled.faceNum / ;
-            // ret.distance = distance(si.pos, sampled.pos);
-            // ret.emissive = sampled.emissive;
-            // ret.to       = sampled.pos - si.pos;
-            // ret.normal   = -normalize(es.to);
+            let index = uint3(indices[sampled.meshIndex][faceIndex * 3 + 0], indices[sampled.meshIndex][faceIndex * 3 + 1], indices[sampled.meshIndex][faceIndex * 3 + 2]);
+            let face = Face<V>(vertices[sampled.meshIndex][index.x], vertices[sampled.meshIndex][index.y], vertices[sampled.meshIndex][index.z]);
+
+            let on = face.samplePos(sample2);
+
+            ret.pdf      = 1.0 / sampled.faceNum / face.area;
+            ret.distance = distance(si.pos, on);
+            ret.emissive = sampled.emissive;
+            ret.to       = on - si.pos;
+            ret.normal   = face.normal;
             break;
 
         case Type::Infinite:  // TODO:
             break;
-        default:
-            ret.
+        default: // invalid
+            ret.emissive = k::red;
+            ret.pdf = 1.0;
             break;
         }
 

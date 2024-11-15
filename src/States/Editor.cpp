@@ -99,7 +99,7 @@ namespace palm
                 info.entityID   = entity;
                 info.editable   = true;
 
-                info.groupName       = path.filename().string();
+                info.groupName      = path.filename().string();
                 const size_t dotPos = info.groupName.find_last_of('.');
                 if (dotPos != std::string_view::npos)
                 {
@@ -143,22 +143,37 @@ namespace palm
 
         device.waitIdle();
 
-        auto& mesh = scene.get<Mesh>(entity);
-        device.destroy(mesh.blas);
-        device.destroy(mesh.vertexBuffer);
-        device.destroy(mesh.indexBuffer);
-        device.destroy(mesh.instanceBuffer);
+        if (scene.contains<Mesh>(entity))
+        {
+            auto& mesh = scene.get<Mesh>(entity);
+            device.destroy(mesh.blas);
+            device.destroy(mesh.vertexBuffer);
+            device.destroy(mesh.indexBuffer);
+            device.destroy(mesh.instanceBuffer);
+        }
 
-        auto& material = scene.get<Material>(entity);
-        device.destroy(material.uniformBuffer);
-        device.destroy(material.albedoTex);
-        device.destroy(material.normalMapTex);
-        device.destroy(material.metalnessTex);
-        device.destroy(material.roughnessTex);
-        device.destroy(material.bindGroup);
+        if (scene.contains<Material>(entity))
+        {
+            auto& material = scene.get<Material>(entity);
+            device.destroy(material.uniformBuffer);
+            device.destroy(material.albedoTex);
+            device.destroy(material.normalMapTex);
+            device.destroy(material.metalnessTex);
+            device.destroy(material.roughnessTex);
+            device.destroy(material.bindGroup);
+        }
 
-        auto& transform = scene.get<Transform>(entity);
-        device.destroy(transform.entityBuffer);
+        if (scene.contains<Transform>(entity))
+        {
+            auto& transform = scene.get<Transform>(entity);
+            device.destroy(transform.entityBuffer);
+        }
+
+        if (scene.contains<Emitter>(entity))
+        {
+            auto& emitter = scene.get<Emitter>(entity);
+            device.destroy(emitter.emissiveTex);
+        }
 
         scene.destroy(entity);
     }
@@ -627,7 +642,7 @@ namespace palm
                             info.editable   = true;
                         }
 
-                        { 
+                        {
                             auto& transform = scene.get<Transform>(added);
 
                             transform.params.world             = glm::identity<glm::mat4>();
@@ -836,7 +851,7 @@ namespace palm
                 auto& emitter = scene.get<Emitter>(*mPickedEntity);
                 ImGui::ColorEdit3("Emissive", glm::value_ptr(emitter.params.emissive), ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
             }
-            
+
             ImGui::End();
         }
 

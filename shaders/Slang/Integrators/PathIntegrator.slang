@@ -49,7 +49,7 @@ struct Payload //<Sampler: ISampler> TODO:
     }
 }
 
-struct Vertex// std140
+struct Vertex : IVertex// std140
 {
     float3 pos;
     float u;
@@ -298,14 +298,16 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     }
 
     // DEBUG: assume point emitter
-    EmitterParams emitter = emitterParams[0];
-    EmitterSample es;
-    es.pdf           = 1.0;
-    es.distance      = distance(worldPos, emitter.pos);
-    es.emissive      = emitter.emissive;
-    es.to            = emitter.pos - worldPos;
-    es.normal        = -normalize(es.to);
-    payload.emitterSample = es;
+    // EmitterParams emitter = emitterParams[0];
+    // EmitterSample es;
+    // es.pdf           = 1.0;
+    // es.distance      = distance(worldPos, emitter.pos);
+    // es.emissive      = emitter.emissive;
+    // es.to            = emitter.pos - worldPos;
+    // es.normal        = -normalize(es.to);
+    uint emitterCount, emitterStride;
+    emitterParams.GetDimensions(emitterCount, emitterStride);
+    payload.emitterSample = EmitterSampler.sample<Vertex>(emitterParams, emitterCount, vertices, indices, payload.si.value, payload.sampler.next1D(), payload.sampler.next2D());
 }
 
 [shader("miss")]
