@@ -39,41 +39,52 @@ public interface IVertex
     public property float3 normal {get; set;}
 }
 
+public interface IInstance
+{
+    public property float4x4 world { get; set; }
+    public property float4x4 worldInvTrans { get; set; }
+}
+
 public class EmitterSampler
 {
-    struct Face<V: IVertex>
+    struct Face<V: IVertex, I: IInstance>
     {
+        __init(V v0_, V v1_, V v2_, I instance)
+        {
+            v0.pos    = mul(instance.world, float4(v0_.pos, 1.0)).xyz;
+            v0.normal = normalize(mul(instance.worldInvTrans, float4(v0_.normal, 1.)).xyz);
+            v1.pos    = mul(instance.world, float4(v1_.pos, 1.0)).xyz;
+            v1.normal = normalize(mul(instance.worldInvTrans, float4(v1_.normal, 1.)).xyz);
+            v2.pos    = mul(instance.world, float4(v2_.pos, 1.0)).xyz;
+            v2.normal = normalize(mul(instance.worldInvTrans, float4(v2_.normal, 1.)).xyz);
+
+            area = 0.5 * length(cross(v2.pos - v0.pos, v1.pos - v0.pos));
+        }
+
+        Tuple<float3, float3> sample(float2 sample2)
+        {
+            if (sample2.x + sample2.y > 1.0)
+            {
+                sample2.x = (1.0 - sample2.x);
+                sample2.y = (1.0 - sample2.y);
+            }
+
+            let w = float3(1. - (sample2.x + sample2.y), sample2.x, sample2.y);
+
+            return makeTuple(v0.pos * w.x + v1.pos * w.y + v2.pos * w.z, v0.normal * w.x + v1.normal * w.y + v2.normal * w.z);
+        }
+
         V v0;
         V v1;
         V v2;
-
-        property float area
-        {
-            get
-            {
-                return 0.5 * length(cross(v2.pos - v0.pos, v1.pos - v0.pos));
-            }
-        };
-
-        property float3 normal
-        {
-            get
-            {
-                return 1. / 3. * (v0.normal + v1.normal + v2.normal);
-            }
-        }
-
-        float3 samplePos(float2 sample2)
-        {
-            let w = float3(1. - (sample2.x + sample2.y), sample2.x, sample2.y);
-
-            return (v0.pos * w.x + v1.pos * w.y + v2.pos * w.z);
-        }
+        float area;
     }
 
-    public static EmitterSample sample<V: IVertex>(StructuredBuffer<EmitterParams> params, const uint32_t emitterCount, StructuredBuffer<V> vertices[], StructuredBuffer<uint32_t> indices[], const SurfaceInteraction si, const float sample1, const float2 sample2)
+    public static EmitterSample sample<V : IVertex, I : IInstance>(StructuredBuffer<EmitterParams> params, StructuredBuffer<V> vertices[], StructuredBuffer<uint32_t> indices[], StructuredBuffer<I> instances, const SurfaceInteraction si, const float sample1, const float sample12, const float2 sample2)
     {
-        // HACK: should be originally sampled based on distance and area.
+        // TODO: should be originally sampled based on distance and area
+        uint emitterCount, emitterStride;
+        params.GetDimensions(emitterCount, emitterStride);
         let sampled   = params[uint32_t(emitterCount * sample1)];
         let selectPdf = 1. / float(emitterCount);
 
@@ -86,23 +97,25 @@ public class EmitterSampler
             ret.distance = distance(si.pos, sampled.pos);
             ret.emissive = sampled.emissive;
             ret.to       = sampled.pos - si.pos;
-            ret.normal   = -normalize(ret.to);
+            ret.normal   = (-1.0 / ret.distance) * ret.to;
             break;
 
         case Type::Area:
-            
-            let faceIndex = uint(sample2.x * sampled.faceNum);
+            // TODO: effective sampling
+            let faceIndex = uint(sample12 * sampled.faceNum);
 
             let index = uint3(indices[sampled.meshIndex][faceIndex * 3 + 0], indices[sampled.meshIndex][faceIndex * 3 + 1], indices[sampled.meshIndex][faceIndex * 3 + 2]);
-            let face = Face<V>(vertices[sampled.meshIndex][index.x], vertices[sampled.meshIndex][index.y], vertices[sampled.meshIndex][index.z]);
+            let face  = Face<V, I>(vertices[sampled.meshIndex][index.x], vertices[sampled.meshIndex][index.y], vertices[sampled.meshIndex][index.z], instances[sampled.meshIndex]);
 
-            let on = face.samplePos(sample2);
+            let v  = face.sample(sample2);
+            let on     = v._0;
+            let normal = v._1;
 
-            ret.pdf      = 1.0 / sampled.faceNum / face.area;
+            ret.pdf = 1.0 / sampled.faceNum / face.area;
             ret.distance = distance(si.pos, on);
             ret.emissive = sampled.emissive;
             ret.to       = on - si.pos;
-            ret.normal   = face.normal;
+            ret.normal   = normal;
             break;
 
         case Type::Infinite:  // TODO:

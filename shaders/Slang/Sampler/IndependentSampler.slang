@@ -14,7 +14,7 @@ public struct IndependentSampler// : ISampler
         prngState = prngState * 747796405 + 1;
         uint word = ((prngState >> ((prngState >> 28) + 4)) ^ prngState) * 277803737;
         word      = (word >> 22) ^ word;
-        return float(word) / 4294967295.0f;
+        return float(word) / 4294967295.0f * 0.99999f;
     }
 
     [mutating]

@@ -19,7 +19,7 @@ struct SceneParams
     float3 padding;
 }
 
-struct InstanceParams
+struct InstanceParams : IInstance
 {
     float4x4 world;
     float4x4 worldInvTrans;
@@ -103,7 +103,7 @@ bool occluded(const float3 pos, const EmitterSample es)
     shadowRay.Origin               = pos;
     shadowRay.Direction            = normalize(es.to);
     shadowRay.TMin                 = k::eps;// WARN: adhoc
-    shadowRay.TMax                 = es.distance - k::eps;// WARN: adhoc
+    shadowRay.TMax                 = es.distance;
 
     bool ret = true;// payload, true if hit other object
     TraceRay(sceneBVH, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, ~0, 0, 0, 1, shadowRay, ret);
@@ -160,7 +160,7 @@ float3 sampleL(in int sampleID, in int pixelSeed)
                 let cosine = abs(dot(si.normal, normalize(es.to)));
                 let f = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
                 let MISWeight = 1.0;//ls.pdf / (ls.pdf + pathpdf); // TODO: NEE only
-                L += MISWeight * beta * f * G * cosine * es.emissive / es.pdf;
+                L += MISWeight * beta * f * G * cosine * es.emissive / max(k::eps, es.pdf);
             }
         }
 
@@ -297,17 +297,8 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
         }
     }
 
-    // DEBUG: assume point emitter
-    // EmitterParams emitter = emitterParams[0];
-    // EmitterSample es;
-    // es.pdf           = 1.0;
-    // es.distance      = distance(worldPos, emitter.pos);
-    // es.emissive      = emitter.emissive;
-    // es.to            = emitter.pos - worldPos;
-    // es.normal        = -normalize(es.to);
-    uint emitterCount, emitterStride;
-    emitterParams.GetDimensions(emitterCount, emitterStride);
-    payload.emitterSample = EmitterSampler.sample<Vertex>(emitterParams, emitterCount, vertices, indices, payload.si.value, payload.sampler.next1D(), payload.sampler.next2D());
+    // emitter sample
+    payload.emitterSample = EmitterSampler.sample<Vertex>(emitterParams, vertices, indices, instanceParams, payload.si.value, payload.sampler.next1D(), payload.sampler.next1D(), payload.sampler.next2D());
 }
 
 [shader("miss")]
