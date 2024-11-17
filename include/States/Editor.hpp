@@ -31,7 +31,7 @@ namespace palm
 
     private:
 
-        struct SceneParams  // std430
+        struct SceneParams  // std140
         {
             glm::mat4 view;
             glm::mat4 proj;
@@ -47,7 +47,7 @@ namespace palm
             float padding[3];
         };
 
-        struct InstanceMappingUB  // std430
+        struct InstanceMappingUB  // std140
         {
             uint64_t VBAddress;
             uint64_t IBAddress;

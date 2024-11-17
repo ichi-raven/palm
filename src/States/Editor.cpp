@@ -40,17 +40,14 @@ namespace palm
 
         assert(hostMaterials.size() == hostMeshes.size() || !"The number of mesh is different from the number of material!");
 
-        for (size_t i = 0; i < hostMeshes.size(); ++i)
+        for (const auto& hostMesh : hostMeshes)
         {
-            const auto entity  = scene.create<Mesh, Material, EntityInfo, Transform>();
-            auto& mesh         = scene.get<Mesh>(entity);
-            auto& material     = scene.get<Material>(entity);
-            auto& info         = scene.get<EntityInfo>(entity);
-            auto& transform    = scene.get<Transform>(entity);
-            auto& hostMesh     = hostMeshes[i];
-            auto& hostMaterial = hostMaterials[i];
-
-            mesh.hostMesh = hostMeshes[i];
+            const auto entity = scene.create<Mesh, Material, EntityInfo, Transform>();
+            auto& mesh        = scene.get<Mesh>(entity);
+            auto& material    = scene.get<Material>(entity);
+            auto& info        = scene.get<EntityInfo>(entity);
+            auto& transform   = scene.get<Transform>(entity);
+            mesh.hostMesh     = hostMesh;
 
             {  // vertex buffer
                 std::vector<Mesh::Vertex> vertices;
@@ -95,9 +92,6 @@ namespace palm
 
                 material.uniformBuffer = device.create<vk2s::Buffer>(ci, fb);
                 material.uniformBuffer->write(hostMaterials.data(), ubSize);
-
-                // TODO: material parameter loading from model data
-                material.params.albedo = hostMaterial.albedo;
             }
 
             {  // information
@@ -776,7 +770,7 @@ namespace palm
             ImGui::Text("pos: (%.3lf, %.3lf, %.3lf)", pos.x, pos.y, pos.z);
             ImGui::Text("lookat: (%.3lf, %.3lf, %.3lf)", lookAt.x, lookAt.y, lookAt.z);
 
-            // transform editing
+            // transform editing (experimental)
             if (mPickedEntity && scene.contains<Transform>(*mPickedEntity))
             {
                 ImGui::SeparatorText("Manipulation");

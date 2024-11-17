@@ -61,7 +61,8 @@ public class EmitterSampler
             area = 0.5 * length(cross(v2.pos - v0.pos, v1.pos - v0.pos));
         }
 
-        Tuple<float3, float3> sample(float2 sample2)
+        // pos, normal
+        V sample(float2 sample2)
         {
             if (sample2.x + sample2.y > 1.0)
             {
@@ -71,7 +72,10 @@ public class EmitterSampler
 
             let w = float3(1. - (sample2.x + sample2.y), sample2.x, sample2.y);
 
-            return makeTuple(v0.pos * w.x + v1.pos * w.y + v2.pos * w.z, v0.normal * w.x + v1.normal * w.y + v2.normal * w.z);
+            V ret;
+            ret.pos = v0.pos * w.x + v1.pos * w.y + v2.pos * w.z;
+            ret.normal = v0.normal * w.x + v1.normal * w.y + v2.normal * w.z;
+            return ret;
         }
 
         V v0;
@@ -80,7 +84,7 @@ public class EmitterSampler
         float area;
     }
 
-    public static EmitterSample sample<V : IVertex, I : IInstance>(StructuredBuffer<EmitterParams> params, StructuredBuffer<V> vertices[], StructuredBuffer<uint32_t> indices[], StructuredBuffer<I> instances, const SurfaceInteraction si, const float sample1, const float sample12, const float2 sample2)
+    public static EmitterSample sample<V : IVertex, I : IInstance>(StructuredBuffer<EmitterParams> params, StructuredBuffer<V> vertices[], StructuredBuffer<uint32_t> indices[], StructuredBuffer<I> instances, const SurfaceInteraction si, const float sample1, const float2 sample2, const float sample3)
     {
         // TODO: should be originally sampled based on distance and area
         uint emitterCount, emitterStride;
@@ -102,26 +106,24 @@ public class EmitterSampler
 
         case Type::Area:
             // TODO: effective sampling
-            let faceIndex = uint(sample12 * sampled.faceNum);
+            let faceIndex = uint(sample3 * sampled.faceNum);
 
             let index = uint3(indices[sampled.meshIndex][faceIndex * 3 + 0], indices[sampled.meshIndex][faceIndex * 3 + 1], indices[sampled.meshIndex][faceIndex * 3 + 2]);
             let face  = Face<V, I>(vertices[sampled.meshIndex][index.x], vertices[sampled.meshIndex][index.y], vertices[sampled.meshIndex][index.z], instances[sampled.meshIndex]);
 
             let v  = face.sample(sample2);
-            let on     = v._0;
-            let normal = v._1;
 
             ret.pdf = 1.0 / sampled.faceNum / face.area;
-            ret.distance = distance(si.pos, on);
+            ret.distance = distance(si.pos, v.pos);
             ret.emissive = sampled.emissive;
-            ret.to       = on - si.pos;
-            ret.normal   = normal;
+            ret.to       = v.pos - si.pos;
+            ret.normal   = v.normal;
             break;
 
         case Type::Infinite:  // TODO:
             break;
         default: // invalid
-            ret.emissive = k::red;
+            ret.emissive = k::red; // DEBUG:
             ret.pdf = 1.0;
             break;
         }
@@ -129,4 +131,16 @@ public class EmitterSampler
         ret.pdf *= selectPdf;
         return ret;
     }
+
+    // pdf, invG
+    // public static Tuple<float, float> pdf(const SurfaceInteraction si, const SurfaceInteraction bsdfsi)
+    // {
+    //     let to = bsdfsi.pos - si.pos;
+    //     let distSq = dot(to, to);
+
+    //     let lightCos = abs(dot(normalize(to), bsdfsi.normal));
+    
+    //     invG = distSq / lightCos;
+    //     return 1. / lightArea / emitterInfo.triEmitterNum / float(emitterInfo.activeEmitterNum);
+    // }
 }

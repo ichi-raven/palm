@@ -131,7 +131,7 @@ public struct DynamicMaterial : IMaterial
         {
             switch (params.type)
             {
-            case MaterialType::Lambert:
+                case MaterialType::Lambert:
                     return Lambert.BSDF.pdf(params, ctx, si, wo);
                 case MaterialType::Principle:
                     return Principle.BSDF.pdf(params, ctx, si, wo);
@@ -145,9 +145,9 @@ public struct DynamicMaterial : IMaterial
         {
             switch (params.type)
             {
-            case MaterialType::Lambert:
+                case MaterialType::Lambert:
                     return Lambert.BSDF.eval(params, ctx, si, wo);
-            case MaterialType::Principle:
+                case MaterialType::Principle:
                     return Principle.BSDF.eval(params, ctx, si, wo);
                 default: // invalid
             }
