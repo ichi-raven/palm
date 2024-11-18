@@ -133,14 +133,14 @@ public class EmitterSampler
     }
 
     // pdf, invG
-    // public static Tuple<float, float> pdf(const SurfaceInteraction si, const SurfaceInteraction bsdfsi)
-    // {
-    //     let to = bsdfsi.pos - si.pos;
-    //     let distSq = dot(to, to);
+    public static float pdf(const SurfaceInteraction si, const SurfaceInteraction bsdfSi, const uint32_t areaEmitterNum, out float invG)
+    {
+        let to = bsdfSi.pos - si.pos;
+        let distSq = dot(to, to);
 
-    //     let lightCos = abs(dot(normalize(to), bsdfsi.normal));
+        let lightCos = abs(dot(normalize(to), bsdfSi.normal));
     
-    //     invG = distSq / lightCos;
-    //     return 1. / lightArea / emitterInfo.triEmitterNum / float(emitterInfo.activeEmitterNum);
-    // }
+        invG = distSq / lightCos;
+        return 1. / bsdfSi.area / areaEmitterNum;
+    }
 }

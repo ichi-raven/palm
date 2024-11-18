@@ -6,13 +6,15 @@
 #include "../include/States/MaterialViewer.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image.h>
+#include <stb_image_write.h>
 
 inline void setupImGuiStyle()
 {
     ImGui::CreateContext();
 
-#ifdef _WIN32  // Load from Windows default Arial fonts (HACK:)
+#ifdef _WIN32  // HACK: Load from Windows default Arial fonts
     ImGuiIO& io = ImGui::GetIO();
     io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/Arial.ttf", 16.0f);
 #endif

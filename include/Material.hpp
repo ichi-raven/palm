@@ -55,7 +55,7 @@ namespace palm
             int32_t normalmapTexIndex = -1;
 
             glm::vec3 emissive;
-            int32_t materialType = static_cast<std::underlying_type_t<Type>>(Type::eLambert);
+            int32_t materialType = static_cast<std::underlying_type_t<Type>>(Type::ePrinciple);
         };
 
         inline static void updateAndDrawMaterialUI(Params& params, bool& enabledEmissive)
@@ -106,12 +106,10 @@ namespace palm
             //ImGui::InputInt("Normal Map Texture Index", &params.normalmapTexIndex);
 
             // Material type
-            //ImGui::InputInt("Material Type", &params.materialType);
             int currentType             = static_cast<int>(params.materialType);
             if (ImGui::Combo("Material Type", &currentType, kMaterialTypesStr.data(), kMaterialTypesStr.size()))
             {
                 params.materialType = currentType;
-                std::cout << "selected: " << currentType << "\n";
             }
 
             // Emissive color

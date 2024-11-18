@@ -65,11 +65,14 @@ namespace palm
 
         void onResized();
 
+        void saveImage(const std::filesystem::path& saveDst);
+
     private:
 
         std::optional<AppState> mChangeDst;
 
-        Handle<vk2s::Image> mOutputImage;
+        UniqueHandle<vk2s::Image> mOutputImage;
+        UniqueHandle<vk2s::Buffer> mStagingBuffer;
 
         std::unique_ptr<Integrator> mIntegrator;
 

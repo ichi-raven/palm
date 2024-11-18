@@ -42,7 +42,8 @@ namespace palm
             glm::vec4 camPos;
 
             uint32_t sppPerFrame;
-            float padding[3];
+            uint32_t areaEmitterNum;
+            float padding[2];
         };
 
         struct InstanceParams

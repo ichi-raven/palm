@@ -13,6 +13,10 @@
 #include <imgui_impl_vulkan.h>
 #include <ImGuizmo.h>
 
+#include <stb_image_write.h>
+
+#include <filesystem>
+
 namespace palm
 {
     void Renderer::init()
@@ -182,6 +186,15 @@ namespace palm
                 cmd->end();
                 cmd->execute();
             }
+
+            // create staging buffer
+            {
+                constexpr vk::Format outputFormat = vk::Format::eR8G8B8A8Unorm;
+                const uint32_t channelSize        = vk2s::Compiler::getSizeOfFormat(outputFormat);
+                const uint32_t size               = windowWidth * windowHeight * channelSize;
+                mStagingBuffer                    = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eTransferDst), vk::MemoryPropertyFlagBits::eHostVisible);
+            }
+
         }
         catch (std::exception& e)
         {
@@ -208,7 +221,10 @@ namespace palm
         {
             if (ImGui::BeginMenu("File"))
             {
-                ImGui::MenuItem("Save Rendered Image", NULL);
+                if (ImGui::MenuItem("Save Rendered Image", NULL))
+                {
+                    saveImage(std::filesystem::path("rendered.png"));
+                }
                 ImGui::MenuItem("Save As", NULL);
                 ImGui::EndMenu();
             }
@@ -259,6 +275,56 @@ namespace palm
         window->resize();
 
         mGuiPass.renderpass->recreateFrameBuffers(window.get());
+    }
+
+    void Renderer::saveImage(const std::filesystem::path& saveDst)
+    {
+        auto& device = getCommonRegion()->device;
+
+        const auto extent                 = mOutputImage->getVkExtent();
+        constexpr vk::Format outputFormat = vk::Format::eR8G8B8A8Unorm;
+        const uint32_t channelSize        = vk2s::Compiler::getSizeOfFormat(outputFormat);
+        const uint32_t size               = extent.width * extent.height * channelSize;
+
+        const auto region = vk::ImageCopy()
+                                .setExtent(extent)
+                                .setSrcSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 })
+                                .setSrcOffset({ 0, 0, 0 })
+                                .setDstSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 })
+                                .setDstOffset({ 0, 0, 0 });
+
+        UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
+        cmd->begin(true);
+        cmd->transitionImageLayout(mOutputImage.get(), vk::ImageLayout::eGeneral, vk::ImageLayout::eTransferSrcOptimal);
+        cmd->copyImageToBuffer(mOutputImage.get(), mStagingBuffer.get(), extent.width, extent.height);
+        cmd->transitionImageLayout(mOutputImage.get(), vk::ImageLayout::eTransferSrcOptimal, vk::ImageLayout::eGeneral);
+        cmd->end();
+        cmd->execute();
+
+        device.getVkDevice()->waitIdle();
+
+        std::vector<uint8_t> output(extent.width * extent.height * 3);
+        {
+            std::uint8_t* p = reinterpret_cast<std::uint8_t*>(device.getVkDevice()->mapMemory(mStagingBuffer->getVkDeviceMemory().get(), 0, size));
+            for (int h = 0; h < extent.height; h++)
+            {
+                for (int w = 0; w < extent.width; w++)
+                {
+                    int index             = h * extent.width + w;
+                    output[index * 3 + 0] = p[index * 4 + 0];
+                    output[index * 3 + 1] = p[index * 4 + 1];
+                    output[index * 3 + 2] = p[index * 4 + 2];
+                }
+            }
+
+            device.getVkDevice()->unmapMemory(mStagingBuffer->getVkDeviceMemory().get());
+        }
+
+        const int res = stbi_write_png(saveDst.string<char>().c_str(), extent.width, extent.height, 3, output.data(), extent.width * 3);
+        if (res == 0)
+        {
+            std::cerr << "failed to output!\n";
+        }
     }
 
 }  // namespace palm

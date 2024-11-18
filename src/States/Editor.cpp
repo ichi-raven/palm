@@ -322,7 +322,8 @@ namespace palm
                 mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
                 //mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings1));
 
-                vk::Viewport viewport(0.f, 0.f, static_cast<float>(windowWidth), static_cast<float>(windowHeight), 0.f, 1.f);
+                // HACK: manual viewport setting
+                vk::Viewport viewport(0.f, 0.f, static_cast<float>(windowWidth) * 0.75f, static_cast<float>(windowHeight) * 0.75f, 0.f, 1.f);
                 vk::Rect2D scissor({ 0, 0 }, window->getVkSwapchainExtent());
                 vk::PipelineColorBlendAttachmentState colorBlendAttachment(VK_FALSE);
                 colorBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
@@ -592,7 +593,7 @@ namespace palm
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
-        ImGuizmo::SetRect(0, 0, windowWidth, windowHeight);
+        ImGuizmo::SetRect(0, 0, windowWidth * 0.75, windowHeight * 0.75); // HACK; linked with liting pass viewport
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));  // left
         ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.03));
@@ -694,8 +695,8 @@ namespace palm
         ImGui::End();
 
         {
-            ImGui::SetNextWindowPos(ImVec2(0, windowHeight * 0.80));  // bottom
-            ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.20));
+            ImGui::SetNextWindowPos(ImVec2(0, windowHeight * 0.75));  // bottom
+            ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.25));
             ImGui::Begin("FileExplorer", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
             ImGui::SetWindowFontScale(kFontScale);
 
@@ -733,8 +734,8 @@ namespace palm
         }
 
         {
-            ImGui::SetNextWindowPos(ImVec2(windowWidth * 0.70, windowHeight * 0.031));  // right
-            ImGui::SetNextWindowSize(ImVec2(windowWidth * 0.30, windowHeight * 0.769));
+            ImGui::SetNextWindowPos(ImVec2(windowWidth * 0.75, windowHeight * 0.031));  // right
+            ImGui::SetNextWindowSize(ImVec2(windowWidth * 0.25, windowHeight * 0.719));
             ImGui::Begin("SceneEditor", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
             ImGui::SetWindowFontScale(kFontScale);
 
@@ -843,6 +844,10 @@ namespace palm
                     emitter.params.type     = static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::eArea);
                     emitter.params.faceNum  = scene.get<Mesh>(*mPickedEntity).hostMesh.indices.size() / 3;
                     emitter.params.pos      = transform.pos;
+                }
+                else if (material.params.emissive.length() == 0.0 && scene.contains<Emitter>(*mPickedEntity))
+                {
+                    scene.remove<Emitter>(*mPickedEntity);
                 }
             }
 

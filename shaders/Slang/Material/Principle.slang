@@ -13,7 +13,28 @@ public struct Principle : IMaterial
 
     public struct BSDF : IBSDF
     {
-        public static float3 evaluateSheen(const float3 baseColor, const float sheen, const float3 sheenTint, const float3 wi, const float3 wm, const float3 wo)
+        static float evaluateDisneyClearcoat(const float clearcoat, const float alpha, const float3 wi, const float3 wm,
+                                     const float3 wo)
+        {
+            if(clearcoat <= 0.0) 
+            {
+                return 0.0;
+            }
+
+            let absDotNH = abs(pbr::cosTheta(wm));
+            let absDotNL = abs(pbr::cosTheta(wo));
+            let absDotNV = abs(pbr::cosTheta(wi));
+            let dotHL = dot(wm, wo);
+
+            let d = pbr::D_GTR1(absDotNH, lerp(0.1, 0.001, alpha));
+            let f = pbr::schlick(0.04, dotHL);
+            let gl = pbr::separableSmithGGXG1(wo, 0.25);
+            let gv = pbr::separableSmithGGXG1(wi, 0.25);
+
+            return 0.25 * clearcoat * d * f * gl * gv;
+        }
+
+        static float3 evaluateSheen(const float3 baseColor, const float sheen, const float3 sheenTint, const float3 wi, const float3 wm, const float3 wo)
         {
             if(sheen <= 0.0) 
             {
@@ -25,7 +46,69 @@ public struct Principle : IMaterial
             return sheen * lerp(float3(1.0), tint, sheenTint) * pbr::schlickWeight(dotHL);
         }
 
-        public static float evaluateDisneyRetroDiffuse(float roughness, const float3 wi, const float3 wm, const float3 wo)
+        static float3 evaluateDisneyBRDF(const MaterialParams params, const BSDFContext ctx, const float3 wi, const float3 wm,
+                                        const float3 wo)
+        {
+            let relativeIOR = ctx.lastIOR / params.IOR;
+
+            float dotNL = pbr::cosTheta(wo);
+            float dotNV = pbr::cosTheta(wi);
+            if(dotNL <= 0.0 || dotNV <= 0.0) 
+            {
+                return float3(0.0);
+            }
+
+            float2 a;
+            pbr::calcAnisotropic(params.roughness, params.anisotropic, a.x, a.y);
+
+            let d = pbr::GGXAnisotropicD(wm, a.x, a.y);
+            let gl = pbr::separableSmithGGXG1(wi, wm, a.x, a.y);
+            let gv = pbr::separableSmithGGXG1(wo, wm, a.x, a.y);
+
+            float3 f = pbr::disneyFresnel(params.albedo, params.specularTint, params.metallic, params.IOR, relativeIOR, wo, wm, wi);
+
+            return d * gl * gv * f / (4.0 * dotNL * dotNV);
+        }
+
+        static float3 evaluateDisneySpecTransmission(const MaterialParams params, const BSDFContext ctx, const float3 wi, const float3 wm,
+                                                    const float3 wo, const float ax, const float ay, const bool thin)
+        {
+            let relativeIOR = ctx.lastIOR / params.IOR;
+            let n2 = relativeIOR * relativeIOR;
+
+            let absDotNL = abs(pbr::cosTheta(wo));
+            let absDotNV = abs(pbr::cosTheta(wi));
+            let dotHL = dot(wm, wo);
+            let dotHV = dot(wm, wi);
+            let absDotHL = abs(dotHL);
+            let absDotHV = abs(dotHV);
+
+            let d = pbr::GGXAnisotropicD(wm, ax, ay);
+            let gl = pbr::separableSmithGGXG1(wi, wm, ax, ay);
+            let gv = pbr::separableSmithGGXG1(wo, wm, ax, ay);
+
+            float f = pbr::fresnelDielectric(dotHV, 1.0, 1.0 / relativeIOR);
+
+            float3 color;
+            if(thin)
+            {
+                color = sqrt(params.albedo);
+            }
+            else
+            {
+                color = params.albedo;
+            }
+            
+            // Note that we are intentionally leaving out the 1/n2 spreading factor since for VCM we will be evaluating
+            // particles with this. That means we'll need to model the air-[other medium] transmission if we ever place
+            // the camera inside a non-air medium.
+            let c = (absDotHL * absDotHV) / max(k::eps, absDotNL * absDotNV);
+            let tmp = dotHL + relativeIOR * dotHV;
+            let t = (n2 / max(k::eps, tmp * tmp));
+            return color * c * t * (1.0 - f) * gl * gv * d;
+        }
+
+        static float evaluateDisneyRetroDiffuse(float roughness, const float3 wi, const float3 wm, const float3 wo)
         {
             let dotNL = abs(pbr::cosTheta(wo));
             let dotNV = abs(pbr::cosTheta(wi));
@@ -40,7 +123,7 @@ public struct Principle : IMaterial
             return rr * (fl + fv + fl * fv * (rr - 1.0));
         }
 
-        public static float evaluateDisneyDiffuse(const float3 baseColor, const float flatness, const float roughness, const float3 wi, const float3 wm,
+        static float evaluateDisneyDiffuse(const float3 baseColor, const float flatness, const float roughness, const float3 wi, const float3 wm,
                                         const float3 wo, bool thin)
         {
             let dotNL = abs(pbr::cosTheta(wo));
@@ -70,7 +153,7 @@ public struct Principle : IMaterial
             return k::invPi * (retro + subsurfaceApprox * (1.0 - 0.5 * fl) * (1.0 - 0.5 * fv));
         }
 
-        public static float3 sampleGGXVNDFAnisotropic(const float3 wi, float ax, float ay, float2 u2)
+        static float3 sampleGGXVNDFAnisotropic(const float3 wi, float ax, float ay, float2 u2)
         {
             // -- Stretch the view vector so we are sampling as though roughness==1
             let v = normalize(float3(wi.x * ax, wi.y * ay, wi.z));
@@ -89,7 +172,7 @@ public struct Principle : IMaterial
             return normalize(float3(ax * n.x, ay * n.y, n.z));
         }
 
-        public static Optional<BSDFSample> sampleDisneySpecTransmission(const MaterialParams params, const BSDFContext ctx, const float3 wi, const bool thin, const float u, const float2 u2)
+        static Optional<BSDFSample> sampleDisneySpecTransmission(const MaterialParams params, const BSDFContext ctx, const float3 wi, const bool thin, const float u, const float2 u2)
         {
             
             if(pbr::cosTheta(wi) == 0.0) 
@@ -195,7 +278,7 @@ public struct Principle : IMaterial
             return ret;
         }
 
-        public static Optional<BSDFSample> sampleDisneyDiffuse(const MaterialParams params, float3 wi, bool thin,
+        static Optional<BSDFSample> sampleDisneyDiffuse(const MaterialParams params, float3 wi, bool thin,
                                         const float u, const float2 u2)
         {
             BSDFSample ret;
@@ -230,14 +313,14 @@ public struct Principle : IMaterial
 
             float diffuse = evaluateDisneyDiffuse(params.albedo, params.flatness, params.roughness, wi, wm, ret.wo, thin);
 
-            ret.f = color * diffuse;//sheen;// + color * diffuse;
+            ret.f = sheen + color * diffuse;
             ret.pdf = abs(dotNL) * pdf;
             ret.flags = BSDFSample::Flags::Diffuse | BSDFSample::Flags::Reflection;
 
             return ret;
         }
 
-        public static Optional<BSDFSample> sampleDisneyClearcoat(const MaterialParams params, const float3 wi,
+        static Optional<BSDFSample> sampleDisneyClearcoat(const MaterialParams params, const float3 wi,
                                          const float u, const float2 u2)
         {
             BSDFSample ret;
@@ -282,7 +365,7 @@ public struct Principle : IMaterial
             return ret;
         }
 
-        public static Optional<BSDFSample> sampleDisneyBRDF(const MaterialParams params, const BSDFContext ctx, const float3 wi,
+        static Optional<BSDFSample> sampleDisneyBRDF(const MaterialParams params, const BSDFContext ctx, const float3 wi,
                                         const float u, const float2 u2)
         {
             BSDFSample ret;
@@ -400,16 +483,130 @@ public struct Principle : IMaterial
 
         public static float pdf(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float3 wo)
         {
-            // TODO:
-            return 0;
+            let thin = true; // HACK:
+            let wm = normalize(si.wi + wo);
+
+            let dotNV = pbr::cosTheta(si.wi);
+            let dotNL = pbr::cosTheta(wo);
+
+            float pBRDF = 0.0, pDiffuse = 0.0, pClearcoat = 0.0, pSpecTrans = 0.0;
+            calcLobePdfs(params, pBRDF, pDiffuse, pClearcoat, pSpecTrans);
+
+            // calculate all of the anisotropic params
+            float ax, ay;
+            pbr::calcAnisotropic(params.roughness, params.anisotropic, ax, ay);
+
+            let diffuseWeight = (1.0 - params.metallic) * (1.0 - params.specTrans);
+            let transWeight   = (1.0 - params.metallic) * params.specTrans;
+
+            // pdf
+            float wholePDF = 0.0;
+
+            // clearcoat
+            let upperHemisphere = dotNL > 0.0 && dotNV > 0.0;
+            if(upperHemisphere && params.clearcoat > 0.0)
+            {
+                let absDotNL = abs(pbr::cosTheta(wo));
+                let absDotNH = abs(pbr::cosTheta(wm));
+                let d = pbr::D_GTR1(absDotNH, lerp(0.1, 0.001, params.roughness * params.roughness));
+                wholePDF += pClearcoat * d / (4.0 * absDotNL);
+            }
+
+            // diffuse
+            if(diffuseWeight > 0.0) 
+            {
+                wholePDF += pDiffuse * abs(pbr::cosTheta(wo));
+            }
+
+            // transmission
+            if(transWeight > 0.0) 
+            {
+                // Scale roughness based on IOR (Burley 2015, Figure 15).
+                let rscaled = thin ? pbr::thinTransmissionRoughness(params.IOR, params.roughness) : params.roughness;
+                float tax, tay;
+                pbr::calcAnisotropic(rscaled, params.anisotropic, tax, tay);
+
+                let pdf = pbr::GGXVNDFAnisotropicPdf(wo, wm, si.wi, tax, tay);
+
+                let dotLH = dot(wm, wo);
+                let dotVH = dot(wm, si.wi);
+                let relativeIOR = ctx.lastIOR / params.IOR;
+                let v = dotVH + relativeIOR * dotLH;
+                wholePDF += pSpecTrans * pdf / (v * v);
+            }
+
+            // specular
+            if(upperHemisphere) 
+            {                
+                let pdf = pbr::GGXVNDFAnisotropicPdf(wo, wm, si.wi, ax, ay) / (4.0 * abs(dot(wo, wm)));
+                wholePDF += pBRDF * pdf / (4. * abs(dot(si.wi, wm)));
+            }
+
+            return clamp(wholePDF, 0.0, 1.0);
         }
 
         public static float3 eval(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float3 wo)
         {
-            // TODO:
-            return float3(0.0);
+            let thin = true; // HACK:
+            let wm = normalize(si.wi + wo);
+
+            let dotNV = pbr::cosTheta(si.wi);
+            let dotNL = pbr::cosTheta(wo);
+
+            float3 reflectance = float3(0.0);
+
+            float pBRDF = 0.0, pDiffuse = 0.0, pClearcoat = 0.0, pSpecTrans = 0.0;
+            calcLobePdfs(params, pBRDF, pDiffuse, pClearcoat, pSpecTrans);
+
+            // calculate all of the anisotropic params
+            float ax, ay;
+            pbr::calcAnisotropic(params.roughness, params.anisotropic, ax, ay);
+
+            float diffuseWeight = (1.0 - params.metallic) * (1.0 - params.specTrans);
+            float transWeight   = (1.0 - params.metallic) * params.specTrans;
+
+            // -- Clearcoat
+            bool upperHemisphere = dotNL > 0.0 && dotNV > 0.0;
+            if(upperHemisphere && params.clearcoat > 0.0)
+            {
+                let clearcoat = evaluateDisneyClearcoat(params.clearcoat, params.clearcoatGloss, si.wi, wm, wo);
+                reflectance += float3(clearcoat);
+            }
+
+            // -- Diffuse
+            if(diffuseWeight > 0.0) 
+            {
+                let diffuse = evaluateDisneyDiffuse(params.albedo, params.flatness, params.roughness, si.wi, wm, wo, thin);
+
+                float3 sheen = evaluateSheen(params.albedo, params.sheen, params.sheenTint, si.wi, wm, wo);
+
+                reflectance += diffuseWeight * (diffuse * params.albedo + sheen);
+            }
+
+            // -- transmission
+            if(transWeight > 0.0) 
+            {
+                // Scale roughness based on IOR (Burley 2015, Figure 15).
+                float rscaled = thin ? pbr::thinTransmissionRoughness(params.IOR, params.roughness) : params.roughness;
+                float tax, tay;
+                pbr::calcAnisotropic(rscaled, params.anisotropic, tax, tay);
+
+                float3 transmission = evaluateDisneySpecTransmission(params, ctx, si.wi, wm, wo, tax, tay, thin);
+                reflectance += transWeight * transmission;
+            }
+
+            // -- specular
+            if(upperHemisphere) 
+            {
+                let specular = evaluateDisneyBRDF(params, ctx, si.wi, wm, wo);
+                
+                reflectance += specular;
+            }
+
+            reflectance *= abs(dotNL);
+
+            return reflectance;
         }
     }
 
-    //private MaterialParams mParams = {};
 }

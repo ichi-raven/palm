@@ -15,8 +15,9 @@ struct SceneParams
     float4x4 projInv;
     float4 cameraPos;
 
-    uint sppPerFrame;
-    float3 padding;
+    uint32_t sppPerFrame;
+    uint32_t areaEmitterNum;
+    float2 padding;
 }
 
 struct InstanceParams : IInstance
@@ -123,10 +124,10 @@ float3 sampleL(in int sampleID, in int pixelSeed)
     TraceRay(sceneBVH, RAY_FLAG_NONE, ~0, 0, 0, 0, ray, payload);
 
     // WARNING: required for MIS
-    // if (let emissive = payload.emissive)
-    // {
-    //     L += beta * emissive;
-    // }
+    if (let emissive = payload.emissive)
+    {
+        L += beta * emissive;
+    }
 
     // trace ray recursively
     for (int depth = 1; depth < k::maxDepth && payload.continue(); ++depth)
@@ -147,22 +148,22 @@ float3 sampleL(in int sampleID, in int pixelSeed)
         // NEE
         if (!bs.isSpecular()) 
         {
-            // if (!occluded(si.pos, es)) // HACK: Slang (HLSL) does not short circuit
-            // {
-            //     MaterialParams params = materialParams[si.instanceIndex];
+            if (!occluded(si.pos, es)) // HACK: Slang (HLSL) does not short circuit
+            {
+                MaterialParams params = materialParams[si.instanceIndex];
 
-            //     // Add emitter directional contribution to L
-            //     let wo = si.frame.toLocal(normalize(es.to));
-            //     let lightCos = abs(dot(normalize(es.to), es.normal));
-            //     let G = lightCos / (es.distance * es.distance);
-            //     let cosine = abs(dot(si.normal, normalize(es.to)));
-            //     let f = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
+                // Add emitter directional contribution to L
+                let wo = si.frame.toLocal(normalize(es.to));
+                let lightCos = abs(dot(normalize(es.to), es.normal));
+                let G = lightCos / (es.distance * es.distance);
+                let cosine = abs(dot(si.normal, normalize(es.to)));
+                let f = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
                 
-            //     let pathpdf = G * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
-            //     let MISWeight = 1.0;//es.pdf / (es.pdf + pathpdf);
+                let pathpdf = G * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
+                let MISWeight = es.pdf / (es.pdf + pathpdf);
                 
-            //     L += MISWeight * beta * f * G * cosine * es.emissive / max(k::eps, es.pdf);
-            // }
+                L += MISWeight * beta * f * G * cosine * es.emissive / max(k::eps, es.pdf);
+            }
         }
 
         // BSDF sampling
@@ -174,22 +175,21 @@ float3 sampleL(in int sampleID, in int pixelSeed)
             if (let emissive = bsdfPayload.emissive)
             {
                 // Add BSDF directional contribution to L
-                // let bsdf
-                // let wo = si.frame.toLocal(normalize(es.to));
-                // let lightCos = abs(dot(normalize(es.to), es.normal));
-                // let invG = 
-                // float lightpdf = 1.0;
+                let wo = si.frame.toLocal(normalize(es.to));
+                let lightCos = abs(dot(normalize(es.to), es.normal));
+                float lightpdf = 1.0;
 
-                // if (!bs.isSpecular())
-                // {
-                //     lightpdf = isSpecular(cache.bsdf.flags) ? 0. : calcHitLightPdf(cache.x, payload.x, payload.normal, payload.area, invG);
+                if (let bsdfSi = bsdfPayload.si)
+                {
+                    float invG = 1.0;
+                    lightpdf = bs.isSpecular() ? 0. : EmitterSampler.pdf(si, bsdfSi, sceneParams.areaEmitterNum, invG);
 
-                //     lightpdf *= invG;
-                // }
-
-                // const float cosine = abs(dot(si.normal, si.wi));
-                // const float MISWeight = bs.pdf / (lightpdf + bs.pdf);
-                // L += MISWeight * beta * bs.f * cosine * emissive / max(k::eps, bs.pdf);
+                    lightpdf *= invG;
+                }
+                
+                const float cosine = abs(dot(si.normal, si.wi));
+                const float MISWeight = bs.pdf / (lightpdf + bs.pdf);
+                L += MISWeight * beta * bs.f * cosine * emissive / max(k::eps, bs.pdf);
             }
 
             // reflects sampler transitions
@@ -210,10 +210,10 @@ float3 sampleL(in int sampleID, in int pixelSeed)
     }
 
     // WARNING: to be removed when doing MIS
-    if (let e = payload.emissive)
-    {
-        L += beta * e;
-    }
+    // if (let e = payload.emissive)
+    // {
+    //     L += beta * e;
+    // }
 
     return L;
 }

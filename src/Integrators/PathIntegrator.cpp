@@ -37,6 +37,16 @@ namespace palm
                     camPos = camera.getPos();
                 });
 
+            uint32_t areaEmitterNum = 0;
+            mScene.each<Emitter>(
+                [&](const Emitter& emitter)
+                {
+                    if (emitter.params.type == static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::eArea))
+                    {
+                        ++areaEmitterNum;
+                    }
+                });
+
             SceneParams params{
                 .view        = view,
                 .proj        = proj,
@@ -44,6 +54,7 @@ namespace palm
                 .projInv     = glm::inverse(proj),
                 .camPos      = glm::vec4(camPos, 1.0f),
                 .sppPerFrame = 4,
+                .areaEmitterNum = areaEmitterNum,
                 .padding     = { 0.f },
             };
 
