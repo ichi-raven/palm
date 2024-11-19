@@ -186,13 +186,15 @@ float3 sampleL(in int sampleID, in int pixelSeed)
                 {
                     if (!bs.isSpecular())
                     {
+                        uint emitterCount, emitterStride;
+                        emitterParams.GetDimensions(emitterCount, emitterStride);
                         float invG = 1.0;
-                        emitterpdf = EmitterSampler.pdf(si, bsdfSi, sceneParams.areaEmitterNum, invG);
+                        emitterpdf = EmitterSampler.pdf(si, bsdfSi, emitterCount/*sceneParams.areaEmitterNum*/, invG);
                         emitterpdf *= invG;
                     }
                 }
                 
-                let cosine = abs(si.wi.z);
+                let cosine = abs(dot(si.normal, bs.wo));
                 let MISWeight = bs.pdf / (emitterpdf + bs.pdf);
                 L += MISWeight * beta * bs.f * cosine * emissive / max(k::eps, bs.pdf);
             }
@@ -319,7 +321,7 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     }
 
     // emitter sample
-    payload.emitterSample = EmitterSampler.sample<Vertex>(emitterParams, vertices, indices, instanceParams, payload.si.value, payload.sampler.next1D(), payload.sampler.next2D(), payload.sampler.next1D());
+    payload.emitterSample = EmitterSampler.sample<Vertex, InstanceParams>(emitterParams, vertices, indices, instanceParams, payload.si.value, payload.sampler.next1D(), payload.sampler.next2D(), payload.sampler.next1D());
 }
 
 [shader("miss")]

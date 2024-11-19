@@ -18,6 +18,8 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <imfilebrowser.h>
+
 #include "../include/AppStates.hpp"
 #include "../include/GraphicsPass.hpp"
 #include "../include/Integrators/Integrator.hpp"
@@ -82,6 +84,8 @@ namespace palm
         std::vector<Handle<vk2s::Fence>> mFences;
 
         GraphicsPass mGuiPass;
+
+        ImGui::FileBrowser mFileBrowser;
 
         double mLastTime = 0;
         uint32_t mNow;

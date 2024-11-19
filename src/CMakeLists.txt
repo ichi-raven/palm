@@ -8,6 +8,7 @@ include_directories(
   ${IMGUI_DIR}
   ${IMGUI_BACKEND_DIR}
   ${IMGUIZMO_DIR}
+  ${IMFILEBROWSER_DIR}
   ${SPIRV_REFLECT_DIR}
   ${ASSIMP_INCLUDE_DIR}
   ${Vulkan_INCLUDE_DIRS}

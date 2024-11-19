@@ -12,6 +12,7 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 #include <ImGuizmo.h>
+#include <imfilebrowser.h>
 
 #include <stb_image_write.h>
 
@@ -22,6 +23,7 @@ namespace palm
     void Renderer::init()
     {
         initVulkan();
+        mFileBrowser = ImGui::FileBrowser(ImGuiFileBrowserFlags_EnterNewFilename | ImGuiFileBrowserFlags_CreateNewDir | ImGuiFileBrowserFlags_ConfirmOnEnter | ImGuiFileBrowserFlags_SkipItemsCausingError);
 
         mLastTime = glfwGetTime();
         mNow      = 0;
@@ -194,7 +196,6 @@ namespace palm
                 const uint32_t size               = windowWidth * windowHeight * channelSize;
                 mStagingBuffer                    = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eTransferDst), vk::MemoryPropertyFlagBits::eHostVisible);
             }
-
         }
         catch (std::exception& e)
         {
@@ -225,7 +226,13 @@ namespace palm
                 {
                     saveImage(std::filesystem::path("rendered.png"));
                 }
-                ImGui::MenuItem("Save As", NULL);
+
+                if (ImGui::MenuItem("Save As", NULL))
+                {
+                    mFileBrowser.SetTitle("save rendered image");
+                    mFileBrowser.Open();
+                }
+
                 ImGui::EndMenu();
             }
 
@@ -255,6 +262,16 @@ namespace palm
         }
 
         ImGui::End();
+
+        mFileBrowser.Display();
+
+        if (mFileBrowser.HasSelected())
+        {
+            const std::string& path = mFileBrowser.GetSelected().string();
+            std::cout << "saved rendered image to: " << mFileBrowser.GetSelected().string() << std::endl;
+            mFileBrowser.ClearSelected();
+            saveImage(std::filesystem::path(path));
+        }
 
         ImGui::Render();
     }
@@ -286,12 +303,8 @@ namespace palm
         const uint32_t channelSize        = vk2s::Compiler::getSizeOfFormat(outputFormat);
         const uint32_t size               = extent.width * extent.height * channelSize;
 
-        const auto region = vk::ImageCopy()
-                                .setExtent(extent)
-                                .setSrcSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 })
-                                .setSrcOffset({ 0, 0, 0 })
-                                .setDstSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 })
-                                .setDstOffset({ 0, 0, 0 });
+        const auto region =
+            vk::ImageCopy().setExtent(extent).setSrcSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 }).setSrcOffset({ 0, 0, 0 }).setDstSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 }).setDstOffset({ 0, 0, 0 });
 
         UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
         cmd->begin(true);

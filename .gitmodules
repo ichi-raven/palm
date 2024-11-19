@@ -7,3 +7,6 @@
 [submodule "ThirdParty/ImGuizmo"]
 	path = ThirdParty/ImGuizmo
 	url = git@github.com:CedricGuillemet/ImGuizmo.git
+[submodule "ThirdParty/ImFileBrowser"]
+	path = ThirdParty/ImFileBrowser
+	url = git@github.com:AirGuanZ/imgui-filebrowser.git
