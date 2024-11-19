@@ -51,17 +51,16 @@ public class EmitterSampler
     {
         __init(V v0_, V v1_, V v2_, I instance)
         {
-            v0.pos    = mul(instance.world, float4(v0_.pos, 1.0)).xyz;
-            v0.normal = normalize(mul(instance.worldInvTrans, float4(v0_.normal, 1.)).xyz);
-            v1.pos    = mul(instance.world, float4(v1_.pos, 1.0)).xyz;
-            v1.normal = normalize(mul(instance.worldInvTrans, float4(v1_.normal, 1.)).xyz);
-            v2.pos    = mul(instance.world, float4(v2_.pos, 1.0)).xyz;
-            v2.normal = normalize(mul(instance.worldInvTrans, float4(v2_.normal, 1.)).xyz);
+            v0.pos    = mul(instance.world, float4(v0_.pos, 1.)).xyz;
+            v0.normal = normalize(mul(instance.worldInvTrans, float4(v0_.normal, 0.)).xyz);
+            v1.pos    = mul(instance.world, float4(v1_.pos, 1.)).xyz;
+            v1.normal = normalize(mul(instance.worldInvTrans, float4(v1_.normal, 0.)).xyz);
+            v2.pos    = mul(instance.world, float4(v2_.pos, 1.)).xyz;
+            v2.normal = normalize(mul(instance.worldInvTrans, float4(v2_.normal, 0.)).xyz);
 
             area = 0.5 * length(cross(v2.pos - v0.pos, v1.pos - v0.pos));
         }
 
-        // pos, normal
         V sample(float2 sample2)
         {
             if (sample2.x + sample2.y > 1.0)
@@ -70,7 +69,7 @@ public class EmitterSampler
                 sample2.y = (1.0 - sample2.y);
             }
 
-            let w = float3(1. - (sample2.x + sample2.y), sample2.x, sample2.y);
+            let w = float3(1.0 - (sample2.x + sample2.y), sample2.x, sample2.y);
 
             V ret;
             ret.pos = v0.pos * w.x + v1.pos * w.y + v2.pos * w.z;
@@ -111,7 +110,7 @@ public class EmitterSampler
             let index = uint3(indices[sampled.meshIndex][faceIndex * 3 + 0], indices[sampled.meshIndex][faceIndex * 3 + 1], indices[sampled.meshIndex][faceIndex * 3 + 2]);
             let face  = Face<V, I>(vertices[sampled.meshIndex][index.x], vertices[sampled.meshIndex][index.y], vertices[sampled.meshIndex][index.z], instances[sampled.meshIndex]);
 
-            let v  = face.sample(sample2);
+            let v = face.sample(sample2);
 
             ret.pdf = 1.0 / sampled.faceNum / face.area;
             ret.distance = distance(si.pos, v.pos);

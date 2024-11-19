@@ -46,7 +46,6 @@ namespace pbr
     {
         let s = sinTheta(v);
         return (s == 0) ? 1. : clamp(v.x / s, -1., 1.);
-        //return dot(normalize(v), float3(1., 0., 0.));
     }
 
     public float cos2Phi(const float3 v)

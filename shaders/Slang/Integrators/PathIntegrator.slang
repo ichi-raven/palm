@@ -103,7 +103,7 @@ bool occluded(const float3 pos, const EmitterSample es)
     shadowRay.Origin               = pos;
     shadowRay.Direction            = normalize(es.to);
     shadowRay.TMin                 = k::eps;// WARN: adhoc
-    shadowRay.TMax                 = es.distance;
+    shadowRay.TMax                 = es.distance - k::eps;
 
     bool ret = true;// payload, true if hit other object
     TraceRay(sceneBVH, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, ~0, 0, 0, 1, shadowRay, ret);
@@ -170,25 +170,30 @@ float3 sampleL(in int sampleID, in int pixelSeed)
         {
             Payload bsdfPayload;
             bsdfPayload.sampler = payload.sampler;
-            TraceRay(sceneBVH, RAY_FLAG_NONE, ~0, 0, 0, 0, ray, bsdfPayload/**/);
+            RayDesc bsdfRay;
+            bsdfRay.Origin      = si.pos;
+            bsdfRay.Direction   = si.frame.toWorld(bs.wo);
+            bsdfRay.TMin        = k::eps;
+            bsdfRay.TMax        = k::infty;
+            TraceRay(sceneBVH, RAY_FLAG_NONE, ~0, 0, 0, 0, bsdfRay, bsdfPayload);
 
             if (let emissive = bsdfPayload.emissive)
             {
                 // Add BSDF directional contribution to L
-                let wo = si.frame.toLocal(normalize(es.to));
-                let lightCos = abs(dot(normalize(es.to), es.normal));
-                float lightpdf = 1.0;
+                float emitterpdf = 0.0;
 
                 if (let bsdfSi = bsdfPayload.si)
                 {
-                    float invG = 1.0;
-                    lightpdf = bs.isSpecular() ? 0. : EmitterSampler.pdf(si, bsdfSi, sceneParams.areaEmitterNum, invG);
-
-                    lightpdf *= invG;
+                    if (!bs.isSpecular())
+                    {
+                        float invG = 1.0;
+                        emitterpdf = EmitterSampler.pdf(si, bsdfSi, sceneParams.areaEmitterNum, invG);
+                        emitterpdf *= invG;
+                    }
                 }
                 
-                const float cosine = abs(dot(si.normal, si.wi));
-                const float MISWeight = bs.pdf / (lightpdf + bs.pdf);
+                let cosine = abs(si.wi.z);
+                let MISWeight = bs.pdf / (emitterpdf + bs.pdf);
                 L += MISWeight * beta * bs.f * cosine * emissive / max(k::eps, bs.pdf);
             }
 
@@ -272,10 +277,9 @@ void missShader(inout Payload payload : SV_RayPayload)
 {
     payload.si = none;
     payload.bsdfSample = none;
-    // uniform emitter sample?
+    // TODO: infinite emitter
     payload.emitterSample = none;
-    // lighting
-    payload.emissive = k::black;
+    //payload.emissive = k::black;
 }
 
 [shader("closesthit")]

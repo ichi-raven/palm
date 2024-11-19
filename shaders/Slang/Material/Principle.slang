@@ -395,25 +395,25 @@ public struct Principle : IMaterial
             let G1v = pbr::separableSmithGGXG1(wi, wm, ax, ay);
             let specular = G1v * F;
 
-            ret.flags = BSDFSample::Flags::Diffuse | BSDFSample::Flags::Reflection;
             ret.f = specular;
-            ret.pdf = pbr::GGXVNDFAnisotropicPdf(ret.wo, wm, wi, ax, ay);
-
-            //ret.pdf *= (1.0 / (4. * abs(dot(ret.wo, wm))));
+            
+            if (params.roughness < k::eps)
+            {
+                ret.flags = BSDFSample::Flags::Specular | BSDFSample::Flags::Reflection;
+                ret.pdf = 1.0;
+            }
+            else
+            {
+                ret.flags = BSDFSample::Flags::Diffuse | BSDFSample::Flags::Reflection;
+                ret.pdf = pbr::GGXVNDFAnisotropicPdf(ret.wo, wm, wi, ax, ay);
+            }
 
             return ret;
         }
 
-        public static void calcLobePdfs(const MaterialParams params,
+        static void calcLobePdfs(const MaterialParams params,
                               out float pSpecular, out float pDiffuse, out float pClearcoat, out float pSpecTrans)
         {
-            // DEBUG:
-            // pSpecular = 1.0;
-            // pDiffuse = 0.0;
-            // pClearcoat = 0.0;
-            // pSpecTrans = 0.0;
-            // return;
-
             let metallicBRDF   = params.metallic;
             let specularBSDF   = (1.0 - params.metallic) * params.specTrans;
             let dielectricBRDF = (1.0 - params.specTrans) * (1.0 - params.metallic);
@@ -441,7 +441,7 @@ public struct Principle : IMaterial
             float pTransmission = 0;
             calcLobePdfs(params, pSpecular, pDiffuse, pClearcoat, pTransmission);
             
-            if(sample1 <= pSpecular) 
+            if (sample1 <= pSpecular) 
             {
                 if (let res = sampleDisneyBRDF(params, ctx, si.wi, sample1, sample2))
                 {
@@ -504,7 +504,7 @@ public struct Principle : IMaterial
 
             // clearcoat
             let upperHemisphere = dotNL > 0.0 && dotNV > 0.0;
-            if(upperHemisphere && params.clearcoat > 0.0)
+            if (upperHemisphere && params.clearcoat > 0.0)
             {
                 let absDotNL = abs(pbr::cosTheta(wo));
                 let absDotNH = abs(pbr::cosTheta(wm));
@@ -513,13 +513,13 @@ public struct Principle : IMaterial
             }
 
             // diffuse
-            if(diffuseWeight > 0.0) 
+            if (diffuseWeight > 0.0) 
             {
                 wholePDF += pDiffuse * abs(pbr::cosTheta(wo));
             }
 
             // transmission
-            if(transWeight > 0.0) 
+            if (transWeight > 0.0) 
             {
                 // Scale roughness based on IOR (Burley 2015, Figure 15).
                 let rscaled = thin ? pbr::thinTransmissionRoughness(params.IOR, params.roughness) : params.roughness;
@@ -536,10 +536,17 @@ public struct Principle : IMaterial
             }
 
             // specular
-            if(upperHemisphere) 
-            {                
-                let pdf = pbr::GGXVNDFAnisotropicPdf(wo, wm, si.wi, ax, ay) / (4.0 * abs(dot(wo, wm)));
-                wholePDF += pBRDF * pdf / (4. * abs(dot(si.wi, wm)));
+            if (upperHemisphere) 
+            {
+                if (params.roughness < k::eps)
+                {
+                    wholePDF += pBRDF;
+                }
+                else
+                {
+                    let pdf = pbr::GGXVNDFAnisotropicPdf(wo, wm, si.wi, ax, ay);
+                    wholePDF += pBRDF * pdf / (4.0 * abs(dot(wo, wm)) * abs(dot(si.wi, wm)));
+                }
             }
 
             return clamp(wholePDF, 0.0, 1.0);
