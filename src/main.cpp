@@ -16,7 +16,7 @@ inline void setupImGuiStyle()
 
 #ifdef _WIN32  // HACK: Load from Windows default Arial fonts
     ImGuiIO& io = ImGui::GetIO();
-    io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/Arial.ttf", 16.0f);
+    io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/Arial.ttf", 24.0f);
 #endif
 
     ImGuiStyle& style    = ImGui::GetStyle();

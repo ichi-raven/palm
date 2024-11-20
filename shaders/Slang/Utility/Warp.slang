@@ -4,14 +4,16 @@ import Constants;
 
 public namespace Warp
 {
+    [ForceInline]
     public float3 toUniformSphere(float2 u)
     {
-        float a = u.x * 2. * k::pi;
-        float z = u.y * 2. - 1.;
-        float r = sqrt(1 - z * z);
+        let a = u.x * 2. * k::pi;
+        let z = u.y * 2. - 1.;
+        let r = sqrt(1 - z * z);
         return float3(r * cos(a), r * sin(a), z);
     }
 
+    [ForceInline]
     public float3 toUniformHemiSphere(float2 u)
     {
         float3 ret = toUniformSphere(u);
@@ -23,9 +25,10 @@ public namespace Warp
         return ret;
     }
 
+    [ForceInline]
     public float2 toUniformDiskConcentric(float2 u)
     {
-        float2 uOffset = 2. * u - float2(1., 1.);
+        let uOffset = 2. * u - float2(1., 1.);
         if (uOffset.x == 0 && uOffset.y == 0)
         {
             return float2(0., 0.);
@@ -46,9 +49,18 @@ public namespace Warp
         return r * float2(cos(theta), sin(theta));
     }
 
+    [ForceInline]
+    public float2 toUniformDiskPolar(float2 u)
+    {
+        let r     = sqrt(u.x);
+        let theta = 2. * k::pi * u.y;
+        return float2(r * cos(theta), r * sin(theta));
+    }
+
+    [ForceInline]
     public float3 toCosineWeightedHemisphere(float2 u)
     {
-        float2 d = toUniformDiskConcentric(u);
+        let d = toUniformDiskConcentric(u);
         let z = sqrt(max(1 - (d.x * d.x) - (d.y * d.y), 0.));
         return float3(d.x, d.y, z);
 

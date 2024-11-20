@@ -19,12 +19,13 @@ namespace palm
 {
     struct Material
     {
-        constexpr static std::array kMaterialTypesStr = { "Lambert", "Principle" };
-
+        // WARN: the indices must match the Type below
+        constexpr static std::array kMaterialTypesStr = { "Lambert", "Conductor", "Principle" };
         enum class Type : int32_t
         {
             eLambert   = 0,
-            ePrinciple = 1,
+            eConductor = 1,
+            ePrinciple = 2,
             eMaterialNum
         };
 
@@ -109,7 +110,7 @@ namespace palm
             int currentType             = static_cast<int>(params.materialType);
             if (ImGui::Combo("Material Type", &currentType, kMaterialTypesStr.data(), kMaterialTypesStr.size()))
             {
-                params.materialType = currentType;
+                params.materialType = static_cast<int32_t>(currentType);
             }
 
             // Emissive color

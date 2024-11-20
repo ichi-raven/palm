@@ -6,11 +6,6 @@ import PBR;
 
 public struct Principle : IMaterial
 {
-    public __init(in MaterialParams params_)
-    {
-        //mParams = params_;
-    }
-
     public struct BSDF : IBSDF
     {
         static float evaluateDisneyClearcoat(const float clearcoat, const float alpha, const float3 wi, const float3 wm,
@@ -41,8 +36,8 @@ public struct Principle : IMaterial
                 return float3(0.0);
             }
 
-            const float dotHL = dot(wm, wo);
-            const float3 tint = pbr::calculateTint(baseColor);
+            let dotHL = dot(wm, wo);
+            let tint = pbr::calculateTint(baseColor);
             return sheen * lerp(float3(1.0), tint, sheenTint) * pbr::schlickWeight(dotHL);
         }
 
@@ -51,8 +46,8 @@ public struct Principle : IMaterial
         {
             let relativeIOR = ctx.lastIOR / params.IOR;
 
-            float dotNL = pbr::cosTheta(wo);
-            float dotNV = pbr::cosTheta(wi);
+            let dotNL = pbr::cosTheta(wo);
+            let dotNV = pbr::cosTheta(wi);
             if(dotNL <= 0.0 || dotNV <= 0.0) 
             {
                 return float3(0.0);
@@ -62,10 +57,10 @@ public struct Principle : IMaterial
             pbr::calcAnisotropic(params.roughness, params.anisotropic, a.x, a.y);
 
             let d = pbr::GGXAnisotropicD(wm, a.x, a.y);
-            let gl = pbr::separableSmithGGXG1(wi, wm, a.x, a.y);
-            let gv = pbr::separableSmithGGXG1(wo, wm, a.x, a.y);
+            let gl = pbr::separableSmithGGXG1(wo, wm, a.x, a.y);
+            let gv = pbr::separableSmithGGXG1(wi, wm, a.x, a.y);
 
-            float3 f = pbr::disneyFresnel(params.albedo, params.specularTint, params.metallic, params.IOR, relativeIOR, wo, wm, wi);
+            float3 f = pbr::disneyFresnel(params.albedo, params.specularTint, params.metallic, params.IOR, relativeIOR, wi, wm, wo);
 
             return d * gl * gv * f / (4.0 * dotNL * dotNV);
         }
@@ -84,8 +79,8 @@ public struct Principle : IMaterial
             let absDotHV = abs(dotHV);
 
             let d = pbr::GGXAnisotropicD(wm, ax, ay);
-            let gl = pbr::separableSmithGGXG1(wi, wm, ax, ay);
-            let gv = pbr::separableSmithGGXG1(wo, wm, ax, ay);
+            let gl = pbr::separableSmithGGXG1(wo, wm, ax, ay);
+            let gv = pbr::separableSmithGGXG1(wi, wm, ax, ay);
 
             float f = pbr::fresnelDielectric(dotHV, 1.0, 1.0 / relativeIOR);
 
@@ -136,19 +131,19 @@ public struct Principle : IMaterial
 
             if(thin && flatness > 0.0) 
             {
-                float alpha = roughness * roughness;
+                let alpha = roughness * roughness;
 
-                float dotHL = dot(wm, wo);
-                float fss90 = dotHL * dotHL * alpha;
-                float fss = lerp(1.0, fss90, fl) * lerp(1.0, fss90, fv);
+                let dotHL = dot(wm, wo);
+                let fss90 = dotHL * dotHL * alpha;
+                let fss = lerp(1.0, fss90, fl) * lerp(1.0, fss90, fv);
 
                 hanrahanKrueger = 1.25 * (fss * (1.0 / (dotNL + dotNV) - 0.5) + 0.5);
             }
 
-            float lambert = 1.0;
+            let lambert = 1.0;
             // what
-            float retro = evaluateDisneyRetroDiffuse(roughness, wi, wm, wo);
-            float subsurfaceApprox = lerp(lambert, hanrahanKrueger, thin ? flatness : 0.0);
+            let retro            = evaluateDisneyRetroDiffuse(roughness, wi, wm, wo);
+            let subsurfaceApprox = lerp(lambert, hanrahanKrueger, thin ? flatness : 0.0);
 
             return k::invPi * (retro + subsurfaceApprox * (1.0 - 0.5 * fl) * (1.0 - 0.5 * fv));
         }
@@ -311,10 +306,10 @@ public struct Principle : IMaterial
 
             let sheen = evaluateSheen(params.albedo, params.sheen, params.sheenTint, wi, wm, ret.wo);
 
-            float diffuse = evaluateDisneyDiffuse(params.albedo, params.flatness, params.roughness, wi, wm, ret.wo, thin);
+            let diffuse = evaluateDisneyDiffuse(params.albedo, params.flatness, params.roughness, wi, wm, ret.wo, thin);
 
-            ret.f = sheen + color * diffuse;
-            ret.pdf = abs(dotNL) * pdf;
+            ret.f   = sheen + color * diffuse;
+            ret.pdf = k::invPi * abs(dotNL) * pdf;
             ret.flags = BSDFSample::Flags::Diffuse | BSDFSample::Flags::Reflection;
 
             return ret;
@@ -328,9 +323,9 @@ public struct Principle : IMaterial
             let a = 0.25;
             let a2 = a * a;
 
-            float c = sqrt(max(0.0, (1.0 - pow(a2, 1.0 - u2.x)) / (1.0 - a2)));
-            float s = sqrt(max(0.0, 1.0 - c * c));
-            float phi = 2. * k::pi * u2.y;
+            let c = sqrt(max(0.0, (1.0 - pow(a2, 1.0 - u2.x)) / (1.0 - a2)));
+            let s = sqrt(max(0.0, 1.0 - c * c));
+            let phi = 2. * k::pi * u2.y;
 
             float3 wm = float3(s * cos(phi), c, s * sin(phi));
             if(dot(wm, wi) < 0.0) 
@@ -344,8 +339,8 @@ public struct Principle : IMaterial
                 return none;
             }
 
-            float clearcoatWeight = params.clearcoat;
-            float clearcoatGloss = params.clearcoatGloss;
+            let clearcoatWeight = params.clearcoat;
+            let clearcoatGloss = params.clearcoatGloss;
 
             let dotNH    = pbr::cosTheta(wm);
             let dotLH    = dot(wm, ret.wo);
@@ -356,10 +351,9 @@ public struct Principle : IMaterial
             let f = pbr::schlick(0.04, dotLH);
             let g = pbr::separableSmithGGXG1(wi, 0.25) * pbr::separableSmithGGXG1(ret.wo, 0.25);
 
-            float fPdf = d / (4.0 * dot(wi, wm));
-
+            let fPdf = d / (4.0 * dot(wi, wm));
+            // ?
             ret.f = float3(0.25 * clearcoatWeight * g * f * d) / fPdf;
-            // tangent space
             ret.pdf = fPdf;
 
             return ret;
@@ -404,8 +398,8 @@ public struct Principle : IMaterial
             }
             else
             {
-                ret.flags = BSDFSample::Flags::Diffuse | BSDFSample::Flags::Reflection;
-                ret.pdf = pbr::GGXVNDFAnisotropicPdf(ret.wo, wm, wi, ax, ay);
+                ret.flags = BSDFSample::Flags::Glossy | BSDFSample::Flags::Reflection;
+                ret.pdf = pbr::GGXVNDFAnisotropicPdf(ret.wo, wm, wi, ax, ay) / (4.0 * abs(dot(wi, wm)));
             }
 
             return ret;
@@ -418,7 +412,7 @@ public struct Principle : IMaterial
             let specularBSDF   = (1.0 - params.metallic) * params.specTrans;
             let dielectricBRDF = (1.0 - params.specTrans) * (1.0 - params.metallic);
 
-            let specularWeight     = metallicBRDF + dielectricBRDF;
+            let specularWeight = metallicBRDF + dielectricBRDF;
             let transmissionWeight = specularBSDF;
             let diffuseWeight      = dielectricBRDF;
             let clearcoatWeight    = clamp(params.clearcoat, 0.0, 1.0); 
@@ -513,9 +507,9 @@ public struct Principle : IMaterial
             }
 
             // diffuse
-            if (diffuseWeight > 0.0) 
+            if (diffuseWeight > 0.0)
             {
-                wholePDF += pDiffuse * abs(pbr::cosTheta(wo));
+                wholePDF += pDiffuse * k::invPi * abs(pbr::cosTheta(wo));
             }
 
             // transmission
@@ -545,7 +539,7 @@ public struct Principle : IMaterial
                 else
                 {
                     let pdf = pbr::GGXVNDFAnisotropicPdf(wo, wm, si.wi, ax, ay);
-                    wholePDF += pBRDF * pdf / (4.0 * abs(dot(wo, wm)) * abs(dot(si.wi, wm)));
+                    wholePDF += pBRDF * pdf / (4.0 * abs(dot(wo, wm)));
                 }
             }
 

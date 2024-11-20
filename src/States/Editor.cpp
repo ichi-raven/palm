@@ -587,18 +587,15 @@ namespace palm
 
         const auto [windowWidth, windowHeight] = window->getWindowSize();
 
-        constexpr auto kFontScale = 1.5f;
-
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
-        ImGuizmo::SetRect(0, 0, windowWidth * 0.75, windowHeight * 0.75); // HACK; linked with liting pass viewport
+        ImGuizmo::SetRect(0, 0, windowWidth * 0.75, windowHeight * 0.75); // HACK; linked with lighting pass viewport
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));  // left
         ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.03));
         ImGui::Begin("MenuBar", NULL, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
-        ImGui::SetWindowFontScale(kFontScale);
 
         if (ImGui::BeginMenuBar())
         {
@@ -698,7 +695,6 @@ namespace palm
             ImGui::SetNextWindowPos(ImVec2(0, windowHeight * 0.75));  // bottom
             ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.25));
             ImGui::Begin("FileExplorer", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
-            ImGui::SetWindowFontScale(kFontScale);
 
             static std::filesystem::path current = std::filesystem::current_path();
 
@@ -737,7 +733,6 @@ namespace palm
             ImGui::SetNextWindowPos(ImVec2(windowWidth * 0.75, windowHeight * 0.031));  // right
             ImGui::SetNextWindowSize(ImVec2(windowWidth * 0.25, windowHeight * 0.719));
             ImGui::Begin("SceneEditor", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
-            ImGui::SetWindowFontScale(kFontScale);
 
             ImGui::Text("Scene Editor");
 

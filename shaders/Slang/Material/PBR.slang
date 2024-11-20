@@ -4,6 +4,7 @@ import "../Utility/Constants";
 
 namespace pbr
 {
+    [ForceInline]
     public float sgn(const float v)
     {
         if (v == 0.)
@@ -14,57 +15,73 @@ namespace pbr
         return v >= 0. ? 1. : -1.;
     }
 
+    [ForceInline]
+    public float sqr(const float x)
+    {
+        return x * x;
+    }
+
+    [ForceInline]
     public float cosTheta(const float3 v)
     {
         return v.z; // Z-UP shading space
     }
 
+    [ForceInline]
     public float cos2Theta(const float3 v)
     {
         let c = cosTheta(v);
         return c * c;
     }
 
+    [ForceInline]
     public float sinTheta(const float3 v)
     {
         return sqrt(1. - cos2Theta(v));
     }
 
+    [ForceInline]
     public float tanTheta(const float3 v)
     {
         let c = cosTheta(v);
         return sqrt(1. - c * c) / c;
     }
 
+    [ForceInline]
     public float tan2Theta(const float3 v)
     {
         let c2 = cos2Theta(v);
         return 1. / c2 - 1.;
     }
 
+    [ForceInline]
     public float cosPhi(const float3 v)
     {
         let s = sinTheta(v);
         return (s == 0) ? 1. : clamp(v.x / s, -1., 1.);
     }
 
+    [ForceInline]
     public float cos2Phi(const float3 v)
     {
         let c = cosPhi(v);
         return c * c;
     }
 
+    [ForceInline]
     public float sin2Phi(const float3 v)
     {
         let c2 = cos2Phi(v);
         return 1 - c2;
     }
 
+    [ForceInline]
     public float sinPhi(const float3 v)
     {
         return sqrt(sin2Phi(v));
     }
 
+    [ForceInline]
     public float schlick(const float cosine, const float ref_idx)
     {
         float r0 = (1. - ref_idx) / (1. + ref_idx);
@@ -72,12 +89,14 @@ namespace pbr
         return r0 + (1. - r0) * pow((1. - cosine), 5.);
     }
 
+    [ForceInline]
     public float3 schlickfloat3(const float3 r0, const float radians)
     {
         let exponential = pow(1. - radians, 5.);
         return r0 + (float3(1.) - r0) * exponential;
     }
 
+    [ForceInline]
     public float schlickWeight(const float u)
     {
         let m = clamp(1. - u, 0., 1.);
@@ -89,10 +108,10 @@ namespace pbr
     {
         cosThetaI = clamp(cosThetaI, -1., 1.);
         // Potentially swap indices of refraction
-        let entering = cosThetaI > 0.;
-        if (!entering) 
+        let entering = cosThetaI >= 0.;
+        if (!entering)
         {
-            float tmp = etaI;
+            let tmp = etaI;
             etaI = etaT;
             etaT = tmp;
 
@@ -150,7 +169,7 @@ namespace pbr
             return k::invPi;
         }
 
-        const float a2 = a * a;
+        let a2 = a * a;
         return (a2 - 1.0) / (k::pi * log2(a2) * (1.0 + (a2 - 1.0) * absDotHL * absDotHL));
     }
 
@@ -159,7 +178,7 @@ namespace pbr
         let a2 = a * a;
         let absDotNV = abs(cosTheta(w));
 
-        return 2.0 / (1.0 + sqrt(a2 + (1 - a2) * absDotNV * absDotNV));
+        return 2.0 / (1.0 + sqrt(a2 + (1.0 - a2) * absDotNV * absDotNV));
     }
 
     public float GGXAnisotropicD(const float3 wm, const float ax, const float ay)
@@ -181,24 +200,24 @@ namespace pbr
 
     public float separableSmithGGXG1(const float3 w, const float3 wm, const float ax, const float ay)
     {
-        let dotHW = dot(w, wm);
-        if (dotHW <= 0.0) 
-        {
-            return 0.0;
-        }
+        // needed?
+        // let dotHW = dot(w, wm);
+        // if (dotHW <= 0.0) 
+        // {
+        //     return 0.0;
+        // }
 
-        const float absTanTheta = abs(tanTheta(w));
+        let absTanTheta = abs(tanTheta(w));
         if(absTanTheta >= k::infty) 
         {
             return 0.0;
         }
 
-        let a = sqrt(cos2Phi(w) * ax * ax + sin2Phi(w) * ay * ay);
-        float a2Tan2Theta = (a * absTanTheta);
-        a2Tan2Theta *= a2Tan2Theta;
+        let a             = sqrt(cos2Phi(w) * ax * ax + sin2Phi(w) * ay * ay);
+        let a2Tan2Theta = (a * absTanTheta) * (a * absTanTheta);
 
         let lambda = 0.5 * (-1.0 + sqrt(1.0 + a2Tan2Theta));
-        return 1.0 / 1.0 + lambda;
+        return 1.0 / (1.0 + lambda);
     }
 
     public float GGXVNDFAnisotropicPdf(const float3 wo, const float3 wm, const float3 wi, const float ax, const float ay)
@@ -227,16 +246,16 @@ namespace pbr
 
     public void calcAnisotropic(const float roughness, const float anisotropic, out float ax, out float ay)
     {
-        const float aspect = sqrt(1.0 - 0.9 * anisotropic);
-        const float r2 = roughness * roughness;
-        ax = r2 / aspect;
-        ay = r2 * aspect;
-        return;
+        let aspect  = sqrt(1.0 - 0.9 * anisotropic);
+        let r2      = roughness * roughness;
+
+        ax          = max(k::eps, r2 / aspect);
+        ay          = max(k::eps, r2 * aspect);
     }
 
     public float fresnelSchlickR0FromRelativeIOR(const float relativeIOR)
     {
-        const float r0 = (1 - relativeIOR) / (1 + relativeIOR);
+        let r0 = (1 - relativeIOR) / (1 + relativeIOR);
         return r0 * r0;
     }
 
@@ -250,17 +269,17 @@ namespace pbr
 
     public float3 disneyFresnel(const float3 baseColor, const float specularTint, const float metallic, const float IOR, const float relativeIOR, const float3 wi, const float3 wm, const float3 wo)
     {
-        float dotHV = abs(dot(wm, wi));
+        let dotHV = abs(dot(wm, wi));
 
-        float3 tint = calculateTint(baseColor);
+        let tint = calculateTint(baseColor);
 
         // -- See section 3.1 and 3.2 of the 2015 PBR presentation + the Disney BRDF explorer (which does their
         // -- 2012 remapping rather than the SchlickR0FromRelativeIOR seen here but they mentioned the switch in 3.2).
         float3 R0 = fresnelSchlickR0FromRelativeIOR(relativeIOR) * lerp(float3(1.0), tint, specularTint);
         R0 = lerp(R0, baseColor, metallic);
 
-        float dielectricFresnel = fresnelDielectric(dotHV, 1.0, IOR);
-        float3 metallicFresnel = schlickfloat3(R0, dot(wo, wm));
+        let dielectricFresnel = fresnelDielectric(dotHV, 1.0, IOR);
+        let metallicFresnel = schlickfloat3(R0, dot(wo, wm));
 
         return lerp(float3(dielectricFresnel), metallicFresnel, metallic);
     }

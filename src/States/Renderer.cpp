@@ -319,11 +319,11 @@ namespace palm
         std::vector<uint8_t> output(extent.width * extent.height * 3);
         {
             std::uint8_t* p = reinterpret_cast<std::uint8_t*>(device.getVkDevice()->mapMemory(mStagingBuffer->getVkDeviceMemory().get(), 0, size));
-            for (int h = 0; h < extent.height; h++)
+            for (size_t h = 0; h < extent.height; ++h)
             {
-                for (int w = 0; w < extent.width; w++)
+                for (size_t w = 0; w < extent.width; ++w)
                 {
-                    int index             = h * extent.width + w;
+                    const size_t index             = h * extent.width + w;
                     output[index * 3 + 0] = p[index * 4 + 0];
                     output[index * 3 + 1] = p[index * 4 + 1];
                     output[index * 3 + 2] = p[index * 4 + 2];

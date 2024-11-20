@@ -52,11 +52,11 @@ public class EmitterSampler
         __init(V v0_, V v1_, V v2_, I instance)
         {
             v0.pos    = mul(instance.world, float4(v0_.pos, 1.)).xyz;
-            v0.normal = normalize(mul(instance.worldInvTrans, float4(v0_.normal, 0.)).xyz);
+            v0.normal = mul(instance.worldInvTrans, float4(v0_.normal, 0.)).xyz;
             v1.pos    = mul(instance.world, float4(v1_.pos, 1.)).xyz;
-            v1.normal = normalize(mul(instance.worldInvTrans, float4(v1_.normal, 0.)).xyz);
+            v1.normal = mul(instance.worldInvTrans, float4(v1_.normal, 0.)).xyz;
             v2.pos    = mul(instance.world, float4(v2_.pos, 1.)).xyz;
-            v2.normal = normalize(mul(instance.worldInvTrans, float4(v2_.normal, 0.)).xyz);
+            v2.normal = mul(instance.worldInvTrans, float4(v2_.normal, 0.)).xyz;
 
             area = 0.5 * length(cross(v2.pos - v0.pos, v1.pos - v0.pos));
         }
@@ -69,11 +69,11 @@ public class EmitterSampler
                 sample2.y = (1.0 - sample2.y);
             }
 
-            let w = float3(1.0 - (sample2.x + sample2.y), sample2.x, sample2.y);
+            let w = float3(sample2.x, sample2.y, 1.0 - sample2.x - sample2.y);
 
             V ret;
             ret.pos = v0.pos * w.x + v1.pos * w.y + v2.pos * w.z;
-            ret.normal = v0.normal * w.x + v1.normal * w.y + v2.normal * w.z;
+            ret.normal = normalize(v0.normal * w.x + v1.normal * w.y + v2.normal * w.z);
             return ret;
         }
 
@@ -106,9 +106,10 @@ public class EmitterSampler
         case Type::Area:
             // TODO: effective sampling
             let faceIndex = uint(sample3 * sampled.faceNum);
+            let meshIndex = sampled.meshIndex;
 
-            let index = uint3(indices[sampled.meshIndex][faceIndex * 3 + 0], indices[sampled.meshIndex][faceIndex * 3 + 1], indices[sampled.meshIndex][faceIndex * 3 + 2]);
-            let face  = Face<V, I>(vertices[sampled.meshIndex][index.x], vertices[sampled.meshIndex][index.y], vertices[sampled.meshIndex][index.z], instances[sampled.meshIndex]);
+            let index = uint3(indices[meshIndex][faceIndex * 3 + 0], indices[meshIndex][faceIndex * 3 + 1], indices[meshIndex][faceIndex * 3 + 2]);
+            let face  = Face<V, I>(vertices[meshIndex][index.x], vertices[meshIndex][index.y], vertices[meshIndex][index.z], instances[meshIndex]);
 
             let v = face.sample(sample2);
 
@@ -132,14 +133,14 @@ public class EmitterSampler
     }
 
     // pdf, invG
-    public static float pdf(const SurfaceInteraction si, const SurfaceInteraction bsdfSi, const uint32_t areaEmitterNum, out float invG)
+    public static float pdf(const SurfaceInteraction si, const SurfaceInteraction bsdfSi, const uint32_t areaEmitterNum)
     {
         let to = bsdfSi.pos - si.pos;
         let distSq = dot(to, to);
 
         let lightCos = abs(dot(normalize(to), bsdfSi.normal));
-    
-        invG = distSq / lightCos;
-        return 1. / bsdfSi.area / areaEmitterNum;
+
+        let invG = distSq / lightCos;
+        return invG / bsdfSi.area / areaEmitterNum;
     }
 }

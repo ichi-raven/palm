@@ -15,12 +15,14 @@ When you want to add a material (BSDF)
 
 __include Lambert;
 __include Principle;
+__include Conductor;
 
 // **always synchronize with CPU side**
 public enum MaterialType
 {
     Lambert = 0,
-    Principle = 1,
+    Conductor = 1,
+    Principle = 2,
     MaterialTypeNum,
 }
 
@@ -90,8 +92,6 @@ public struct BSDFSample
 public interface IMaterial 
 {
     public associatedtype BSDF : IBSDF;
-
-    public __init(in MaterialParams params);
 }
 
 public interface IBSDF
@@ -105,12 +105,7 @@ public interface IBSDF
 
 public struct DynamicMaterial : IMaterial
 {
-
-    public __init(MaterialParams params_)
-    {
-
-    }
-
+    
     public struct BSDF: IBSDF
     {
         public static Optional<BSDFSample> sample(MaterialParams params, inout BSDFContext ctx, SurfaceInteraction si, float sample1, float2 sample2)
@@ -119,6 +114,9 @@ public struct DynamicMaterial : IMaterial
             {
                 case MaterialType::Lambert:
                     return Lambert.BSDF.sample(params, ctx, si, sample1, sample2);
+                case MaterialType::Conductor:
+                    params.metallic = 1.0;
+                    return Conductor.BSDF.sample(params, ctx, si, sample1, sample2);
                 case MaterialType::Principle:
                     return Principle.BSDF.sample(params, ctx, si, sample1, sample2);
                 default: // invalid
@@ -133,6 +131,9 @@ public struct DynamicMaterial : IMaterial
             {
                 case MaterialType::Lambert:
                     return Lambert.BSDF.pdf(params, ctx, si, wo);
+                case MaterialType::Conductor:
+                    params.metallic = 1.0;
+                    return Conductor.BSDF.pdf(params, ctx, si, wo);
                 case MaterialType::Principle:
                     return Principle.BSDF.pdf(params, ctx, si, wo);
                 default: // invalid
@@ -147,6 +148,9 @@ public struct DynamicMaterial : IMaterial
             {
                 case MaterialType::Lambert:
                     return Lambert.BSDF.eval(params, ctx, si, wo);
+                case MaterialType::Conductor:
+                    params.metallic = 1.0;
+                    return Conductor.BSDF.eval(params, ctx, si, wo);
                 case MaterialType::Principle:
                     return Principle.BSDF.eval(params, ctx, si, wo);
                 default: // invalid
