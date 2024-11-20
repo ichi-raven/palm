@@ -6,5 +6,5 @@ toy scene editor + physically-based(?)renderer
 mesh loading
 material editing
 emitter adding
-- renderer
+- renderer  
 path integrator (including MIS)
