@@ -14,15 +14,17 @@ When you want to add a material (BSDF)
 */
 
 __include Lambert;
-__include Principle;
 __include Conductor;
+__include Dielectric;
+__include Principle;
 
 // **always synchronize with CPU side**
 public enum MaterialType
 {
-    Lambert = 0,
-    Conductor = 1,
-    Principle = 2,
+    Lambert     = 0,
+    Conductor   = 1,
+    Dielectric  = 2,
+    Principle   = 3,
     MaterialTypeNum,
 }
 
@@ -61,6 +63,21 @@ public struct MaterialParams // std140
 
 public struct BSDFContext
 {
+    public __init()
+    {
+        isRefracted = false;
+        hasBeenRefracted = false;
+        lastIOR = 1.0;
+    }
+
+    [mutating]
+    public void update(BSDFSample sample, const float lastIOR_)
+    {
+        isRefracted = sample.isTransmitted();
+        hasBeenRefracted |= isRefracted;
+        lastIOR = lastIOR_;
+    }
+
     public bool isRefracted;
     public bool hasBeenRefracted;
     public float lastIOR;
@@ -81,6 +98,11 @@ public struct BSDFSample
     public bool isSpecular()
     {
         return flags & Flags.Specular;
+    }
+
+    public bool isTransmitted()
+    {
+        return flags & Flags.Transmission;
     }
 
     public float3 f;
@@ -117,6 +139,8 @@ public struct DynamicMaterial : IMaterial
                 case MaterialType::Conductor:
                     params.metallic = 1.0;
                     return Conductor.BSDF.sample(params, ctx, si, sample1, sample2);
+                case MaterialType::Dielectric:
+                    return Dielectric.BSDF.sample(params, ctx, si, sample1, sample2);
                 case MaterialType::Principle:
                     return Principle.BSDF.sample(params, ctx, si, sample1, sample2);
                 default: // invalid
@@ -134,6 +158,8 @@ public struct DynamicMaterial : IMaterial
                 case MaterialType::Conductor:
                     params.metallic = 1.0;
                     return Conductor.BSDF.pdf(params, ctx, si, wo);
+                case MaterialType::Dielectric:
+                    return Dielectric.BSDF.pdf(params, ctx, si, wo);
                 case MaterialType::Principle:
                     return Principle.BSDF.pdf(params, ctx, si, wo);
                 default: // invalid
@@ -151,6 +177,8 @@ public struct DynamicMaterial : IMaterial
                 case MaterialType::Conductor:
                     params.metallic = 1.0;
                     return Conductor.BSDF.eval(params, ctx, si, wo);
+                case MaterialType::Dielectric:
+                    return Dielectric.BSDF.eval(params, ctx, si, wo);
                 case MaterialType::Principle:
                     return Principle.BSDF.eval(params, ctx, si, wo);
                 default: // invalid

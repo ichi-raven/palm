@@ -4,11 +4,6 @@ import "../Utility/Constants";
 
 public struct Lambert : IMaterial
 {
-    public __init(in MaterialParams params_)
-    {
-        //mParams = params_;
-    }
-
     public struct BSDF : IBSDF
     {
         public static Optional<BSDFSample> sample(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float sample1, float2 sample2)

@@ -5,7 +5,7 @@ __include "IndependentSampler";
 
 public interface ISampler
 {
-    public __init(uint seed);
+    public __init(uint32_t seed);
 
     [mutating]
     public float next1D();

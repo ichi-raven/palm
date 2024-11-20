@@ -20,12 +20,13 @@ namespace palm
     struct Material
     {
         // WARN: the indices must match the Type below
-        constexpr static std::array kMaterialTypesStr = { "Lambert", "Conductor", "Principle" };
+        constexpr static std::array kMaterialTypesStr = { "Lambert", "Conductor", "Dielectric", "Principle" };
         enum class Type : int32_t
         {
-            eLambert   = 0,
-            eConductor = 1,
-            ePrinciple = 2,
+            eLambert    = 0,
+            eConductor  = 1,
+            eDielectric = 2,
+            ePrinciple  = 3,
             eMaterialNum
         };
 
@@ -50,7 +51,7 @@ namespace palm
             float clearcoatGloss;
             float IOR = 1.0;
 
-            int32_t albedoTexIndex = -1;
+            int32_t albedoTexIndex    = -1;
             int32_t roughnessTexIndex = -1;
             int32_t metalnessTexIndex = -1;
             int32_t normalmapTexIndex = -1;
@@ -107,7 +108,7 @@ namespace palm
             //ImGui::InputInt("Normal Map Texture Index", &params.normalmapTexIndex);
 
             // Material type
-            int currentType             = static_cast<int>(params.materialType);
+            int currentType = static_cast<int>(params.materialType);
             if (ImGui::Combo("Material Type", &currentType, kMaterialTypesStr.data(), kMaterialTypesStr.size()))
             {
                 params.materialType = static_cast<int32_t>(currentType);
@@ -118,7 +119,6 @@ namespace palm
             {
                 enabledEmissive = params.emissive.length() > 0.;
             }
-
         }
 
         Params params;

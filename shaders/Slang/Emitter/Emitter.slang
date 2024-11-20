@@ -121,6 +121,8 @@ public class EmitterSampler
             break;
 
         case Type::Infinite:  // TODO:
+            ret.emissive = k::blue; // DEBUG:
+            ret.pdf = 1.0;
             break;
         default: // invalid
             ret.emissive = k::red; // DEBUG:
@@ -132,8 +134,7 @@ public class EmitterSampler
         return ret;
     }
 
-    // pdf, invG
-    public static float pdf(const SurfaceInteraction si, const SurfaceInteraction bsdfSi, const uint32_t areaEmitterNum)
+    public static float pdf(const SurfaceInteraction si, const SurfaceInteraction bsdfSi, const uint32_t emitterNum)
     {
         let to = bsdfSi.pos - si.pos;
         let distSq = dot(to, to);
@@ -141,6 +142,6 @@ public class EmitterSampler
         let lightCos = abs(dot(normalize(to), bsdfSi.normal));
 
         let invG = distSq / lightCos;
-        return invG / bsdfSi.area / areaEmitterNum;
+        return invG / bsdfSi.area / emitterNum;
     }
 }

@@ -28,6 +28,14 @@ struct InstanceParams : IInstance
 
 struct Payload //<Sampler: ISampler> TODO:
 {
+    __init(const IndependentSampler sampler_, const bool sampleOnlyEmissive_ = true)
+    {
+        ctx = BSDFContext();
+        sampler = sampler_;
+        sampleOnlyEmissive = sampleOnlyEmissive_;
+        resetForNextBounce();
+    }
+
     BSDFContext ctx;
     Optional<SurfaceInteraction> si;
     Optional<BSDFSample> bsdfSample;
@@ -35,7 +43,12 @@ struct Payload //<Sampler: ISampler> TODO:
     Optional<float3> emissive;
     IndependentSampler sampler;
 
-    //bool sampleBSDF = true;
+    bool sampleOnlyEmissive;
+
+    bool skipSampling()
+    {
+        return !sampleOnlyEmissive;
+    }
 
     bool continue()
     {
@@ -118,9 +131,8 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
     float3 L    = float3(0.0);
     float3 beta = float3(1.0);
 
-    Payload payload    = {};
-    //payload.sampleBSDF = true;
-    payload.sampler = IndependentSampler(tea(sampleID, pixelSeed));
+    let seed = tea(sampleID, pixelSeed);
+    Payload payload    = Payload(IndependentSampler(seed));
     
     // trace primary ray
     RayDesc ray = getCameraRay(DispatchRaysIndex().xy, payload.sampler.next2D());
@@ -168,17 +180,16 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                     let f = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
 
                     let pathpdf   = G * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
-                    let MISWeight = es.pdf / (es.pdf + pathpdf);
+                    let MISWeight = es.pdf / max(k::eps, es.pdf + pathpdf);
                     
-                    L += MISWeight * beta * f * G * cosine * es.emissive / es.pdf;
+                    L += MISWeight * beta * f * G * cosine * es.emissive / max(k::eps, es.pdf);
                 }
             }
 
             // BSDF sampling
             {
-                Payload bsdfPayload;
-                bsdfPayload.sampler    = payload.sampler;
-                //bsdfPayload.sampleBSDF = false;
+                Payload bsdfPayload = Payload(payload.sampler, false);
+
                 RayDesc bsdfRay;
                 bsdfRay.Origin      = si.pos;
                 bsdfRay.Direction   = si.frame.toWorld(bs.wo);
@@ -189,7 +200,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                 if (let emissive = bsdfPayload.emissive)
                 {
                     // add BSDF directional contribution to L
-                    float emitterpdf = 0.0;
+                    float emitterpdf = 1.0;
 
                     if (let bsdfSi = bsdfPayload.si)
                     {
@@ -200,10 +211,15 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                             emitterpdf = EmitterSampler.pdf(si, bsdfSi, emitterCount);
                         }
                     }
+                    else
+                    {
+                        L = k::blue;
+                        break;
+                    }
 
                     let cosine    = abs(dot(si.normal, si.frame.toWorld(bs.wo)));
-                    let MISWeight = bs.pdf / (emitterpdf + bs.pdf);
-                    L += MISWeight * beta * bs.f * cosine * emissive / bs.pdf;
+                    let MISWeight = bs.pdf / max(k::eps, emitterpdf + bs.pdf);
+                    L += MISWeight * beta * bs.f * cosine * emissive / max(k::eps, bs.pdf);
                 }
 
                 // reflects sampler transitions
@@ -293,7 +309,7 @@ void missShader(inout Payload payload : SV_RayPayload)
     payload.bsdfSample = none;
     // TODO: infinite emitter
     payload.emitterSample = none;
-    //payload.emissive = k::black;
+    payload.emissive = none;
 }
 
 [shader("closesthit")]
@@ -322,16 +338,18 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
         payload.emissive = params.emissive;
     }
 
-    //if (payload.sampleBSDF)
+    if (payload.skipSampling())
     {
-        payload.bsdfSample = DynamicMaterial.BSDF.sample(params, payload.ctx, payload.si.value.toLocal(), payload.sampler.next1D(), payload.sampler.next2D());
-        if (let bs = payload.bsdfSample) // update BSDFContext
+        return;
+    }
+
+    payload.bsdfSample = DynamicMaterial.BSDF.sample(params, payload.ctx, payload.si.value.toLocal(), payload.sampler.next1D(), payload.sampler.next2D());
+    if (let bs = payload.bsdfSample) // update BSDFContext
+    {
+        payload.ctx.update(bs, params.IOR);
+        if (bs.pdf == 0.)
         {
-            payload.ctx.lastIOR = params.IOR;
-            if (bs.pdf == 0.)
-            {
-                payload.bsdfSample = none;
-            }
+            payload.bsdfSample = none;
         }
     }
 

@@ -104,6 +104,44 @@ namespace pbr
         return m * m2 * m2;
     }
 
+    [ForceInline]
+    public bool isEffectivelySmooth(const float2 alpha)
+    {
+        return max(alpha.x, alpha.y) < k::eps;
+    }
+
+    [ForceInline]
+    public bool isEffectivelySmooth(const float ax, const float ay)
+    {
+        return max(ax, ay) < k::eps;
+    }
+
+    public bool refract(const float3 wi, float3 normal, float eta, out float etap, out float3 wt)
+    {
+        float ct_i = dot(normal, wi);
+        if (ct_i < 0.)
+        {
+            eta = 1. / eta;
+            ct_i = -ct_i;
+            normal = -normal;
+        }
+
+        let s2t_i = max(0., 1. - sqr(ct_i));
+        let s2t_t = s2t_i / sqr(eta);
+        if (s2t_t >= 1.)
+        {
+            etap = 0.0;
+            wt = k::zeros.xyz;
+            return false;
+        }
+
+        let ct_t = sqrt(1. - s2t_t);
+        wt = -wi / eta + (ct_i / eta - ct_t) * normal;
+        etap = eta;
+
+        return true;
+    }
+
     public float fresnelDielectric(float cosThetaI, float etaI, float etaT)
     {
         cosThetaI = clamp(cosThetaI, -1., 1.);
@@ -249,8 +287,8 @@ namespace pbr
         let aspect  = sqrt(1.0 - 0.9 * anisotropic);
         let r2      = roughness * roughness;
 
-        ax          = max(k::eps, r2 / aspect);
-        ay          = max(k::eps, r2 * aspect);
+        ax          = r2 / aspect;
+        ay          = r2 * aspect;
     }
 
     public float fresnelSchlickR0FromRelativeIOR(const float relativeIOR)

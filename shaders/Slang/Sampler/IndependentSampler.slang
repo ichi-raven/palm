@@ -3,7 +3,7 @@ implementing Sampler;
 
 public struct IndependentSampler// : ISampler
 {
-    public __init(uint seed) 
+    public __init(uint32_t seed) 
     {
         prngState = seed;
     }
@@ -23,5 +23,5 @@ public struct IndependentSampler// : ISampler
         return float2(next1D(), next1D());
     }
 
-    private int prngState;
+    private uint32_t prngState;
 }
