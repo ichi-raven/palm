@@ -290,7 +290,7 @@ void rayGenShader()
     for (int sampleID = 0; sampleID < sceneParams.sppPerFrame; ++sampleID)
     {
         // true if doing MIS
-        L += correct(sampleL<true>(sampleID, pixelSeed)) / float(sceneParams.sppPerFrame);
+        L += correct(sampleL<false>(sampleID, pixelSeed)) / float(sceneParams.sppPerFrame);
     }
 
     let rate = float(sceneParams.sppPerFrame) / accumulatedSpp;

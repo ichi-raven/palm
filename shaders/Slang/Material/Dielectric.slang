@@ -66,6 +66,7 @@ public struct Dielectric : IMaterial
                 {
                     return none;
                 }
+
                 ret.wo = wo;
             }
             else // transmitted
@@ -73,7 +74,7 @@ public struct Dielectric : IMaterial
                 ret.flags = BSDFSample::Flags::Glossy | BSDFSample::Flags::Transmission;
                 float3 wo;
                 float etap;
-                bool tir = !pbr::refract(si.wi, wm, params.IOR, etap, wo);
+                let tir = !pbr::refract(si.wi, wm, params.IOR, etap, wo);
 
                 if (wo.z * si.wi.z > 0. || wo.z == 0. || tir) // in same hemisphere or failed to refract
                 {
@@ -81,8 +82,6 @@ public struct Dielectric : IMaterial
                 }
 
                 ret.wo = wo;
-
-                return ret;
             }
             
 
@@ -139,7 +138,7 @@ public struct Dielectric : IMaterial
             }
             else
             {
-                let denom = pbr::sqr(dot(si.wi, wm) + dot(wo, wm) / etap);
+                let denom = pbr::sqr(dot(wo, wm) + dot(si.wi, wm) / etap) * ct_i * ct_o;
                 let dwm_dwo = abs(dot(wo, wm)) / denom;
                 pdf = ggx::pdf(si.wi, wm, ax, ay) * dwm_dwo * pT / (pR + pT);
             }
@@ -160,7 +159,7 @@ public struct Dielectric : IMaterial
             let ct_o = pbr::cosTheta(wo);
             let ct_i = pbr::cosTheta(si.wi);
 
-            bool refl = ct_i * ct_o > 0.;
+            let refl = ct_i * ct_o > 0.;
             float etap = 1.;
 
             if (!refl)
@@ -190,7 +189,7 @@ public struct Dielectric : IMaterial
             }
             else
             {
-                let denom = pbr::sqr(dot(si.wi, wm) + dot(wo, wm) / etap) * ct_i * ct_o;
+                let denom = pbr::sqr(dot(wo, wm) + dot(si.wi, wm) / etap) * ct_i * ct_o;
                 let dwm_dwo = abs(dot(wo, wm)) / denom;
                 return float3((1. - F) * ggx::D(wm, ax, ay) * ggx::G(wo, si.wi, ax, ay)* abs(dot(si.wi, wm)) * abs(dot(wo, wm)) / denom);
             }
@@ -198,6 +197,4 @@ public struct Dielectric : IMaterial
             return k::zeros.xyz;
         }
     }
-
-    //private MaterialParams mParams = {};
 }
