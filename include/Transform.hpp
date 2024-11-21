@@ -28,9 +28,9 @@ namespace palm
             glm::mat4 world;
             glm::mat4 worldInvTranspose;
             glm::vec3 vel;
-            float padding1;
-            uint64_t entityID;
-            float padding2[2];
+            uint32_t entitySlot;
+            glm::vec3 padding;
+            uint32_t entityIndex;
 
             void update(glm::vec3 translate, const glm::vec3& rotation, const glm::vec3& scaling)
             {

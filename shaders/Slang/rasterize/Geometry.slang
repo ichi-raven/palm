@@ -15,9 +15,9 @@ struct EntityParams
     float4x4 model;
     float4x4 modelInvTranspose;
     float3 vel;
-    float padding1;
-    uint64_t entityID;
-    float2 padding2;
+    uint32_t entitySlot;
+    float3 padding;
+    uint32_t entityIndex;
 }
 
 struct VSInput
@@ -74,13 +74,10 @@ VSOutput vsmain(VSInput in)
 [shader("fragment")]
 FSOutput fsmain(VSOutput in)
 {
-    let slot  = uint32_t(entityParams.entityID & 0xFFFFFFFF << 32);
-    let index = uint32_t(entityParams.entityID & 0xFFFFFFFF);
-
     FSOutput output = (FSOutput)0;
     output.albedo = float4(1.0); // TODO:
-    output.normal = float4(in.worldInfo.normal, reinterpret<float>(slot));
-    output.worldPos = float4(in.worldInfo.pos, reinterpret<float>(index));
+    output.normal = float4(in.worldInfo.normal, reinterpret<float>(entityParams.entitySlot));
+    output.worldPos = float4(in.worldInfo.pos, reinterpret<float>(entityParams.entityIndex));
     
     return output;
 }

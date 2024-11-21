@@ -111,7 +111,8 @@ namespace palm
                 transform.params.world             = glm::identity<glm::mat4>();
                 transform.params.worldInvTranspose = glm::identity<glm::mat4>();
                 transform.params.vel               = glm::vec3(0.f);
-                transform.params.entityID          = entity;
+                transform.params.entitySlot        = static_cast<uint32_t>((entity & ec2s::kEntitySlotMask) >> ec2s::kEntitySlotShiftWidth);
+                transform.params.entityIndex       = static_cast<uint32_t>(entity & ec2s::kEntityIndexMask);
 
                 const auto frameCount = window->getFrameCount();
                 const auto size       = sizeof(Transform::Params) * frameCount;
@@ -579,14 +580,13 @@ namespace palm
             const auto x = static_cast<float>(std::clamp(mx / width / kRenderArea.x, 0., 1.));
             const auto y = static_cast<float>(std::clamp(my / height / kRenderArea.y, 0., 1.));
 
-            SceneParams sceneParams
-            {
-                .view = view, 
-                .proj = proj, 
-                .viewInv = glm::inverse(view), 
-                .projInv = glm::inverse(proj), 
-                .camPos = glm::vec4(camera.getPos(), 1.0), 
-                .mousePos = glm::vec2(x, y), 
+            SceneParams sceneParams{
+                .view      = view,
+                .proj      = proj,
+                .viewInv   = glm::inverse(view),
+                .projInv   = glm::inverse(proj),
+                .camPos    = glm::vec4(camera.getPos(), 1.0),
+                .mousePos  = glm::vec2(x, y),
                 .frameSize = glm::uvec2(width, height),
             };
 
@@ -594,18 +594,19 @@ namespace palm
         }
 
         // read clicked entity
-        if (window->getMouseKey(GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
+        if (window->getMouseKey(GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !mManipulating)
         {
             mPickedIDBuffer->read(
                 [&](const void* p)
                 {
                     const auto hovered = *(reinterpret_cast<const ec2s::Entity*>(p));
-                    if (!mPickedEntity || *mPickedEntity != hovered)
+                    std::cout << "picked: " << hovered << "\n";
+                    if (hovered != 0 && (!mPickedEntity || *mPickedEntity != hovered))
                     {
                         mPickedEntity = hovered;
                     }
                 },
-                sizeof(uint32_t), 0);
+                sizeof(ec2s::Entity), 0);
         }
 
         // entity informations
@@ -625,7 +626,7 @@ namespace palm
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
-        ImGuizmo::SetRect(0, 0, windowWidth * kRenderArea.x, windowHeight * kRenderArea.y); 
+        ImGuizmo::SetRect(0, 0, windowWidth * kRenderArea.x, windowHeight * kRenderArea.y);
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));  // left
         ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.03));
@@ -680,7 +681,8 @@ namespace palm
                             transform.params.world             = glm::identity<glm::mat4>();
                             transform.params.worldInvTranspose = glm::identity<glm::mat4>();
                             transform.params.vel               = glm::vec3(0.f);
-                            transform.params.entityID          = added;
+                            transform.params.entitySlot        = static_cast<uint32_t>((added & ec2s::kEntitySlotMask) >> ec2s::kEntitySlotShiftWidth);
+                            transform.params.entityIndex       = static_cast<uint32_t>(added & ec2s::kEntityIndexMask);
 
                             const auto frameCount = window->getFrameCount();
                             const auto size       = sizeof(Transform::Params) * frameCount;
@@ -838,7 +840,7 @@ namespace palm
                     currentGizmoOperation = ImGuizmo::SCALE;
                 }
 
-                ImGuizmo::Manipulate(glm::value_ptr(viewMat), glm::value_ptr(projectionMat), currentGizmoOperation, ImGuizmo::WORLD, glm::value_ptr(transform.params.world));
+                mManipulating = ImGuizmo::Manipulate(glm::value_ptr(viewMat), glm::value_ptr(projectionMat), currentGizmoOperation, ImGuizmo::WORLD, glm::value_ptr(transform.params.world));
 
                 glm::vec3 translation, rotation, scale;
                 ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform.params.world), glm::value_ptr(translation), glm::value_ptr(rotation), glm::value_ptr(scale));

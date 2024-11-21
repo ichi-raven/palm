@@ -107,6 +107,7 @@ namespace palm
         double mLastTime     = 0;
         uint32_t mNow        = 0;
         uint32_t mFrameCount = 0;
+        bool mManipulating   = false;
 
         inline const static glm::vec2 kRenderArea = glm::vec2(0.75f, 0.75f);
     };

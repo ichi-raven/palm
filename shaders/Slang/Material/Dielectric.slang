@@ -67,6 +67,10 @@ public struct Dielectric : IMaterial
                     return none;
                 }
 
+                let ct_o = pbr::cosTheta(wo);
+                let ct_i = pbr::cosTheta(si.wi);
+                ret.pdf = ggx::pdf(si.wi, wm, ax, ay) / (4. * abs(dot(si.wi, wm))) * pR / (pR + pT);
+                ret.f = float3(ggx::D(wm, ax, ay) * ggx::G(wo, si.wi, ax, ay) * pR / (4. * ct_i * ct_o));
                 ret.wo = wo;
             }
             else // transmitted
@@ -81,14 +85,15 @@ public struct Dielectric : IMaterial
                     return none;
                 }
 
+                let ct_o = pbr::cosTheta(wo);
+                let ct_i = pbr::cosTheta(si.wi);
+                let denom = pbr::sqr(dot(wo, wm) + dot(si.wi, wm) / etap);
+                let dwm_dwo = abs(dot(wo, wm)) / denom;
+                ret.pdf = ggx::pdf(si.wi, wm, ax, ay) * dwm_dwo * pT / (pR + pT);
+                ret.f = float3(pT * ggx::D(wm, ax, ay) * ggx::G(wo, si.wi, ax, ay) * abs(dot(si.wi, wm) * dot(wo, wm) / (ct_i * ct_o * denom)));
                 ret.wo = wo;
             }
             
-
-            ret.f = eval(params, ctx, si, ret.wo);
-
-            ret.pdf = pdf(params, ctx, si, ret.wo);
-
             return ret;
         }
 
@@ -128,7 +133,7 @@ public struct Dielectric : IMaterial
                 return 0.;
             }
 
-            let pR = pbr::fresnelDielectric(dot(wo, wm), params.IOR, params.IOR / ctx.lastIOR);
+            let pR = pbr::fresnelDielectric(dot(si.wi, wm), params.IOR, params.IOR / ctx.lastIOR);
             let pT = 1. - pR;
             
             float pdf = 0.0;
@@ -181,7 +186,7 @@ public struct Dielectric : IMaterial
                 return k::zeros.xyz;
             }
 
-            let F = pbr::fresnelDielectric(dot(wo, wm), params.IOR, params.IOR / ctx.lastIOR);
+            let F = pbr::fresnelDielectric(dot(si.wi, wm), params.IOR, params.IOR / ctx.lastIOR);
 
             if (refl)
             {

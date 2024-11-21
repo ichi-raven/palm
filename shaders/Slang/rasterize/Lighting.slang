@@ -45,13 +45,13 @@ float4 fsmain(VSOutput in) : SV_Target
     
     let slot  = reinterpret<uint32_t>(normal.w);
     let index = reinterpret<uint32_t>(worldPos.w);
-    let entity = uint64_t(slot << 32 | index);
+    let entity = uint64_t(uint64_t(slot) << 32 | index);
 
     float2 uvYinv = float2(in.uv.x, 1.0 - in.uv.y);
     uint2 mouseInFrame = uint2(sceneParams.mousePos * sceneParams.frameSize);
     uint2 uvInFrame = uint2(uvYinv * sceneParams.frameSize);
 
-    if (mouseInFrame.x == uvInFrame.x && mouseInFrame.y == uvInFrame.y)
+    if (all(mouseInFrame == uvInFrame))
     {
         pickedID[0] = entity;
     }

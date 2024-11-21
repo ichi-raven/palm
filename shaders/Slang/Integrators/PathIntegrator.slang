@@ -247,14 +247,10 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
     return L;
 }
 
+[ForceInline]
 float3 correct(const float3 L)
 {
-    if (L.x != L.x || L.y != L.y || L.z != L.z)
-    {
-        return k::zeros.xyz;
-    }
-
-    return L;
+    return any(isnan(L)) || any(isinf(L)) ? k::zeros.xyz : L;
 }
 
 // bindings
@@ -285,7 +281,7 @@ void rayGenShader()
     for (int sampleID = 0; sampleID < sceneParams.sppPerFrame; ++sampleID)
     {
         // true if doing MIS
-        L += correct(sampleL<false>(sampleID, pixelSeed)) / float(sceneParams.sppPerFrame);
+        L += correct(sampleL<true>(sampleID, pixelSeed)) / float(sceneParams.sppPerFrame);
     }
 
     let rate = float(sceneParams.sppPerFrame) / accumulatedSpp;
