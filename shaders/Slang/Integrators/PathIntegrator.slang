@@ -180,9 +180,9 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                     let f = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
 
                     let pathpdf   = G * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
-                    let MISWeight = es.pdf / max(k::eps, es.pdf + pathpdf);
+                    let MISWeight = es.pdf / es.pdf + pathpdf;
                     
-                    L += MISWeight * beta * f * G * cosine * es.emissive / max(k::eps, es.pdf);
+                    L += MISWeight * beta * f * G * cosine * es.emissive / es.pdf;
                 }
             }
 
@@ -200,7 +200,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                 if (let emissive = bsdfPayload.emissive)
                 {
                     // add BSDF directional contribution to L
-                    float emitterpdf = 1.0;
+                    float emitterpdf = 0.0;
 
                     if (let bsdfSi = bsdfPayload.si)
                     {
@@ -211,15 +211,10 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                             emitterpdf = EmitterSampler.pdf(si, bsdfSi, emitterCount);
                         }
                     }
-                    else
-                    {
-                        L = k::blue;
-                        break;
-                    }
 
                     let cosine    = abs(dot(si.normal, si.frame.toWorld(bs.wo)));
                     let MISWeight = bs.pdf / max(k::eps, emitterpdf + bs.pdf);
-                    L += MISWeight * beta * bs.f * cosine * emissive / max(k::eps, bs.pdf);
+                    L += MISWeight * beta * bs.f * cosine * emissive / bs.pdf;
                 }
 
                 // reflects sampler transitions
