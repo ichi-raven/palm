@@ -33,7 +33,7 @@ namespace palm
             // for area emitter
             uint32_t faceNum = 0;
             int32_t meshIndex = -1;
-            float padding[2];
+            float padding[2]  = { 0.f };
 
             glm::vec3 emissive = glm::vec3(0.);
             int32_t texIndex = -1;

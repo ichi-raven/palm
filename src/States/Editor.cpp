@@ -111,7 +111,7 @@ namespace palm
                 transform.params.world             = glm::identity<glm::mat4>();
                 transform.params.worldInvTranspose = glm::identity<glm::mat4>();
                 transform.params.vel               = glm::vec3(0.f);
-                transform.params.padding           = { 0.f };
+                transform.params.entityID          = entity;
 
                 const auto frameCount = window->getFrameCount();
                 const auto size       = sizeof(Transform::Params) * frameCount;
@@ -313,17 +313,16 @@ namespace palm
                     vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eAll),
                 };
 
-                //std::vector bindings1 = {
-                //    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
-                //    vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
-                //    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eCombinedImageSampler, Material::kDefaultTexNum, vk::ShaderStageFlagBits::eAll),
-                //};
+                std::vector bindings1 = {
+                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
+
+                };
 
                 mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
-                //mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings1));
+                mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings1));
 
-                // HACK: manual viewport setting
-                vk::Viewport viewport(0.f, 0.f, static_cast<float>(windowWidth) * 0.75f, static_cast<float>(windowHeight) * 0.75f, 0.f, 1.f);
+                vk::Viewport viewport(0.f, 0.f, static_cast<float>(windowWidth) * kRenderArea.x, static_cast<float>(windowHeight) * kRenderArea.y, 0.f, 1.f);
                 vk::Rect2D scissor({ 0, 0 }, window->getVkSwapchainExtent());
                 vk::PipelineColorBlendAttachmentState colorBlendAttachment(VK_FALSE);
                 colorBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
@@ -354,6 +353,12 @@ namespace palm
                 mSceneBuffer    = device.create<vk2s::DynamicBuffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eUniformBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, frameCount);
             }
 
+            // storage buffer (for picked ID)
+            {
+                const auto size = sizeof(ec2s::Entity);
+                mPickedIDBuffer = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eStorageBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+            }
+
             // create bindgroup
             mSceneBindGroup = device.create<vk2s::BindGroup>(mGeometryPass.bindLayouts[0].get());
 
@@ -364,6 +369,10 @@ namespace palm
             mGBuffer.bindGroup->bind(1, vk::DescriptorType::eSampledImage, mGBuffer.worldPosTex);
             mGBuffer.bindGroup->bind(2, vk::DescriptorType::eSampledImage, mGBuffer.normalTex);
             mGBuffer.bindGroup->bind(3, mDefaultSampler.get());
+
+            mLightingBindGroup = device.create<vk2s::BindGroup>(mLightingPass.bindLayouts[1].get());
+            mLightingBindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, mSceneBuffer.get());
+            mLightingBindGroup->bind(1, vk::DescriptorType::eStorageBuffer, mPickedIDBuffer.get());
 
             // create commands and sync objects
 
@@ -421,7 +430,7 @@ namespace palm
     void Editor::update()
     {
         constexpr auto colorClearValue   = vk::ClearValue(std::array{ 0.1f, 0.1f, 0.1f, 1.0f });
-        constexpr auto gbufferClearValue = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 1.0f });
+        constexpr auto gbufferClearValue = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 0.0f });
         constexpr auto depthClearValue   = vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0));
         constexpr std::array clearValues = { gbufferClearValue, gbufferClearValue, gbufferClearValue, depthClearValue };
 
@@ -506,7 +515,7 @@ namespace palm
 
             command->setPipeline(mLightingPass.pipeline);
             command->setBindGroup(0, mGBuffer.bindGroup.get());
-            //command->setBindGroup(1, mSceneBindGroup.get(), { mNow * static_cast<uint32_t>(mSceneBuffer->getBlockSize()) });
+            command->setBindGroup(1, mLightingBindGroup.get(), { mNow * static_cast<uint32_t>(mSceneBuffer->getBlockSize()) });
             command->draw(4, 1, 0, 0);
             command->drawImGui();
 
@@ -555,23 +564,48 @@ namespace palm
 
     void Editor::updateShaderResources()
     {
+        auto& window = common()->window;
         auto& scene  = common()->scene;
         auto& camera = scene.get<vk2s::Camera>(mCameraEntity);
+
+        const auto [mx, my]        = window->getMousePos();
+        const auto [width, height] = window->getWindowSize();
 
         // scene information
         {
             const auto& view = camera.getViewMatrix();
             const auto& proj = camera.getProjectionMatrix();
 
-            SceneParams sceneParams{
-                .view    = view,
-                .proj    = proj,
-                .viewInv = glm::inverse(view),
-                .projInv = glm::inverse(proj),
-                .camPos  = glm::vec4(camera.getPos(), 1.0),
+            const auto x = static_cast<float>(std::clamp(mx / width / kRenderArea.x, 0., 1.));
+            const auto y = static_cast<float>(std::clamp(my / height / kRenderArea.y, 0., 1.));
+
+            SceneParams sceneParams
+            {
+                .view = view, 
+                .proj = proj, 
+                .viewInv = glm::inverse(view), 
+                .projInv = glm::inverse(proj), 
+                .camPos = glm::vec4(camera.getPos(), 1.0), 
+                .mousePos = glm::vec2(x, y), 
+                .frameSize = glm::uvec2(width, height),
             };
 
             mSceneBuffer->write(&sceneParams, sizeof(SceneParams), mNow * mSceneBuffer->getBlockSize());
+        }
+
+        // read clicked entity
+        if (window->getMouseKey(GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
+        {
+            mPickedIDBuffer->read(
+                [&](const void* p)
+                {
+                    const auto hovered = *(reinterpret_cast<const ec2s::Entity*>(p));
+                    if (!mPickedEntity || *mPickedEntity != hovered)
+                    {
+                        mPickedEntity = hovered;
+                    }
+                },
+                sizeof(uint32_t), 0);
         }
 
         // entity informations
@@ -591,7 +625,7 @@ namespace palm
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
-        ImGuizmo::SetRect(0, 0, windowWidth * 0.75, windowHeight * 0.75); // HACK; linked with lighting pass viewport
+        ImGuizmo::SetRect(0, 0, windowWidth * kRenderArea.x, windowHeight * kRenderArea.y); 
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));  // left
         ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.03));
@@ -646,7 +680,7 @@ namespace palm
                             transform.params.world             = glm::identity<glm::mat4>();
                             transform.params.worldInvTranspose = glm::identity<glm::mat4>();
                             transform.params.vel               = glm::vec3(0.f);
-                            transform.params.padding           = { 0.f };
+                            transform.params.entityID          = added;
 
                             const auto frameCount = window->getFrameCount();
                             const auto size       = sizeof(Transform::Params) * frameCount;
@@ -666,6 +700,7 @@ namespace palm
                     if (ImGui::MenuItem("Infinite", NULL))
                     {
                         // TODO: select constant or envmap -> set color or load texture
+                        std::cerr << "TODO: infinite emitter\n";
                     }
 
                     ImGui::EndMenu();
@@ -692,8 +727,8 @@ namespace palm
         ImGui::End();
 
         {
-            ImGui::SetNextWindowPos(ImVec2(0, windowHeight * 0.75));  // bottom
-            ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.25));
+            ImGui::SetNextWindowPos(ImVec2(0, windowHeight * kRenderArea.y));  // bottom
+            ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * (1.0f - kRenderArea.y)));
             ImGui::Begin("FileExplorer", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
             static std::filesystem::path current = std::filesystem::current_path();
@@ -730,8 +765,9 @@ namespace palm
         }
 
         {
-            ImGui::SetNextWindowPos(ImVec2(windowWidth * 0.75, windowHeight * 0.031));  // right
-            ImGui::SetNextWindowSize(ImVec2(windowWidth * 0.25, windowHeight * 0.719));
+            constexpr auto kMenuBarSize = 0.031;
+            ImGui::SetNextWindowPos(ImVec2(windowWidth * kRenderArea.x, windowHeight * kMenuBarSize));  // right
+            ImGui::SetNextWindowSize(ImVec2(windowWidth * (1.f - kRenderArea.x), windowHeight * (kRenderArea.y - kMenuBarSize)));
             ImGui::Begin("SceneEditor", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
             ImGui::Text("Scene Editor");

@@ -32,31 +32,31 @@ namespace palm
 
         struct Params  // std140
         {
-            glm::vec3 albedo;
-            float roughness;
+            glm::vec3 albedo = glm::vec3(0.0);
+            float roughness  = 0.0;
 
-            float metallic;
-            float specTrans;
-            float diffTrans;
-            float flatness;
+            float metallic  = 0.0;
+            float specTrans = 0.0;
+            float diffTrans = 0.0;
+            float flatness  = 0.0;
 
-            glm::vec3 padding;
-            float specularTint;
+            glm::vec3 padding  = glm::vec3(0.0);
+            float specularTint = 0.0;
 
-            glm::vec3 sheenTint;
-            float sheen;
+            glm::vec3 sheenTint = glm::vec3(0.0);
+            float sheen         = 0.0;
 
-            float anisotropic;
-            float clearcoat;
-            float clearcoatGloss;
-            float IOR = 1.0;
+            float anisotropic    = 0.0;
+            float clearcoat      = 0.0;
+            float clearcoatGloss = 0.0;
+            float IOR            = 1.0;
 
             int32_t albedoTexIndex    = -1;
             int32_t roughnessTexIndex = -1;
             int32_t metalnessTexIndex = -1;
             int32_t normalmapTexIndex = -1;
 
-            glm::vec3 emissive;
+            glm::vec3 emissive   = glm::vec3(0.0);
             int32_t materialType = static_cast<std::underlying_type_t<Type>>(Type::ePrinciple);
         };
 

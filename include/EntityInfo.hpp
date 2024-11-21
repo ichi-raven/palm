@@ -14,7 +14,7 @@ namespace palm
     {
         std::string groupName;
         std::string entityName;
-        ec2s::Entity entityID;
+        ec2s::Entity entityID = ec2s::kInvalidEntity;
         bool editable = false;
     };
 }

@@ -30,7 +30,6 @@ namespace palm
         GEN_STATE(Editor, palm::AppState, palm::CommonRegion);
 
     private:
-
         struct SceneParams  // std140
         {
             glm::mat4 view;
@@ -38,6 +37,8 @@ namespace palm
             glm::mat4 viewInv;
             glm::mat4 projInv;
             glm::vec4 camPos;
+            glm::vec2 mousePos;
+            glm::uvec2 frameSize;
         };
 
         struct InstanceUB
@@ -66,7 +67,6 @@ namespace palm
         };
 
     private:
-
         void initVulkan();
 
         void createGBuffer();
@@ -82,7 +82,6 @@ namespace palm
         void removeEntity(const ec2s::Entity entity);
 
     private:
-
         std::vector<Handle<vk2s::Command>> mCommands;
         std::vector<Handle<vk2s::Semaphore>> mImageAvailableSems;
         std::vector<Handle<vk2s::Semaphore>> mRenderCompletedSems;
@@ -96,16 +95,20 @@ namespace palm
         UniqueHandle<vk2s::Sampler> mDefaultSampler;
 
         UniqueHandle<vk2s::DynamicBuffer> mSceneBuffer;
+        UniqueHandle<vk2s::Buffer> mPickedIDBuffer;
         UniqueHandle<vk2s::BindGroup> mSceneBindGroup;
+        UniqueHandle<vk2s::BindGroup> mLightingBindGroup;
 
         std::optional<ec2s::Entity> mPickedEntity;
         ec2s::Entity mCameraEntity = ec2s::kInvalidEntity;
 
         std::optional<AppState> mChangeDst;
 
-        double mLastTime = 0;
-        uint32_t mNow;
-        uint32_t mFrameCount;
+        double mLastTime     = 0;
+        uint32_t mNow        = 0;
+        uint32_t mFrameCount = 0;
+
+        inline const static glm::vec2 kRenderArea = glm::vec2(0.75f, 0.75f);
     };
 
 }  // namespace palm

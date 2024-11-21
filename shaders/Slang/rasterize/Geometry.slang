@@ -6,6 +6,8 @@ struct SceneParams
     float4x4 viewInv;
     float4x4 projInv;
     float4 camPos;
+    float2 mousePos;
+    uint2 frameSize;
 }
 
 struct EntityParams
@@ -13,7 +15,9 @@ struct EntityParams
     float4x4 model;
     float4x4 modelInvTranspose;
     float3 vel;
-    float padding;
+    float padding1;
+    uint64_t entityID;
+    float2 padding2;
 }
 
 struct VSInput
@@ -70,10 +74,13 @@ VSOutput vsmain(VSInput in)
 [shader("fragment")]
 FSOutput fsmain(VSOutput in)
 {
+    let slot  = uint32_t(entityParams.entityID & 0xFFFFFFFF << 32);
+    let index = uint32_t(entityParams.entityID & 0xFFFFFFFF);
+
     FSOutput output = (FSOutput)0;
-    output.albedo = float4(1.0); // DEBUG
-    output.normal = float4(in.worldInfo.normal, 1.0);
-    output.worldPos = float4(in.worldInfo.pos, 1.0);
+    output.albedo = float4(1.0); // TODO:
+    output.normal = float4(in.worldInfo.normal, reinterpret<float>(slot));
+    output.worldPos = float4(in.worldInfo.pos, reinterpret<float>(index));
     
     return output;
 }

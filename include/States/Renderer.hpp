@@ -87,9 +87,9 @@ namespace palm
 
         ImGui::FileBrowser mFileBrowser;
 
-        double mLastTime = 0;
-        uint32_t mNow;
-        uint32_t mFrameCount;
+        double mLastTime     = 0;
+        uint32_t mNow        = 0;
+        uint32_t mFrameCount = 0;
     };
 
 }  // namespace palm

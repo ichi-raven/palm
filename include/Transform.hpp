@@ -8,6 +8,8 @@
 #ifndef PALM_INCLUDE_TRANSFORM_HPP_
 #define PALM_INCLUDE_TRANSFORM_HPP_
 
+#include <EC2S.hpp>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -26,7 +28,9 @@ namespace palm
             glm::mat4 world;
             glm::mat4 worldInvTranspose;
             glm::vec3 vel;
-            float padding;
+            float padding1;
+            uint64_t entityID;
+            float padding2[2];
 
             void update(glm::vec3 translate, const glm::vec3& rotation, const glm::vec3& scaling)
             {
