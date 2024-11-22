@@ -93,11 +93,33 @@ namespace palm
 
     MaterialViewer::~MaterialViewer()
     {
+        auto& device = getCommonRegion()->device;
+
         for (auto& fence : mFences)
         {
             fence->wait();
         }
-        auto& device = getCommonRegion()->device;
+
+        for (auto& fence : mFences)
+        {
+            device.destroy(fence);
+        }
+
+        for (auto& sem : mImageAvailableSems)
+        {
+            device.destroy(sem);
+        }
+
+        for (auto& sem : mRenderCompletedSems)
+        {
+            device.destroy(sem);
+        }
+
+        for (auto& command : mCommands)
+        {
+            device.destroy(command);
+        }
+
         device.destroyImGui();
     }
 
