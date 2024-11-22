@@ -49,6 +49,7 @@ public struct Principle : IMaterial
                                          const float u, const float2 u2)
         {
             BSDFSample ret;
+            ret.flags = BSDFSample::Flags::Glossy | BSDFSample::Flags::Reflection; 
 
             let a = 0.25;
             let a2 = a * a;
@@ -156,6 +157,7 @@ public struct Principle : IMaterial
                 }
             }
 
+            // invalid lobe sampling
             return none;
         }
 
@@ -177,8 +179,8 @@ public struct Principle : IMaterial
             let diffuseWeight = (1.0 - params.metallic) * (1.0 - params.specTrans);
             let transWeight   = (1.0 - params.metallic) * params.specTrans;
 
-            // pdf
-            float wholePDF = 0.0;
+            // while pdf
+            float pdf = 0.0;
 
             // clearcoat
             let upperHemisphere = dotNL > 0.0 && dotNV > 0.0;
@@ -186,29 +188,29 @@ public struct Principle : IMaterial
             {
                 let absDotNL = abs(pbr::cosTheta(wo));
                 let absDotNH = abs(pbr::cosTheta(wm));
-                let d = pbr::D_GTR1(absDotNH, lerp(0.1, 0.001, params.roughness * params.roughness));
-                wholePDF += pClearcoat * d / (4.0 * absDotNL);
+                let d        = pbr::D_GTR1(absDotNH, lerp(0.1, 0.001, params.roughness * params.roughness));
+                pdf += pClearcoat * d / (4.0 * absDotNL);
             }
 
             // diffuse
             if (diffuseWeight > 0.0)
             {
-                wholePDF += pDiffuse * Lambert.BSDF.pdf(params, ctx, si, wo);
+                pdf += pDiffuse * Lambert.BSDF.pdf(params, ctx, si, wo);
             }
 
             // transmission
-            if (transWeight > 0.0) 
+            if (transWeight > 0.0)
             {
-                wholePDF += pSpecTrans * Dielectric.BSDF.pdf(params, ctx, si, wo);
+                pdf += pSpecTrans * Dielectric.BSDF.pdf(params, ctx, si, wo);
             }
 
             // specular
-            if (upperHemisphere) 
+            if (upperHemisphere)
             {
-                wholePDF += pBRDF * Conductor.BSDF.pdf(params, ctx, si, wo);
+                pdf += pBRDF * Conductor.BSDF.pdf(params, ctx, si, wo);
             }
 
-            return clamp(wholePDF, 0.0, 1.0);
+            return pdf;
         }
 
         public static float3 eval(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float3 wo)
@@ -219,6 +221,7 @@ public struct Principle : IMaterial
             let dotNV = pbr::cosTheta(si.wi);
             let dotNL = pbr::cosTheta(wo);
 
+            // whole reflectance
             float3 reflectance = float3(0.0);
 
             float pBRDF = 0.0, pDiffuse = 0.0, pClearcoat = 0.0, pSpecTrans = 0.0;
@@ -228,10 +231,10 @@ public struct Principle : IMaterial
             float ax, ay;
             pbr::calcAnisotropic(params.roughness, params.anisotropic, ax, ay);
 
-            float diffuseWeight = (1.0 - params.metallic) * (1.0 - params.specTrans);
-            float transWeight   = (1.0 - params.metallic) * params.specTrans;
+            let diffuseWeight = (1.0 - params.metallic) * (1.0 - params.specTrans);
+            let transWeight   = (1.0 - params.metallic) * params.specTrans;
 
-            // -- Clearcoat
+            // clearcoat
             bool upperHemisphere = dotNL > 0.0 && dotNV > 0.0;
             if(upperHemisphere && params.clearcoat > 0.0)
             {
@@ -239,7 +242,7 @@ public struct Principle : IMaterial
                 reflectance += float3(clearcoat);
             }
 
-            // -- Diffuse
+            // diffuse
             if(diffuseWeight > 0.0) 
             {
                 let diffuse = Lambert.BSDF.eval(params, ctx, si, wo);
@@ -249,14 +252,14 @@ public struct Principle : IMaterial
                 reflectance += diffuseWeight * (diffuse * params.albedo + sheen);
             }
 
-            // -- transmission
+            // transmission
             if(transWeight > 0.0) 
             {
                 let transmission = Dielectric.BSDF.eval(params, ctx, si, wo);
                 reflectance += transWeight * transmission;
             }
 
-            // -- specular
+            // specular
             if(upperHemisphere) 
             {
                 let specular = Conductor.BSDF.eval(params, ctx, si, wo);

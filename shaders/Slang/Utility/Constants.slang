@@ -2,17 +2,17 @@ module Constants;
 
 public namespace k
 {
-    public static float pi      = 3.14159265358979323846;
-    public static float invPi   = 0.31830988618379067154;
-    public static float inv2Pi  = 0.15915494309189533577;
-    public static float inv4Pi  = 0.07957747154594766788;
-    public static float piOver2 = 1.57079632679489661923;
-    public static float piOver4 = 0.78539816339744830961;
-    public static float sqrt2   = 1.41421356237309504880;
+    public static let pi      = 3.14159265358979323846;
+    public static let invPi   = 0.31830988618379067154;
+    public static let inv2Pi  = 0.15915494309189533577;
+    public static let inv4Pi  = 0.07957747154594766788;
+    public static let piOver2 = 1.57079632679489661923;
+    public static let piOver4 = 0.78539816339744830961;
+    public static let sqrt2   = 1.41421356237309504880;
 
     public static let eps      = 1e-3;
     public static let infty    = 1e6;
-    public static let maxDepth = 8;
+    public static let maxDepth = 16;
 
     public static let invalidTexIndex = -1;
 

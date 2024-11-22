@@ -104,7 +104,7 @@ public class EmitterSampler
             break;
 
         case Type::Area:
-            // TODO: effective sampling
+            // TODO: more effective sampling
             let faceIndex = uint(sample3 * sampled.faceNum);
             let meshIndex = sampled.meshIndex;
 
@@ -113,7 +113,7 @@ public class EmitterSampler
 
             let v = face.sample(sample2);
 
-            ret.pdf = 1.0 / sampled.faceNum / face.area;
+            ret.pdf = 1.0 / (sampled.faceNum * face.area);
             ret.distance = distance(si.pos, v.pos);
             ret.emissive = sampled.emissive;
             ret.to       = v.pos - si.pos;
@@ -122,15 +122,17 @@ public class EmitterSampler
 
         case Type::Infinite:  // TODO:
             ret.emissive = k::blue; // DEBUG:
-            ret.pdf = 1.0;
+            ret.pdf = 0.0;
             break;
         default: // invalid
             ret.emissive = k::red; // DEBUG:
-            ret.pdf = 1.0;
+            ret.pdf = 0.0;
             break;
         }
 
+        // apply emitter selecting pdf
         ret.pdf *= selectPdf;
+
         return ret;
     }
 

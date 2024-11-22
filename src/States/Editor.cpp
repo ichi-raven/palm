@@ -260,8 +260,8 @@ namespace palm
 
                 mGeometryPass.renderpass = device.create<vk2s::RenderPass>(images, mGBuffer.depthBuffer, vk::AttachmentLoadOp::eClear);
 
-                mGeometryPass.vs = device.create<vk2s::Shader>("../../shaders/Slang/rasterize/Geometry.slang", "vsmain");
-                mGeometryPass.fs = device.create<vk2s::Shader>("../../shaders/Slang/rasterize/Geometry.slang", "fsmain");
+                mGeometryPass.vs = device.create<vk2s::Shader>("../../shaders/Slang/Rasterize/Deferred/Geometry.slang", "vsmain");
+                mGeometryPass.fs = device.create<vk2s::Shader>("../../shaders/Slang/Rasterize/Deferred/Geometry.slang", "fsmain");
 
                 std::vector bindings0 = {
                     // Scene MVP information
@@ -304,8 +304,8 @@ namespace palm
 
             {  // lighting pass
                 mLightingPass.renderpass = device.create<vk2s::RenderPass>(window.get(), vk::AttachmentLoadOp::eClear);
-                mLightingPass.vs         = device.create<vk2s::Shader>("../../shaders/Slang/rasterize/Lighting.slang", "vsmain");
-                mLightingPass.fs         = device.create<vk2s::Shader>("../../shaders/Slang/rasterize/Lighting.slang", "fsmain");
+                mLightingPass.vs         = device.create<vk2s::Shader>("../../shaders/Slang/Rasterize/Deferred/Lighting.slang", "vsmain");
+                mLightingPass.fs         = device.create<vk2s::Shader>("../../shaders/Slang/Rasterize/Deferred/Lighting.slang", "fsmain");
 
                 std::array bindings0 = {
                     vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),
@@ -600,8 +600,8 @@ namespace palm
             const auto& view = camera.getViewMatrix();
             const auto& proj = camera.getProjectionMatrix();
 
-            const auto x = static_cast<float>(std::clamp(mx / width / kRenderArea.x, 0., 1.));
-            const auto y = static_cast<float>(std::clamp(my / height / kRenderArea.y, 0., 1.));
+            const auto x = static_cast<float>(mx / (width  * kRenderArea.x));
+            const auto y = static_cast<float>(my / (height * kRenderArea.y));
 
             SceneParams sceneParams{
                 .view      = view,

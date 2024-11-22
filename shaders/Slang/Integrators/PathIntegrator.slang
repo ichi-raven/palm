@@ -250,7 +250,8 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
 [ForceInline]
 float3 correct(const float3 L)
 {
-    return any(isnan(L)) || any(isinf(L)) ? k::zeros.xyz : L;
+    let invalid = any(isnan(L)) || any(isinf(L));
+    return invalid ? k::zeros.xyz : L;
 }
 
 // bindings
@@ -289,7 +290,9 @@ void rayGenShader()
     let finalRes = lerp(pool, L, rate);
     poolImage[threadIdx.xy] = float4(finalRes, reinterpret<float>(accumulatedSpp));
 
-    float3 gammaCorrected = pow(finalRes, 1. / 2.2); // HACK: gamma correction
+    let gamma = 2.2;  // HACK: gamma correction
+    float3 gammaCorrected = pow(finalRes, 1. / gamma); 
+    
     resultImage[threadIdx.xy] = float4(gammaCorrected, 1.0);
 }
 
