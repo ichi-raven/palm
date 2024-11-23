@@ -55,7 +55,7 @@ namespace palm
         // can be modified from ImGui
         struct GUIParams
         {
-            int spp            = 4;
+            int spp            = 1;
             int accumulatedSpp = 0;
         };
 

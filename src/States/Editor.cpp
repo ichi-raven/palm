@@ -169,7 +169,7 @@ namespace palm
                     createdImages.emplace_back(material.normalMapTex);
                 }
 
-                {// transition from initial layout
+                {  // transition from initial layout
                     UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
                     cmd->begin(true);
                     for (auto& tex : createdImages)
@@ -696,8 +696,11 @@ namespace palm
             const auto& view = camera.getViewMatrix();
             const auto& proj = camera.getProjectionMatrix();
 
-            const auto x = static_cast<float>(mx / (width * kRenderArea.x));
-            const auto y = static_cast<float>(my / (height * kRenderArea.y));
+            const auto renderAreaWidth  = width * kRenderArea.x;
+            const auto renderAreaHeight = height * kRenderArea.y;
+
+            const auto x = static_cast<float>(mx / renderAreaWidth);
+            const auto y = static_cast<float>(my / renderAreaHeight);
 
             SceneParams sceneParams{
                 .view      = view,
@@ -706,14 +709,14 @@ namespace palm
                 .projInv   = glm::inverse(proj),
                 .camPos    = glm::vec4(camera.getPos(), 1.0),
                 .mousePos  = glm::vec2(x, y),
-                .frameSize = glm::uvec2(width, height),
+                .frameSize = glm::uvec2(renderAreaWidth, renderAreaHeight),
             };
 
             mSceneBuffer->write(&sceneParams, sizeof(SceneParams), mNow * mSceneBuffer->getBlockSize());
         }
 
         // read clicked pixel's entity
-        if (ImGui::IsKeyPressed(ImGuiKey_MouseLeft) && !mManipulating)
+        if (isPointerOnRenderArea() && ImGui::IsKeyPressed(ImGuiKey_MouseLeft) && !mManipulating)
         {
             mPickedIDBuffer->read(
                 [&](const void* p)
@@ -1030,6 +1033,16 @@ namespace palm
         mGBuffer.bindGroup->bind(0, vk::DescriptorType::eSampledImage, mGBuffer.albedoTex);
         mGBuffer.bindGroup->bind(1, vk::DescriptorType::eSampledImage, mGBuffer.worldPosTex);
         mGBuffer.bindGroup->bind(2, vk::DescriptorType::eSampledImage, mGBuffer.normalTex);
+    }
+
+    bool Editor::isPointerOnRenderArea() const
+    {
+        auto& window = common()->window;
+
+        const auto [mx, my]        = window->getMousePos();
+        const auto [width, height] = window->getWindowSize();
+
+        return mx <= width * kRenderArea.x && my <= height * kRenderArea.y && mx > 0. && my > 0.;
     }
 
 }  // namespace palm

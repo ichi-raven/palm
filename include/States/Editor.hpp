@@ -80,6 +80,8 @@ namespace palm
 
         void removeEntity(const ec2s::Entity entity);
 
+        bool isPointerOnRenderArea() const;
+
     private:
         std::vector<Handle<vk2s::Command>> mCommands;
         std::vector<Handle<vk2s::Semaphore>> mImageAvailableSems;
