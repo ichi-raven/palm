@@ -75,12 +75,12 @@ struct Vertex : IVertex// std140
     property float2 uv
     {
         get {return float2(u, v);}
-        set {u = uv.x; v = uv.y; }
+        set {u = newValue.x; v = newValue.y; }
     }
 
-    static Vertex barycentric(Vertex v1, Vertex v2, Vertex v3, float2 barycentric)
+    static Vertex barycentric(const Vertex v1, const Vertex v2, const Vertex v3, const float2 barycentric)
     {
-        let w = float3(1. - (barycentric.x + barycentric.y), barycentric.x, barycentric.y);
+        let w = float3(1. - barycentric.x - barycentric.y, barycentric.x, barycentric.y);
 
         Vertex ret;
         ret.pos = v1.pos * w.x + v2.pos * w.y + v3.pos * w.z;
@@ -170,7 +170,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
             {
                 if (!occluded(si.pos, es)) // HACK: Slang (HLSL) does not short circuit
                 {
-                    MaterialParams params = materialParams[si.instanceIndex];
+                    MaterialParams params = MaterialParams::loadWithTextures(materialParams[si.instanceIndex], textures, sampler, si.uv);
 
                     // Add emitter directional contribution to L
                     let wo = si.frame.toLocal(normalize(es.to));
@@ -180,7 +180,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                     let f = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
 
                     let pathpdf   = G * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
-                    let MISWeight = es.pdf / es.pdf + pathpdf;
+                    let MISWeight = es.pdf / max(k::eps, es.pdf + pathpdf);
                     
                     L += MISWeight * beta * f * G * cosine * es.emissive / es.pdf;
                 }
@@ -235,7 +235,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
         TraceRay(sceneBVH, RAY_FLAG_NONE, ~0, 0, 0, 0, ray, payload);
     }
 
-    // WARNING: to be removed when doing MIS
+    // required only if no explicit sampling(PT) is performed
     if (!enableMIS)
     {
         if (let e = payload.emissive)
@@ -264,6 +264,8 @@ float3 correct(const float3 L)
 [[vk::binding(6, 0)]] StructuredBuffer<InstanceParams> instanceParams;
 [[vk::binding(7, 0)]] StructuredBuffer<MaterialParams> materialParams;
 [[vk::binding(8, 0)]] StructuredBuffer<EmitterParams> emitterParams;
+[[vk::binding(9, 0)]] Texture2D<float4> textures[];
+[[vk::binding(10, 0)]] SamplerState sampler;
 
 [shader("raygeneration")]
 void rayGenShader()
@@ -323,10 +325,16 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
 
     // create SurfaceInteraction (world)
     let area = area(vertices[instanceIndex][index.x].pos, vertices[instanceIndex][index.y].pos, vertices[instanceIndex][index.z].pos);
-    payload.si = SurfaceInteraction(worldPos, -worldRayDir, worldNormal, area, instanceIndex, Frame(worldNormal));
+    payload.si = SurfaceInteraction(worldPos, -worldRayDir, worldNormal, vertex.uv, area, instanceIndex, Frame(worldNormal));
     
     // sample BSDF and emitter
-    MaterialParams params = materialParams[instanceIndex];
+    MaterialParams params = MaterialParams::loadWithTextures(materialParams[instanceIndex], textures, sampler, payload.si.value.uv);
+    // load material params and normal
+    // if (let mappedNormal = params.loadIfSetTexture(textures, sampler, payload.si.value.uv))
+    // {
+    //     // TODO: apply local normal (mappedNormal) to worldNormal
+    // }
+
     if (dot(params.emissive, params.emissive) > 0.)// HACK:
     {
         payload.emissive = params.emissive;

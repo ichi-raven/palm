@@ -62,25 +62,30 @@ namespace palm
         GUIParams mGUIParams;
 
         // TLAS
-        Handle<vk2s::AccelerationStructure> mTLAS;
+        UniqueHandle<vk2s::AccelerationStructure> mTLAS;
 
         // shader resources
-        Handle<vk2s::Buffer> mSceneBuffer;
-        Handle<vk2s::Buffer> mInstanceBuffer;
-        Handle<vk2s::Buffer> mMaterialBuffer;
-        Handle<vk2s::Buffer> mSampleBuffer;
-        Handle<vk2s::Buffer> mEmittersBuffer;
-        Handle<vk2s::Image> mPoolImage;
+        UniqueHandle<vk2s::Buffer> mSceneBuffer;
+        UniqueHandle<vk2s::Buffer> mInstanceBuffer;
+        UniqueHandle<vk2s::Buffer> mMaterialBuffer;
+        UniqueHandle<vk2s::Buffer> mSampleBuffer;
+        UniqueHandle<vk2s::Buffer> mEmittersBuffer;
+        UniqueHandle<vk2s::Image> mPoolImage;
+        UniqueHandle<vk2s::Sampler> mSampler;
+        Handle<vk2s::Image> mDummyTexture;
+
+        // WARN: VB, IB and textures have no ownership
         std::vector<Handle<vk2s::Buffer>> mVertexBuffers;
         std::vector<Handle<vk2s::Buffer>> mIndexBuffers;
+        std::vector<Handle<vk2s::Image>> mTextures;
 
         // binding
         Handle<vk2s::BindLayout> mBindLayout;
-        Handle<vk2s::BindGroup> mBindGroup;
+        UniqueHandle<vk2s::BindGroup> mBindGroup;
 
         // pipeline and SBT
-        Handle<vk2s::Pipeline> mRaytracePipeline;
-        Handle<vk2s::ShaderBindingTable> mShaderBindingTable;
+        UniqueHandle<vk2s::Pipeline> mRaytracePipeline;
+        UniqueHandle<vk2s::ShaderBindingTable> mShaderBindingTable;
     };
 }  // namespace palm
 

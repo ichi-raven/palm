@@ -37,17 +37,22 @@ namespace palm
 
         const std::vector<vk2s::Mesh>& hostMeshes        = model.getMeshes();
         const std::vector<vk2s::Material>& hostMaterials = model.getMaterials();
+        const std::vector<vk2s::Texture>& hostTextures   = model.getTextures();
 
         assert(hostMaterials.size() == hostMeshes.size() || !"The number of mesh is different from the number of material!");
 
-        for (const auto& hostMesh : hostMeshes)
+        for (size_t instanceIndex = 0; instanceIndex < hostMeshes.size(); ++instanceIndex)
         {
             const auto entity = scene.create<Mesh, Material, EntityInfo, Transform>();
             auto& mesh        = scene.get<Mesh>(entity);
             auto& material    = scene.get<Material>(entity);
             auto& info        = scene.get<EntityInfo>(entity);
             auto& transform   = scene.get<Transform>(entity);
-            mesh.hostMesh     = hostMesh;
+
+            const auto& hostMesh     = hostMeshes[instanceIndex];
+            const auto& hostMaterial = hostMaterials[instanceIndex];
+
+            mesh.hostMesh = hostMesh;
 
             {  // vertex buffer
                 std::vector<Mesh::Vertex> vertices;
@@ -86,12 +91,103 @@ namespace palm
             }
 
             {  // materials
-                const auto ubSize = sizeof(vk2s::Material) * hostMaterials.size();
-                vk::BufferCreateInfo ci({}, ubSize, vk::BufferUsageFlagBits::eStorageBuffer);
-                vk::MemoryPropertyFlags fb = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
+                // params initialize
+                material.params.albedo    = hostMaterial.albedo;
+                material.params.roughness = hostMaterial.roughness.x;
+                material.params.IOR       = hostMaterial.eta.r;
+                material.params.emissive  = glm::vec3(hostMaterial.emissive);
 
-                material.uniformBuffer = device.create<vk2s::Buffer>(ci, fb);
-                material.uniformBuffer->write(hostMaterials.data(), ubSize);
+                // add emitter component if the material has emissive value
+                if (material.params.emissive.length() > 0.0)
+                {
+                    scene.add<Emitter>(entity);
+
+                    auto& emitter          = scene.get<Emitter>(entity);
+                    emitter.attachedEntity = entity;
+
+                    emitter.params.emissive = material.params.emissive;
+                    emitter.params.type     = static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::eArea);
+                    emitter.params.faceNum  = hostMesh.indices.size() / 3;
+                }
+
+                // texture loading
+                // share create info
+                vk::ImageCreateInfo ci;
+                ci.arrayLayers   = 1;
+                ci.imageType     = vk::ImageType::e2D;
+                ci.mipLevels     = 1;
+                ci.usage         = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
+                ci.initialLayout = vk::ImageLayout::eUndefined;
+
+                std::vector<Handle<vk2s::Image>> createdImages;
+
+                if (hostMaterial.albedoTex != -1)
+                {
+                    const auto& hostTex = hostTextures[hostMaterial.albedoTex];
+                    const auto size     = hostTex.width * hostTex.height * static_cast<uint32_t>(STBI_rgb_alpha);
+
+                    ci.format          = vk::Format::eR8G8B8A8Unorm;
+                    ci.extent          = vk::Extent3D(hostTex.width, hostTex.height, 1);
+                    material.albedoTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+                    material.albedoTex->write(hostTex.pData, size);
+                    createdImages.emplace_back(material.albedoTex);
+                }
+
+                if (hostMaterial.roughnessTex != -1)
+                {
+                    const auto& hostTex = hostTextures[hostMaterial.roughnessTex];
+                    const auto size     = hostTex.width * hostTex.height * sizeof(float);
+
+                    ci.format             = vk::Format::eR32Sfloat;
+                    ci.extent             = vk::Extent3D(hostTex.width, hostTex.height, 1);
+                    material.roughnessTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+                    material.roughnessTex->write(hostTex.pData, size);
+                    createdImages.emplace_back(material.roughnessTex);
+                }
+
+                if (hostMaterial.metalnessTex != -1)
+                {
+                    const auto& hostTex = hostTextures[hostMaterial.metalnessTex];
+                    const auto size     = hostTex.width * hostTex.height * sizeof(float);
+
+                    ci.format             = vk::Format::eR32Sfloat;
+                    ci.extent             = vk::Extent3D(hostTex.width, hostTex.height, 1);
+                    material.metalnessTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+                    material.metalnessTex->write(hostTex.pData, size);
+                    createdImages.emplace_back(material.metalnessTex);
+                }
+
+                if (hostMaterial.normalMapTex != -1)
+                {
+                    const auto& hostTex = hostTextures[hostMaterial.normalMapTex];
+                    const auto size     = hostTex.width * hostTex.height * sizeof(float) * 3;
+
+                    ci.format             = vk::Format::eR32G32B32Sfloat;
+                    ci.extent             = vk::Extent3D(hostTex.width, hostTex.height, 1);
+                    material.normalMapTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+                    material.normalMapTex->write(hostTex.pData, size);
+                    createdImages.emplace_back(material.normalMapTex);
+                }
+
+                {// transition from initial layout
+                    UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
+                    cmd->begin(true);
+                    for (auto& tex : createdImages)
+                    {
+                        cmd->transitionImageLayout(tex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eShaderReadOnlyOptimal);
+                    }
+                    cmd->end();
+                    cmd->execute();
+                }
+
+                {  // uniform buffer
+                    const auto ubSize = sizeof(Material::Params);
+                    vk::BufferCreateInfo ci({}, ubSize, vk::BufferUsageFlagBits::eUniformBuffer);
+                    vk::MemoryPropertyFlags fb = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
+
+                    material.uniformBuffer = device.create<vk2s::Buffer>(ci, fb);
+                    material.uniformBuffer->write(&material.params, ubSize);
+                }
             }
 
             {  // information
@@ -557,7 +653,7 @@ namespace palm
     Editor::~Editor()
     {
         auto& device = getCommonRegion()->device;
-        
+
         for (auto& fence : mFences)
         {
             fence->wait();
@@ -600,7 +696,7 @@ namespace palm
             const auto& view = camera.getViewMatrix();
             const auto& proj = camera.getProjectionMatrix();
 
-            const auto x = static_cast<float>(mx / (width  * kRenderArea.x));
+            const auto x = static_cast<float>(mx / (width * kRenderArea.x));
             const auto y = static_cast<float>(my / (height * kRenderArea.y));
 
             SceneParams sceneParams{
@@ -616,8 +712,8 @@ namespace palm
             mSceneBuffer->write(&sceneParams, sizeof(SceneParams), mNow * mSceneBuffer->getBlockSize());
         }
 
-        // read clicked entity
-        if (window->getMouseKey(GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !mManipulating)
+        // read clicked pixel's entity
+        if (ImGui::IsKeyPressed(ImGuiKey_MouseLeft) && !mManipulating)
         {
             mPickedIDBuffer->read(
                 [&](const void* p)
@@ -686,7 +782,6 @@ namespace palm
                         {
                             auto& emitter       = scene.get<Emitter>(added);
                             emitter.params.type = static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::ePoint);
-                            emitter.params.pos  = glm::vec3(0.);
                         }
 
                         {
@@ -898,7 +993,6 @@ namespace palm
                     emitter.params.emissive = material.params.emissive;
                     emitter.params.type     = static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::eArea);
                     emitter.params.faceNum  = scene.get<Mesh>(*mPickedEntity).hostMesh.indices.size() / 3;
-                    emitter.params.pos      = transform.pos;
                 }
                 else if (material.params.emissive.length() == 0.0 && scene.contains<Emitter>(*mPickedEntity))
                 {

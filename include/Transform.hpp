@@ -25,12 +25,12 @@ namespace palm
     {
         struct Params
         {
-            glm::mat4 world;
-            glm::mat4 worldInvTranspose;
-            glm::vec3 vel;
-            uint32_t entitySlot;
-            glm::vec3 padding;
-            uint32_t entityIndex;
+            glm::mat4 world = glm::identity<glm::mat4>();
+            glm::mat4 worldInvTranspose = glm::identity<glm::mat4>();
+            glm::vec3 vel = glm::vec3(0.0);
+            uint32_t entitySlot = 0;
+            glm::vec3 padding = glm::vec3(0.0);
+            uint32_t entityIndex = 0;
 
             void update(glm::vec3 translate, const glm::vec3& rotation, const glm::vec3& scaling)
             {

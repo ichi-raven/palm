@@ -30,7 +30,7 @@ struct VSInput
     property float2 uv
     {
         get {return float2(u, v);}
-        set {u = uv.x; v = uv.y; }
+        set {u = newValue.x; v = newValue.y; }
     }
 };
 

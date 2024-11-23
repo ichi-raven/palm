@@ -32,6 +32,9 @@ namespace palm
 
         struct Params  // std140
         {
+            // static constant
+            constexpr static int32_t kInvalidTexIndex = -1;
+
             glm::vec3 albedo = glm::vec3(0.0);
             float roughness  = 0.0;
 
@@ -51,10 +54,10 @@ namespace palm
             float clearcoatGloss = 0.0;
             float IOR            = 1.0;
 
-            int32_t albedoTexIndex    = -1;
-            int32_t roughnessTexIndex = -1;
-            int32_t metalnessTexIndex = -1;
-            int32_t normalmapTexIndex = -1;
+            int32_t albedoTexIndex    = kInvalidTexIndex;
+            int32_t roughnessTexIndex = kInvalidTexIndex;
+            int32_t metalnessTexIndex = kInvalidTexIndex;
+            int32_t normalmapTexIndex = kInvalidTexIndex;
 
             glm::vec3 emissive   = glm::vec3(0.0);
             int32_t materialType = static_cast<std::underlying_type_t<Type>>(Type::ePrinciple);

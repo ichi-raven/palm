@@ -33,6 +33,29 @@ public struct MaterialParams // std140
 {
     public __init() {}
 
+    public static MaterialParams loadWithTextures(MaterialParams params, Texture2D<float4> textures[], SamplerState sampler, const float2 uv)
+    {
+        if (params.albedoTexIndex != k::invalidTexIndex)
+        {
+            params.albedo = textures[NonUniformResourceIndex(params.albedoTexIndex)].Sample(sampler, uv).xyz;
+        }
+        // if (params.roughnessTexIndex != k::invalidTexIndex)
+        // {
+        //     params.roughness = textures[NonUniformResourceIndex(params.roughnessTexIndex)].Sample(sampler, uv).x;
+        // }
+        // if (params.metalnessTexIndex != k::invalidTexIndex)
+        // {
+        //     params.metallic = textures[NonUniformResourceIndex(params.metalnessTexIndex)].Sample(sampler, uv).x;
+        // }
+
+        if (params.normalmapTexIndex != k::invalidTexIndex)
+        {
+            // TODO:
+        }
+
+        return params;
+    }
+
     public float3 albedo = k::zeros.xyz;
     public float roughness = 0.0;
 

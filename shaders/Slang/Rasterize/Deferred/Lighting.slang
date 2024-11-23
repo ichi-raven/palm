@@ -47,7 +47,7 @@ float4 fsmain(VSOutput in) : SV_Target
     let index = reinterpret<uint32_t>(worldPos.w);
     let entity = uint64_t(uint64_t(slot) << 32 | index);
 
-    float2 uvYinv = float2(in.uv.x, 1.0 - in.uv.y);
+    float2 uvYinv = float2(saturate(in.uv.x), saturate(1.0 - in.uv.y));
     uint2 mouseInFrame = uint2(sceneParams.mousePos * sceneParams.frameSize);
     uint2 uvInFrame = uint2(uvYinv * sceneParams.frameSize);
 
