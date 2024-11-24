@@ -85,7 +85,7 @@ namespace palm
         //! Scale vector
         glm::vec3 scale = { 1.f, 1.f, 1.f };
         //! Uniform buffer to write Params
-        Handle<vk2s::DynamicBuffer> entityBuffer;
+        Handle<vk2s::DynamicBuffer> uniformBuffer;
         //! BindGroup for entityBuffer (only for rasterize)
         Handle<vk2s::BindGroup> bindGroup;
     };

@@ -221,14 +221,6 @@ namespace pbr
 
     public float GGXAnisotropicD(const float3 wm, const float ax, const float ay)
     {
-        // let dotHX2 = cos2Phi(wm);
-        // let dotHY2 = sin2Phi(wm);
-        // let ax2 = ax * ax;
-        // let ay2 = ay * ay;
-
-        // let tmp = dotHX2 / ax2 + dotHY2 / ay2 + cos2Theta(wm);
-        // return 1.0 / (k::pi * ax * ay * tmp * tmp);
-
         let t = tan2Theta(wm) * (cos2Phi(wm) / ax / ax + sin2Phi(wm) / ay / ay);
         let c2 = cos2Theta(wm);
         let denom = k::pi * ax * ay * c2 * c2 * (1 + t) * (1 + t);
@@ -238,13 +230,6 @@ namespace pbr
 
     public float separableSmithGGXG1(const float3 w, const float3 wm, const float ax, const float ay)
     {
-        // needed?
-        // let dotHW = dot(w, wm);
-        // if (dotHW <= 0.0) 
-        // {
-        //     return 0.0;
-        // }
-
         let absTanTheta = abs(tanTheta(w));
         if(absTanTheta >= k::infty) 
         {
@@ -267,20 +252,6 @@ namespace pbr
 
         return G1 * absDotLH * D / absDotNL;
     }
-
-    // public void GGXVNDFAnisotropicPdfOut2(const float3 wi, const float3 wm, const float3 wo, float ax, float ay,
-    //                                 out float forwardPdfW, out float reversePdfW)
-    // {
-    //     float D = GGXAnisotropicD(wm, ax, ay);
-    //     float absDotNL = abs(cosTheta(wi));
-    //     float absDotHL = abs(dot(wm, wi));
-    //     float G1v = separableSmithGGXG1(wo, wm, ax, ay);
-    //     forwardPdfW = G1v * absDotHL * D / absDotNL;
-    //     float absDotNV = abs(cosTheta(wo));
-    //     float absDotHV = abs(dot(wm, wo));
-    //     float G1l = separableSmithGGXG1(wi, wm, ax, ay);
-    //     reversePdfW = G1l * absDotHV * D / absDotNV;
-    // }
 
     public void calcAnisotropic(const float roughness, const float anisotropic, out float ax, out float ay)
     {

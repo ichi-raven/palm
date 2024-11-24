@@ -29,7 +29,7 @@ namespace palm
             // create dummy image
             {
                 // dummy texture
-                constexpr uint8_t kDummyColor[] = { 255, 0, 255, 255 };
+                constexpr uint8_t kDummyColor[] = { 255, 0, 255, 255 }; // Magenta
                 const auto format               = vk::Format::eR8G8B8A8Srgb;
                 const uint32_t size             = vk2s::Compiler::getSizeOfFormat(format);  // 1 * 1
 

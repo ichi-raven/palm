@@ -58,7 +58,7 @@ namespace palm
         };
 
         /**
-         * @brief  summarized G-Buffer
+         * @brief  Summarized G-Buffer
          */
         struct GBuffer
         {
@@ -66,8 +66,9 @@ namespace palm
             UniqueHandle<vk2s::Image> albedoTex;
             UniqueHandle<vk2s::Image> worldPosTex;
             UniqueHandle<vk2s::Image> normalTex;
+            UniqueHandle<vk2s::Image> roughnessMetalnessTex;
 
-            //! binding G-Buffer for lighting pass
+            //! Binding G-Buffer for lighting pass
             UniqueHandle<vk2s::BindGroup> bindGroup;
         };
 

@@ -52,6 +52,7 @@ namespace palm
             glm::vec3 albedo = glm::vec3(0.0);
             //! Roughness [0.0, 1.0]
             float roughness  = 0.0;
+
             //! Metallic (metalness) [0.0, 1.0]
             float metallic  = 0.0;
             //! Transmission ratio of specular reflection component [0.0, 1.0]
@@ -155,7 +156,7 @@ namespace palm
         //! Parameters
         Params params;
         //! Handle to uniform buffer with parameters written (for rasterization)
-        Handle<vk2s::Buffer> uniformBuffer;
+        Handle<vk2s::DynamicBuffer> uniformBuffer;
 
         //! Number of textures to use (constant)
         constexpr static uint32_t kDefaultTexNum = 4;

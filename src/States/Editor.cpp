@@ -138,7 +138,7 @@ namespace palm
                     const auto& hostTex = hostTextures[hostMaterial.roughnessTex];
                     const auto size     = hostTex.width * hostTex.height * sizeof(float);
 
-                    ci.format             = vk::Format::eR32Sfloat;
+                    ci.format             = vk::Format::eR8G8B8A8Unorm;
                     ci.extent             = vk::Extent3D(hostTex.width, hostTex.height, 1);
                     material.roughnessTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
                     material.roughnessTex->write(hostTex.pData, size);
@@ -150,7 +150,7 @@ namespace palm
                     const auto& hostTex = hostTextures[hostMaterial.metalnessTex];
                     const auto size     = hostTex.width * hostTex.height * sizeof(float);
 
-                    ci.format             = vk::Format::eR32Sfloat;
+                    ci.format             = vk::Format::eR8G8B8A8Unorm;
                     ci.extent             = vk::Extent3D(hostTex.width, hostTex.height, 1);
                     material.metalnessTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
                     material.metalnessTex->write(hostTex.pData, size);
@@ -162,7 +162,7 @@ namespace palm
                     const auto& hostTex = hostTextures[hostMaterial.normalMapTex];
                     const auto size     = hostTex.width * hostTex.height * sizeof(float) * 3;
 
-                    ci.format             = vk::Format::eR32G32B32Sfloat;
+                    ci.format             = vk::Format::eR8G8B8A8Unorm;
                     ci.extent             = vk::Extent3D(hostTex.width, hostTex.height, 1);
                     material.normalMapTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
                     material.normalMapTex->write(hostTex.pData, size);
@@ -181,12 +181,21 @@ namespace palm
                 }
 
                 {  // uniform buffer
-                    const auto ubSize = sizeof(Material::Params);
+                    const auto frameCount = window->getFrameCount();
+                    const auto ubSize     = sizeof(Material::Params) * frameCount;
                     vk::BufferCreateInfo ci({}, ubSize, vk::BufferUsageFlagBits::eUniformBuffer);
                     vk::MemoryPropertyFlags fb = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
 
-                    material.uniformBuffer = device.create<vk2s::Buffer>(ci, fb);
-                    material.uniformBuffer->write(&material.params, ubSize);
+                    material.uniformBuffer = device.create<vk2s::DynamicBuffer>(ci, fb, frameCount);
+                    for (int i = 0; i < frameCount; ++i)
+                    {
+                        material.uniformBuffer->write(&material.params, sizeof(Material::Params), i * material.uniformBuffer->getBlockSize());
+                    }
+                }
+
+                {  // bindgroup
+                    material.bindGroup = device.create<vk2s::BindGroup>(mGeometryPass.bindLayouts[2].get());
+                    material.bindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, material.uniformBuffer.get());
                 }
             }
 
@@ -212,15 +221,15 @@ namespace palm
 
                 const auto frameCount = window->getFrameCount();
                 const auto size       = sizeof(Transform::Params) * frameCount;
-                transform.entityBuffer =
+                transform.uniformBuffer =
                     device.create<vk2s::DynamicBuffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eUniformBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, frameCount);
                 for (int i = 0; i < frameCount; ++i)
                 {
-                    transform.entityBuffer->write(&transform.params, sizeof(Transform::Params), i * transform.entityBuffer->getBlockSize());
+                    transform.uniformBuffer->write(&transform.params, sizeof(Transform::Params), i * transform.uniformBuffer->getBlockSize());
                 }
 
                 transform.bindGroup = device.create<vk2s::BindGroup>(mGeometryPass.bindLayouts[1].get());
-                transform.bindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, transform.entityBuffer.get());
+                transform.bindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, transform.uniformBuffer.get());
             }
 
             // select added entity
@@ -263,7 +272,8 @@ namespace palm
         if (scene.contains<Transform>(entity))
         {
             auto& transform = scene.get<Transform>(entity);
-            device.destroy(transform.entityBuffer);
+            device.destroy(transform.uniformBuffer);
+            device.destroy(transform.bindGroup);
         }
 
         if (scene.contains<Emitter>(entity))
@@ -313,15 +323,17 @@ namespace palm
             ci.usage         = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eColorAttachment;
             ci.initialLayout = vk::ImageLayout::eUndefined;
 
-            mGBuffer.albedoTex   = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
-            mGBuffer.worldPosTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
-            mGBuffer.normalTex   = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+            mGBuffer.albedoTex             = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+            mGBuffer.worldPosTex           = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+            mGBuffer.normalTex             = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+            mGBuffer.roughnessMetalnessTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
 
             UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
             cmd->begin(true);
             cmd->transitionImageLayout(mGBuffer.albedoTex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
             cmd->transitionImageLayout(mGBuffer.worldPosTex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
             cmd->transitionImageLayout(mGBuffer.normalTex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
+            cmd->transitionImageLayout(mGBuffer.roughnessMetalnessTex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
             cmd->end();
             cmd->execute();
         }
@@ -352,7 +364,7 @@ namespace palm
 
             // geometry pass
             {
-                std::vector<Handle<vk2s::Image>> images = { mGBuffer.albedoTex, mGBuffer.worldPosTex, mGBuffer.normalTex };
+                std::vector<Handle<vk2s::Image>> images = { mGBuffer.albedoTex, mGBuffer.worldPosTex, mGBuffer.normalTex, mGBuffer.roughnessMetalnessTex };
 
                 mGeometryPass.renderpass = device.create<vk2s::RenderPass>(images, mGBuffer.depthBuffer, vk::AttachmentLoadOp::eClear);
 
@@ -370,8 +382,19 @@ namespace palm
                     vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
                 };
 
+                std::vector bindings2 = {
+                    // Material params
+                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
+                    // Material Textures
+                    //vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eSampledImage, Material::kDefaultTexNum, vk::ShaderStageFlagBits::eAll),
+                    // Sampler
+                    //vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eAll),
+
+                };
+
                 mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
                 mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings1));
+                mGeometryPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings2));
 
                 vk::VertexInputBindingDescription inputBinding(0, sizeof(Mesh::Vertex));
                 const auto& inputAttributes = std::get<0>(mGeometryPass.vs->getReflection());
@@ -379,7 +402,8 @@ namespace palm
                 vk::Rect2D scissor({ 0, 0 }, window->getVkSwapchainExtent());
                 vk::PipelineColorBlendAttachmentState colorBlendAttachment(VK_FALSE);
                 colorBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
-                std::array attachments = { colorBlendAttachment, colorBlendAttachment, colorBlendAttachment };
+                // G-Buffer color 
+                std::array attachments = { colorBlendAttachment, colorBlendAttachment, colorBlendAttachment, colorBlendAttachment };
 
                 vk2s::Pipeline::GraphicsPipelineInfo gpi{
                     .vs            = mGeometryPass.vs,
@@ -404,16 +428,16 @@ namespace palm
                 mLightingPass.fs         = device.create<vk2s::Shader>("../../shaders/Slang/Rasterize/Deferred/Lighting.slang", "fsmain");
 
                 std::array bindings0 = {
-                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll), 
                     vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),
-                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),
-                    vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll), 
+                    vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(4, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eAll),
                 };
 
                 std::vector bindings1 = {
                     vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
                     vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
-
                 };
 
                 mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
@@ -465,7 +489,8 @@ namespace palm
             mGBuffer.bindGroup->bind(0, vk::DescriptorType::eSampledImage, mGBuffer.albedoTex);
             mGBuffer.bindGroup->bind(1, vk::DescriptorType::eSampledImage, mGBuffer.worldPosTex);
             mGBuffer.bindGroup->bind(2, vk::DescriptorType::eSampledImage, mGBuffer.normalTex);
-            mGBuffer.bindGroup->bind(3, mDefaultSampler.get());
+            mGBuffer.bindGroup->bind(3, vk::DescriptorType::eSampledImage, mGBuffer.roughnessMetalnessTex);
+            mGBuffer.bindGroup->bind(4, mDefaultSampler.get());
 
             mLightingBindGroup = device.create<vk2s::BindGroup>(mLightingPass.bindLayouts[1].get());
             mLightingBindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, mSceneBuffer.get());
@@ -529,7 +554,7 @@ namespace palm
         constexpr auto colorClearValue   = vk::ClearValue(std::array{ 0.1f, 0.1f, 0.1f, 1.0f });
         constexpr auto gbufferClearValue = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 0.0f });
         constexpr auto depthClearValue   = vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0));
-        constexpr std::array clearValues = { gbufferClearValue, gbufferClearValue, gbufferClearValue, depthClearValue };
+        constexpr std::array clearValues = { gbufferClearValue, gbufferClearValue, gbufferClearValue, gbufferClearValue, depthClearValue };
 
         auto& device = common()->device;
         auto& window = common()->window;
@@ -589,7 +614,8 @@ namespace palm
             scene.each<Mesh, Material, Transform>(
                 [&](Mesh& mesh, Material& material, Transform& transform)
                 {
-                    command->setBindGroup(1, transform.bindGroup.get(), { mNow * static_cast<uint32_t>(transform.entityBuffer->getBlockSize()) });
+                    command->setBindGroup(1, transform.bindGroup.get(), { mNow * static_cast<uint32_t>(transform.uniformBuffer->getBlockSize()) });
+                    command->setBindGroup(2, material.bindGroup.get(), { mNow * static_cast<uint32_t>(material.uniformBuffer->getBlockSize()) });
                     command->bindVertexBuffer(mesh.vertexBuffer.get());
                     command->bindIndexBuffer(mesh.indexBuffer.get());
 
@@ -604,6 +630,7 @@ namespace palm
             command->transitionImageLayout(mGBuffer.albedoTex.get(), vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
             command->transitionImageLayout(mGBuffer.worldPosTex.get(), vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
             command->transitionImageLayout(mGBuffer.normalTex.get(), vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+            command->transitionImageLayout(mGBuffer.roughnessMetalnessTex.get(), vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
         }
 
         // lighting pass
@@ -624,6 +651,7 @@ namespace palm
             command->transitionImageLayout(mGBuffer.albedoTex.get(), vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eColorAttachmentOptimal);
             command->transitionImageLayout(mGBuffer.worldPosTex.get(), vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eColorAttachmentOptimal);
             command->transitionImageLayout(mGBuffer.normalTex.get(), vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eColorAttachmentOptimal);
+            command->transitionImageLayout(mGBuffer.roughnessMetalnessTex.get(), vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eColorAttachmentOptimal);
         }
 
         // end writing commands
@@ -729,8 +757,11 @@ namespace palm
                 sizeof(ec2s::Entity), 0);
         }
 
-        // entity informations
-        scene.each<Transform>([&](Transform& transform) { transform.entityBuffer->write(&transform.params, sizeof(Transform::Params), mNow * transform.entityBuffer->getBlockSize()); });
+        // write entity transform
+        scene.each<Transform>([&](Transform& transform) { transform.uniformBuffer->write(&transform.params, sizeof(Transform::Params), mNow * transform.uniformBuffer->getBlockSize()); });
+
+        // write entity material
+        scene.each<Material>([&](Material& material) { material.uniformBuffer->write(&material.params, sizeof(Material::Params), mNow * material.uniformBuffer->getBlockSize()); });
     }
 
     void Editor::updateAndRenderImGui(const double deltaTime)
@@ -790,15 +821,15 @@ namespace palm
 
                             const auto frameCount = window->getFrameCount();
                             const auto size       = sizeof(Transform::Params) * frameCount;
-                            transform.entityBuffer =
+                            transform.uniformBuffer =
                                 device.create<vk2s::DynamicBuffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eUniformBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, frameCount);
                             for (int i = 0; i < frameCount; ++i)
                             {
-                                transform.entityBuffer->write(&transform.params, sizeof(Transform::Params), i * transform.entityBuffer->getBlockSize());
+                                transform.uniformBuffer->write(&transform.params, sizeof(Transform::Params), i * transform.uniformBuffer->getBlockSize());
                             }
 
                             transform.bindGroup = device.create<vk2s::BindGroup>(mGeometryPass.bindLayouts[1].get());
-                            transform.bindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, transform.entityBuffer.get());
+                            transform.bindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, transform.uniformBuffer.get());
                         }
 
                         ++pointEmitterNum;
@@ -999,12 +1030,12 @@ namespace palm
 
                 auto& camera = scene.get<vk2s::Camera>(*mPickedEntity);
 
-                auto pos    = camera.getPos();
-                auto lookAt = camera.getLookAt();
+                auto pos     = camera.getPos();
+                auto lookAt  = camera.getLookAt();
                 float fov    = camera.getFOV();
                 float aspect = camera.getAspect();
-                float near = camera.getNear();
-                float far  = camera.getFar();
+                float near   = camera.getNear();
+                float far    = camera.getFar();
 
                 if (ImGui::InputFloat3("Position", glm::value_ptr(pos)))
                 {
@@ -1047,7 +1078,7 @@ namespace palm
 
         createGBuffer();
 
-        std::vector<Handle<vk2s::Image>> images = { mGBuffer.albedoTex, mGBuffer.worldPosTex, mGBuffer.normalTex };
+        std::vector<Handle<vk2s::Image>> images = { mGBuffer.albedoTex, mGBuffer.worldPosTex, mGBuffer.normalTex, mGBuffer.roughnessMetalnessTex };
         mGeometryPass.renderpass->recreateFrameBuffers(images, mGBuffer.depthBuffer);
 
         mLightingPass.renderpass->recreateFrameBuffers(window.get());
@@ -1056,6 +1087,7 @@ namespace palm
         mGBuffer.bindGroup->bind(0, vk::DescriptorType::eSampledImage, mGBuffer.albedoTex);
         mGBuffer.bindGroup->bind(1, vk::DescriptorType::eSampledImage, mGBuffer.worldPosTex);
         mGBuffer.bindGroup->bind(2, vk::DescriptorType::eSampledImage, mGBuffer.normalTex);
+        mGBuffer.bindGroup->bind(3, vk::DescriptorType::eSampledImage, mGBuffer.roughnessMetalnessTex);
     }
 
     bool Editor::isPointerOnRenderArea() const
