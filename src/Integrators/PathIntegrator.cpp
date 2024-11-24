@@ -14,7 +14,7 @@
 #include "../include/Transform.hpp"
 #include "../include/Emitter.hpp"
 
-#include <cstdint>
+#include <iostream>
 
 namespace palm
 {
@@ -377,7 +377,7 @@ namespace palm
         mSceneBuffer->write(&params, sizeof(SceneParams));
     }
 
-    void PathIntegrator::sample(Handle<vk2s::Fence> fence, Handle<vk2s::Command> command)
+    void PathIntegrator::sample(Handle<vk2s::Command> command)
     {
         const auto extent = mOutputImage->getVkExtent();
         // trace ray

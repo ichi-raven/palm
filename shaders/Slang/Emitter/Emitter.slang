@@ -13,6 +13,7 @@ public struct EmitterSample
     public float3 normal;
 }
 
+// **always synchronize with CPU side**
 public enum Type
 {
     Point = 0,
@@ -20,6 +21,7 @@ public enum Type
     Infinite = 2,
 } 
 
+// all parameters bound from CPU, **always synchronize with CPU side**
 public struct EmitterParams
 {
     public float3 pos = k::zeros.xyz;
@@ -89,7 +91,7 @@ public class EmitterSampler
         uint emitterCount, emitterStride;
         params.GetDimensions(emitterCount, emitterStride);
         let sampled   = params[uint32_t(emitterCount * sample1)];
-        let selectPdf = 1. / float(emitterCount);
+        let selectPdf = 1. / float(emitterCount); // apply after
 
         EmitterSample ret;
 
@@ -121,11 +123,11 @@ public class EmitterSampler
             break;
 
         case Type::Infinite:  // TODO:
-            ret.emissive = k::blue; // DEBUG:
+            ret.emissive = k::black; // DEBUG:
             ret.pdf = 0.0;
             break;
         default: // invalid
-            ret.emissive = k::red; // DEBUG:
+            ret.emissive = k::black; // DEBUG:
             ret.pdf = 0.0;
             break;
         }

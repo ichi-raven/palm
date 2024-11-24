@@ -442,7 +442,7 @@ namespace palm
             }
 
             // initialize ImGui
-            device.initImGui(frameCount, window.get(), mLightingPass.renderpass.get());
+            device.initImGui(window.get(), mLightingPass.renderpass.get());
 
             // uniform buffer
             {
@@ -513,7 +513,7 @@ namespace palm
             entityInfo.entityID   = mCameraEntity;
             entityInfo.entityName = "Main Camera";
             entityInfo.groupName  = "Camera";
-            entityInfo.editable   = false;
+            entityInfo.editable   = true;
         }
         else
         {
@@ -547,7 +547,7 @@ namespace palm
 
         // update time
         const double currentTime = glfwGetTime();
-        float deltaTime          = static_cast<float>(currentTime - mLastTime);
+        const float deltaTime    = static_cast<float>(currentTime - mLastTime);
         mLastTime                = currentTime;
 
         // update camera
@@ -642,7 +642,6 @@ namespace palm
         if (mChangeDst)
         {
             device.waitIdle();
-            // destroy
             changeState(*mChangeDst);
         }
 
@@ -716,7 +715,7 @@ namespace palm
         }
 
         // read clicked pixel's entity
-        if (isPointerOnRenderArea() && ImGui::IsKeyPressed(ImGuiKey_MouseLeft) && !mManipulating)
+        if (isPointerOnRenderArea() && ImGui::IsKeyPressed(ImGuiKey_MouseLeft, false) && !mManipulating)
         {
             mPickedIDBuffer->read(
                 [&](const void* p)
@@ -755,23 +754,8 @@ namespace palm
 
         if (ImGui::BeginMenuBar())
         {
-            // TODO:
-            //if (ImGui::BeginMenu("File"))
-            //{
-            //    ImGui::MenuItem("New", NULL);
-            //    ImGui::MenuItem("Open", NULL);
-            //    ImGui::MenuItem("Save", NULL);
-            //    ImGui::MenuItem("Save As", NULL);
-            //    ImGui::MenuItem("Exit", NULL);
-            //    ImGui::EndMenu();
-            //}
-
-            //if (ImGui::BeginMenu("Edit"))
-            //{
-            //    ImGui::MenuItem("Copy", NULL);
-            //    ImGui::MenuItem("Paste", NULL);
-            //    ImGui::EndMenu();
-            //}
+            // TODO: scene save/load, cut/copy/paste, undo/redo
+            // the architecture of the GUI needs to be fundamentally reconstruct
 
             if (ImGui::BeginMenu("Add"))
             {
@@ -822,7 +806,6 @@ namespace palm
                     if (ImGui::MenuItem("Infinite", NULL))
                     {
                         // TODO: select constant or envmap -> set color or load texture
-                        std::cerr << "TODO: infinite emitter\n";
                     }
 
                     ImGui::EndMenu();
@@ -935,7 +918,7 @@ namespace palm
                 static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::TRANSLATE;
                 const auto& viewMat                              = camera.getViewMatrix();
                 glm::mat4 projectionMat                          = camera.getProjectionMatrix();
-                projectionMat[1][1] *= -1.f;  // HACK: too adhoc
+                projectionMat[1][1] *= -1.f;  // HACK: too adhoc (for Vulkan's inverse Y)
 
                 // position editor (translation)
                 ImGui::InputFloat3("Translate", glm::value_ptr(transform.pos));
@@ -960,6 +943,7 @@ namespace palm
                     currentGizmoOperation = ImGuizmo::SCALE;
                 }
 
+                // manipulate (the entity must not be picked during the operation, so the state is preserved)
                 mManipulating = ImGuizmo::Manipulate(glm::value_ptr(viewMat), glm::value_ptr(projectionMat), currentGizmoOperation, ImGuizmo::WORLD, glm::value_ptr(transform.params.world));
 
                 glm::vec3 translation, rotation, scale;
@@ -981,7 +965,7 @@ namespace palm
                 bool enableEmissive = false;
 
                 // show material editing UI
-                Material::updateAndDrawMaterialUI(material.params, enableEmissive);
+                material.updateAndDrawMaterialUI(enableEmissive);
 
                 if (enableEmissive)  // add emissive component
                 {
@@ -1007,6 +991,45 @@ namespace palm
             {
                 auto& emitter = scene.get<Emitter>(*mPickedEntity);
                 ImGui::ColorEdit3("Emissive", glm::value_ptr(emitter.params.emissive), ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
+            }
+
+            if (mPickedEntity && scene.contains<vk2s::Camera>(*mPickedEntity))
+            {
+                ImGui::SeparatorText("Camera");
+
+                auto& camera = scene.get<vk2s::Camera>(*mPickedEntity);
+
+                auto pos    = camera.getPos();
+                auto lookAt = camera.getLookAt();
+                float fov    = camera.getFOV();
+                float aspect = camera.getAspect();
+                float near = camera.getNear();
+                float far  = camera.getFar();
+
+                if (ImGui::InputFloat3("Position", glm::value_ptr(pos)))
+                {
+                    camera.setPos(pos);
+                }
+                if (ImGui::InputFloat3("Look at", glm::value_ptr(lookAt)))
+                {
+                    camera.setLookAt(lookAt);
+                }
+                if (ImGui::InputFloat("Field of view", &fov))
+                {
+                    camera.setFOV(fov);
+                }
+                if (ImGui::InputFloat("Aspect ratio", &aspect))
+                {
+                    camera.setAspect(aspect);
+                }
+                if (ImGui::InputFloat("Near", &near))
+                {
+                    camera.setNear(near);
+                }
+                if (ImGui::InputFloat("Far", &far))
+                {
+                    camera.setFar(far);
+                }
             }
 
             ImGui::End();

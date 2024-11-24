@@ -244,12 +244,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
         }
     }
 
-    return L;
-}
-
-[ForceInline]
-float3 correct(const float3 L)
-{
+    // reject invalid sample
     let invalid = any(isnan(L)) || any(isinf(L));
     return invalid ? k::zeros.xyz : L;
 }
@@ -284,7 +279,7 @@ void rayGenShader()
     for (int sampleID = 0; sampleID < sceneParams.sppPerFrame; ++sampleID)
     {
         // true if doing MIS
-        L += correct(sampleL<true>(sampleID, pixelSeed)) / float(sceneParams.sppPerFrame);
+        L += sampleL<true>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
     }
 
     let rate = float(sceneParams.sppPerFrame) / accumulatedSpp;

@@ -15,8 +15,6 @@
 
 #include <EC2S.hpp>
 
-#include "Film.hpp"
-
 namespace palm
 {
     class PathIntegrator : public Integrator
@@ -30,7 +28,7 @@ namespace palm
 
         virtual void updateShaderResources() override;
 
-        virtual void sample(Handle<vk2s::Fence> fence, Handle<vk2s::Command> command) override;
+        virtual void sample(Handle<vk2s::Command> command) override;
 
     private:
         struct SceneParams  // std140

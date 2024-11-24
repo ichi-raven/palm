@@ -17,6 +17,7 @@
 #include <stb_image_write.h>
 
 #include <filesystem>
+#include <iostream>
 
 namespace palm
 {
@@ -52,7 +53,7 @@ namespace palm
 
         // update time
         const double currentTime = glfwGetTime();
-        float deltaTime          = static_cast<float>(currentTime - mLastTime);
+        const float deltaTime          = static_cast<float>(currentTime - mLastTime);
         mLastTime                = currentTime;
 
         // wait and reset fence
@@ -82,7 +83,7 @@ namespace palm
         // integrator
         if (mIntegrator)
         {
-            mIntegrator->sample(mFences[mNow], command);
+            mIntegrator->sample(command);
 
             const auto region = vk::ImageCopy()
                                     .setExtent({ windowWidth, windowHeight, 1 })
@@ -172,7 +173,7 @@ namespace palm
             }
 
             // initialize ImGui
-            device.initImGui(frameCount, window.get(), mGuiPass.renderpass.get());
+            device.initImGui(window.get(), mGuiPass.renderpass.get());
 
             // create commands and sync objects
 
@@ -290,7 +291,7 @@ namespace palm
         if (mFileBrowser.HasSelected())
         {
             const std::string& path = mFileBrowser.GetSelected().string();
-            std::cout << "saved rendered image to: " << mFileBrowser.GetSelected().string() << std::endl;
+            std::cout << "saved current estimates (image) to: " << mFileBrowser.GetSelected().string() << std::endl;
             mFileBrowser.ClearSelected();
             saveImage(std::filesystem::path(path));
         }

@@ -45,5 +45,4 @@ public struct Lambert : IMaterial
         }
     }
 
-    //private MaterialParams mParams = {};
 }

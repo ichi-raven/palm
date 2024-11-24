@@ -17,10 +17,20 @@
 
 namespace palm
 {
+    /**
+     * @brief  Struct representing material
+     *
+     */
     struct Material
     {
-        // WARN: the indices must match the Type below
+        //! String corresponding to each material type for pull-down menus
+        //! WARN: the indices must match the Type below
         constexpr static std::array kMaterialTypesStr = { "Lambert", "Conductor", "Dielectric", "Principle" };
+        
+        /**
+         * @brief  Material type (must always be kept in sync with shader side)
+         *
+         */
         enum class Type : int32_t
         {
             eLambert    = 0,
@@ -30,40 +40,64 @@ namespace palm
             eMaterialNum
         };
 
+        /**
+         * @brief Material parameters (passed to the GPU, must always be kept in sync with shader side)
+         */
         struct Params  // std140
         {
-            // static constant
+            //! Indicating invalid texture index constant 
             constexpr static int32_t kInvalidTexIndex = -1;
 
+            //! RGB reflectivity ratio of the object itself (base color)
             glm::vec3 albedo = glm::vec3(0.0);
+            //! Roughness [0.0, 1.0]
             float roughness  = 0.0;
-
+            //! Metallic (metalness) [0.0, 1.0]
             float metallic  = 0.0;
+            //! Transmission ratio of specular reflection component [0.0, 1.0]
             float specTrans = 0.0;
+            //! Transmission ratio of diffuse reflection component [0.0, 1.0]
             float diffTrans = 0.0;
+            //! Flatness of the surface [0.0, 1.0]
             float flatness  = 0.0;
 
+            //! padding
             glm::vec3 padding  = glm::vec3(0.0);
+            //! How much of the albedo component is mixed in the specular reflected light [0.0, 1.0]
             float specularTint = 0.0;
 
+            //! How much of the sheen component is mixed in the specular reflected light [0.0, 1.0]
             glm::vec3 sheenTint = glm::vec3(0.0);
+            //! sheen reflection (the amount of reflection near the edge of a fabric or other soft velvet-like material) [0.0, 1.0]
             float sheen         = 0.0;
 
+            //! Anisotropy of specular reflection [-1.0, 1.0]
             float anisotropic    = 0.0;
+            //! Clear coat thickness [0.0, 1.0]
             float clearcoat      = 0.0;
+            //! Clear coat gloss [0.0, 1.0]
             float clearcoatGloss = 0.0;
+            //! Index of Refraction (for transparent scattering)
             float IOR            = 1.0;
 
+            //! each texture index
             int32_t albedoTexIndex    = kInvalidTexIndex;
             int32_t roughnessTexIndex = kInvalidTexIndex;
             int32_t metalnessTexIndex = kInvalidTexIndex;
             int32_t normalmapTexIndex = kInvalidTexIndex;
 
+            //! Emissive component of the material (usually used with emitters)
             glm::vec3 emissive   = glm::vec3(0.0);
+            //! Material type index
             int32_t materialType = static_cast<std::underlying_type_t<Type>>(Type::ePrinciple);
         };
 
-        inline static void updateAndDrawMaterialUI(Params& params, bool& enabledEmissive)
+        /** 
+         * @brief  UI for editing MaterialParams in ImGui
+         *  
+         * @param enabledEmissive Whether the Emissive value was edited
+         */
+        void updateAndDrawMaterialUI(bool& enabledEmissive)
         {
             // Albedo color
             ImGui::ColorEdit3("Albedo", glm::value_ptr(params.albedo), ImGuiColorEditFlags_Float);
@@ -93,7 +127,7 @@ namespace palm
             ImGui::ColorEdit3("Sheen Tint", glm::value_ptr(params.sheenTint), ImGuiColorEditFlags_Float);
 
             // Anisotropic
-            ImGui::SliderFloat("Anisotropic", &params.anisotropic, 0.0f, 1.0f);
+            ImGui::SliderFloat("Anisotropic", &params.anisotropic, -1.0f, 1.0f);
 
             // Clearcoat
             ImGui::SliderFloat("Clearcoat", &params.clearcoat, 0.0f, 1.0f);
@@ -101,14 +135,8 @@ namespace palm
             // Clearcoat gloss
             ImGui::SliderFloat("Clearcoat Gloss", &params.clearcoatGloss, 0.0f, 1.0f);
 
-            // Index of Refraction (IOR)
-            ImGui::SliderFloat("Index of Refraction (IOR)", &params.IOR, 1.0f, 2.5f);
-
-            // Texture indices
-            //ImGui::InputInt("Albedo Texture Index", &params.albedoTexIndex);
-            //ImGui::InputInt("Roughness Texture Index", &params.roughnessTexIndex);
-            //ImGui::InputInt("Metalness Texture Index", &params.metalnessTexIndex);
-            //ImGui::InputInt("Normal Map Texture Index", &params.normalmapTexIndex);
+            // Index of Refraction 
+            ImGui::SliderFloat("IOR (Index of Refraction)", &params.IOR, 1.0f, 2.5f);
 
             // Material type
             int currentType = static_cast<int>(params.materialType);
@@ -124,9 +152,12 @@ namespace palm
             }
         }
 
+        //! Parameters
         Params params;
+        //! Handle to uniform buffer with parameters written (for rasterization)
         Handle<vk2s::Buffer> uniformBuffer;
 
+        //! Number of textures to use (constant)
         constexpr static uint32_t kDefaultTexNum = 4;
         Handle<vk2s::Image> albedoTex;
         Handle<vk2s::Image> roughnessTex;

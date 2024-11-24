@@ -4,6 +4,8 @@
 #include <imgui_impl_vulkan.h>
 #include <ImGuizmo.h>
 
+#include <iostream>
+
 namespace palm
 {
     void MaterialViewer::init()
@@ -139,7 +141,7 @@ namespace palm
             }
 
             // initialize ImGui
-            device.initImGui(frameCount, window.get(), mGuiPass.renderpass.get());
+            device.initImGui(window.get(), mGuiPass.renderpass.get());
 
             // create commands and sync objects
             mCommands.resize(frameCount);

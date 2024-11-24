@@ -51,7 +51,6 @@ ${IMGUIZMO_SOURCE_FILES}
 
 set (EXEC_HEADERS
 ../include/AppStates.hpp
-../include/Film.hpp
 
 ../include/Integrators/Integrator.hpp
 ../include/Integrators/PathIntegrator.hpp

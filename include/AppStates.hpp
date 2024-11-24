@@ -9,9 +9,13 @@
 #define PALM_INCLUDE_APPSTATES_HPP_
 
 #include <vk2s/Device.hpp>
+#include <EC2S.hpp>
 
 namespace palm
 {
+    /**
+     * @brief  Keys corresponding to the States that make up this application
+     */
     enum class AppState
     {
         eEditor,
@@ -19,10 +23,16 @@ namespace palm
         eMaterialViewer,
     };
 
+    /**
+     * @brief  Region shared between States
+     */
     struct CommonRegion
     {
+        //! vk2s device
         vk2s::Device device;
+        //! vk2s window
         UniqueHandle<vk2s::Window> window;
+        //! ec2s registry (representing scene)
         ec2s::Registry scene;
     };
 

@@ -13,6 +13,9 @@
 
 namespace palm
 {
+    /**
+     * @brief  Struct representing the drawing path for rasterization
+     */
     struct GraphicsPass
     {
         UniqueHandle<vk2s::RenderPass> renderpass;
