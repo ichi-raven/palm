@@ -70,7 +70,7 @@ VSOutput vsmain(VSInput in)
     VSOutput output         = (VSOutput)0;
 
     output.worldInfo.pos    = mul(entityParams.model, float4(in.pos, 1.0)).xyz;
-    output.worldInfo.normal = mul(entityParams.modelInvTranspose, float4(in.normal, 1.)).xyz;
+    output.worldInfo.normal = mul(entityParams.modelInvTranspose, float4(in.normal, 0.0)).xyz;
     output.worldInfo.uv     = in.uv;
 
     output.SVPos = mul(sceneParams.proj, mul(sceneParams.view, float4(output.worldInfo.pos, 1.0)));

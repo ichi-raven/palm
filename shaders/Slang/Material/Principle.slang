@@ -82,14 +82,13 @@ public struct Principle : IMaterial
             let f = pbr::schlick(0.04, dotLH);
             let g = pbr::separableSmithGGXG1(wi, 0.25) * pbr::separableSmithGGXG1(ret.wo, 0.25);
 
-            let fPdf = d / (4.0 * dot(wi, wm));
-            // ?
-            ret.f = float3(0.25 * clearcoatWeight * g * f * d) / fPdf;
-            ret.pdf = fPdf;
+            ret.f = float3(0.25 * clearcoatWeight * g * f * d);
+            ret.pdf = d / (4.0 * dot(wi, wm));
 
             return ret;
         }
 
+        [ForceInline]
         static void calcLobePdfs(const MaterialParams params,
                               out float pSpecular, out float pDiffuse, out float pClearcoat, out float pSpecTrans)
         {
@@ -112,8 +111,6 @@ public struct Principle : IMaterial
 
         public static Optional<BSDFSample> sample(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float sample1, float2 sample2)
         {
-            let thin = true; // HACK: 
-
             float pSpecular = 0;
             float pDiffuse = 0;
             float pClearcoat = 0;
@@ -163,7 +160,6 @@ public struct Principle : IMaterial
 
         public static float pdf(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float3 wo)
         {
-            let thin = true; // HACK:
             let wm = normalize(si.wi + wo);
 
             let dotNV = pbr::cosTheta(si.wi);
@@ -215,7 +211,6 @@ public struct Principle : IMaterial
 
         public static float3 eval(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float3 wo)
         {
-            let thin = true; // HACK:
             let wm = normalize(si.wi + wo);
 
             let dotNV = pbr::cosTheta(si.wi);

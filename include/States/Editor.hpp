@@ -130,6 +130,9 @@ namespace palm
         //! Percentage of the total window that is in the rendering area (outside of this is the GUI)
         inline const static glm::vec2 kRenderArea = glm::vec2(0.75f, 0.75f);
 
+        //! Maximum number of emitters that the editor can reflect in the drawing
+        constexpr static size_t kMaxEmitterNum = 10;
+
     private:
         //! GPU commands (per frame)
         std::vector<Handle<vk2s::Command>> mCommands;
@@ -155,6 +158,8 @@ namespace palm
         UniqueHandle<vk2s::DynamicBuffer> mSceneBuffer;
         //! Buffer to which the GPU writes the entity that is mouse hovering
         UniqueHandle<vk2s::Buffer> mPickedIDBuffer;
+        //! Uniform buffer to write emitter information
+        UniqueHandle<vk2s::DynamicBuffer> mEmitterBuffer;
         //! BindGroup for scene information
         UniqueHandle<vk2s::BindGroup> mSceneBindGroup;
         //! BindGroup for Lighting pass informations
@@ -171,8 +176,6 @@ namespace palm
         double mLastTime     = 0;
         //! Index of the frame buffer currently being processed
         uint32_t mNow        = 0;
-        //! Whether Guizmo is editing Transform (no other editing should be done during this time)
-        bool mManipulating   = false;
     };
 
 }  // namespace palm

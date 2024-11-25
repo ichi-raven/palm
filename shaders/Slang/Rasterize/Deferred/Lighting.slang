@@ -2,7 +2,8 @@ import "../../Utility/Constants";
 import "../../Utility/SurfaceInteraction";
 import "../../Utility/Frame";
 
-import "../../Material/Material.slang";
+import "../../Material/Material";
+import "../../Emitter/Emitter";
 
 struct VSOutput
 {
@@ -29,6 +30,7 @@ struct SceneParams
 
 [[vk::binding(0, 1)]] ConstantBuffer<SceneParams>  sceneParams;
 [[vk::binding(1, 1)]] RWStructuredBuffer<uint64_t>  pickedID;
+[[vk::binding(2, 1)]] ConstantBuffer<EmitterParams[10]>  emitterParams;
 
 [shader("vertex")]
 VSOutput vsmain(uint id : SV_VertexID)
@@ -76,16 +78,23 @@ float4 fsmain(VSOutput in) : SV_Target
 
     // there are no context
     var dummyCtx = BSDFContext();
+    dummyCtx.lastIOR = 1.0;
 
-    let invView = (sceneParams.camPos - worldPos).xyz;
+    let invView = normalize((sceneParams.camPos - worldPos).xyz);
     let frame = Frame(normal.xyz);
     let si = SurfaceInteraction(worldPos.xyz, invView, normal.xyz, float2(0.0, 0.0), 0.0, index, frame);
 
-    let dummywo = frame.toLocal(normalize(float3(1., 1., 1.)));
-    let dummyAmbient = float3(0.2, 0.2, 0.2);
-    let dummyEmissive = k::white * 3.0;
+    let ambient = 0.3 * albedo.xyz;
+    var finalColor = ambient;
 
-    let finalColor = dummyAmbient + dummyEmissive * saturate(DynamicMaterial.BSDF.eval(params, dummyCtx, si, dummywo));
+    for (int i = 0; i < 10; ++i)
+    {
+        let wo = frame.toLocal(normalize(emitterParams[i].pos - si.pos));
+        let emissive = emitterParams[i].emissive;
+        let f = DynamicMaterial.BSDF.eval(params, dummyCtx, si.toLocal(), wo);
+            
+        finalColor += emissive * f * abs(dot(si.normal, si.frame.toWorld(wo)));
+    }
 
     return float4(finalColor, 1.0);
 }

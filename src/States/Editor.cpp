@@ -133,7 +133,7 @@ namespace palm
                     createdImages.emplace_back(material.albedoTex);
                 }
 
-                if (hostMaterial.roughnessTex != -1)
+                /*if (hostMaterial.roughnessTex != -1)
                 {
                     const auto& hostTex = hostTextures[hostMaterial.roughnessTex];
                     const auto size     = hostTex.width * hostTex.height * sizeof(float);
@@ -167,7 +167,7 @@ namespace palm
                     material.normalMapTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
                     material.normalMapTex->write(hostTex.pData, size);
                     createdImages.emplace_back(material.normalMapTex);
-                }
+                }*/
 
                 {  // transition from initial layout
                     UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
@@ -402,7 +402,7 @@ namespace palm
                 vk::Rect2D scissor({ 0, 0 }, window->getVkSwapchainExtent());
                 vk::PipelineColorBlendAttachmentState colorBlendAttachment(VK_FALSE);
                 colorBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
-                // G-Buffer color 
+                // G-Buffer color
                 std::array attachments = { colorBlendAttachment, colorBlendAttachment, colorBlendAttachment, colorBlendAttachment };
 
                 vk2s::Pipeline::GraphicsPipelineInfo gpi{
@@ -428,16 +428,15 @@ namespace palm
                 mLightingPass.fs         = device.create<vk2s::Shader>("../../shaders/Slang/Rasterize/Deferred/Lighting.slang", "fsmain");
 
                 std::array bindings0 = {
-                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll), 
-                    vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),
-                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll), 
-                    vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll), vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll), vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),
                     vk::DescriptorSetLayoutBinding(4, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eAll),
                 };
 
                 std::vector bindings1 = {
                     vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
                     vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
                 };
 
                 mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
@@ -468,7 +467,7 @@ namespace palm
             // initialize ImGui
             device.initImGui(window.get(), mLightingPass.renderpass.get());
 
-            // uniform buffer
+            // scene uniform buffer
             {
                 const auto size = sizeof(SceneParams) * frameCount;
                 mSceneBuffer    = device.create<vk2s::DynamicBuffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eUniformBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, frameCount);
@@ -478,6 +477,12 @@ namespace palm
             {
                 const auto size = sizeof(ec2s::Entity);
                 mPickedIDBuffer = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eStorageBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+            }
+
+            // emitter uniform buffer
+            {
+                const auto size = sizeof(Emitter::Params) * kMaxEmitterNum * frameCount;
+                mEmitterBuffer  = device.create<vk2s::DynamicBuffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eUniformBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, frameCount);
             }
 
             // create bindgroup
@@ -495,6 +500,7 @@ namespace palm
             mLightingBindGroup = device.create<vk2s::BindGroup>(mLightingPass.bindLayouts[1].get());
             mLightingBindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, mSceneBuffer.get());
             mLightingBindGroup->bind(1, vk::DescriptorType::eStorageBuffer, mPickedIDBuffer.get());
+            mLightingBindGroup->bind(2, vk::DescriptorType::eUniformBufferDynamic, mEmitterBuffer.get());
 
             // create commands and sync objects
 
@@ -639,7 +645,7 @@ namespace palm
 
             command->setPipeline(mLightingPass.pipeline);
             command->setBindGroup(0, mGBuffer.bindGroup.get());
-            command->setBindGroup(1, mLightingBindGroup.get(), { mNow * static_cast<uint32_t>(mSceneBuffer->getBlockSize()) });
+            command->setBindGroup(1, mLightingBindGroup.get(), { mNow * static_cast<uint32_t>(mSceneBuffer->getBlockSize()), mNow * static_cast<uint32_t>(mEmitterBuffer->getBlockSize()) });
             command->draw(4, 1, 0, 0);
             command->drawImGui();
 
@@ -743,7 +749,7 @@ namespace palm
         }
 
         // read clicked pixel's entity
-        if (isPointerOnRenderArea() && ImGui::IsKeyPressed(ImGuiKey_MouseLeft, false) && !mManipulating)
+        if (isPointerOnRenderArea() && window->getMouseKey(GLFW_MOUSE_BUTTON_LEFT) && !ImGuizmo::IsUsing())
         {
             mPickedIDBuffer->read(
                 [&](const void* p)
@@ -762,6 +768,28 @@ namespace palm
 
         // write entity material
         scene.each<Material>([&](Material& material) { material.uniformBuffer->write(&material.params, sizeof(Material::Params), mNow * material.uniformBuffer->getBlockSize()); });
+
+        // write emitters
+        {
+            std::vector<Emitter::Params> emitterParams;
+            emitterParams.reserve(kMaxEmitterNum);
+            scene.each<Emitter, Transform>(
+                [&](Emitter& emitter, const Transform& transform)
+                {
+                    if (emitterParams.size() >= kMaxEmitterNum)
+                    {
+                        return;
+                    }
+
+                    emitter.params.pos = transform.pos;
+                    emitterParams.emplace_back(emitter.params);
+                });
+
+            if (!emitterParams.empty())
+            {
+                mEmitterBuffer->write(emitterParams.data(), sizeof(Emitter::Params) * emitterParams.size(), mNow * mEmitterBuffer->getBlockSize());
+            }
+        }
     }
 
     void Editor::updateAndRenderImGui(const double deltaTime)
@@ -975,8 +1003,8 @@ namespace palm
                 }
 
                 // manipulate (the entity must not be picked during the operation, so the state is preserved)
-                mManipulating = ImGuizmo::Manipulate(glm::value_ptr(viewMat), glm::value_ptr(projectionMat), currentGizmoOperation, ImGuizmo::WORLD, glm::value_ptr(transform.params.world));
-
+                ImGuizmo::Manipulate(glm::value_ptr(viewMat), glm::value_ptr(projectionMat), currentGizmoOperation, ImGuizmo::WORLD, glm::value_ptr(transform.params.world));
+                
                 glm::vec3 translation, rotation, scale;
                 ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform.params.world), glm::value_ptr(translation), glm::value_ptr(rotation), glm::value_ptr(scale));
 
