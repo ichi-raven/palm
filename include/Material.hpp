@@ -41,7 +41,7 @@ namespace palm
         };
 
         /**
-         * @brief Material parameters (passed to the GPU, must always be kept in sync with shader side)
+         * @brief Material parameters (passed to the GPU, must always sync with shader side)
          */
         struct Params  // std140
         {

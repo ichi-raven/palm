@@ -28,7 +28,7 @@ struct InstanceParams : IInstance
 
 struct Payload //<Sampler: ISampler> TODO:
 {
-    __init(const IndependentSampler sampler_, const bool sampleOnlyEmissive_ = true)
+    __init(const IndependentSampler sampler_, const bool sampleOnlyEmissive_ = false)
     {
         ctx = BSDFContext();
         sampler = sampler_;
@@ -47,7 +47,7 @@ struct Payload //<Sampler: ISampler> TODO:
 
     bool skipSampling()
     {
-        return !sampleOnlyEmissive;
+        return sampleOnlyEmissive;
     }
 
     bool continue()
@@ -138,7 +138,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
     RayDesc ray = getCameraRay(DispatchRaysIndex().xy, payload.sampler.next2D());
     TraceRay(sceneBVH, RAY_FLAG_NONE, ~0, 0, 0, 0, ray, payload);
 
-    // WARNING: required for MIS
+    // required for MIS (luminance for first hit)
     if (enableMIS)
     {
         if (let emissive = payload.emissive)
@@ -168,7 +168,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
             // NEE
             if (!bs.isSpecular()) 
             {
-                if (!occluded(si.pos, es)) // HACK: Slang (HLSL) does not short circuit
+                if (!occluded(si.pos, es)) // Slang (HLSL) does not support short circuit
                 {
                     MaterialParams params = MaterialParams::loadWithTextures(materialParams[si.instanceIndex], textures, sampler, si.uv);
 
@@ -188,7 +188,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
 
             // BSDF sampling
             {
-                Payload bsdfPayload = Payload(payload.sampler, false);
+                Payload bsdfPayload = Payload(payload.sampler, true);
 
                 RayDesc bsdfRay;
                 bsdfRay.Origin      = si.pos;

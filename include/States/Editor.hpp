@@ -130,7 +130,7 @@ namespace palm
         //! Percentage of the total window that is in the rendering area (outside of this is the GUI)
         inline const static glm::vec2 kRenderArea = glm::vec2(0.75f, 0.75f);
 
-        //! Maximum number of emitters that the editor can reflect in the drawing
+        //! Maximum number of emitters that the editor can reflect in the drawing (must always sync with shader side)
         constexpr static size_t kMaxEmitterNum = 10;
 
     private:

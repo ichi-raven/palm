@@ -70,7 +70,7 @@ float4 fsmain(VSOutput in) : SV_Target
         pickedID[0] = entity;
     }
 
-    MaterialParams params = (MaterialParams)0;
+    MaterialParams params = MaterialParams();
     params.type = MaterialType::Principle;
     params.albedo = albedo.xyz;
     params.roughness = roughnessMetalness.x;
@@ -84,16 +84,23 @@ float4 fsmain(VSOutput in) : SV_Target
     let frame = Frame(normal.xyz);
     let si = SurfaceInteraction(worldPos.xyz, invView, normal.xyz, float2(0.0, 0.0), 0.0, index, frame);
 
-    let ambient = 0.3 * albedo.xyz;
+    let ambient = 0.25 * albedo.xyz;
     var finalColor = ambient;
 
+    // treat all emitters as pseudo point emitter
     for (int i = 0; i < 10; ++i)
     {
-        let wo = frame.toLocal(normalize(emitterParams[i].pos - si.pos));
+        var to = emitterParams[i].pos - si.pos;
+        let distance = length(to);
+        to = normalize(to);
+
+        let wo = frame.toLocal(to);
         let emissive = emitterParams[i].emissive;
         let f = DynamicMaterial.BSDF.eval(params, dummyCtx, si.toLocal(), wo);
-            
-        finalColor += emissive * f * abs(dot(si.normal, si.frame.toWorld(wo)));
+        let lightCos = abs(dot(normalize(to), -to));
+        let G = lightCos / (distance * distance);
+
+        finalColor += emissive * f * G * abs(dot(si.normal, si.frame.toWorld(wo)));
     }
 
     return float4(finalColor, 1.0);
