@@ -3,6 +3,7 @@ implementing Material;
 import "../Utility/Constants";
 import "../Utility/Warp";
 import PBR;
+import GGX;
 
 __include Lambert;
 __include Conductor;
@@ -12,27 +13,6 @@ public struct Principle : IMaterial
 {
     public struct BSDF : IBSDF
     {
-        static float evaluateDisneyClearcoat(const float clearcoat, const float alpha, const float3 wi, const float3 wm,
-                                     const float3 wo)
-        {
-            if(clearcoat <= 0.0) 
-            {
-                return 0.0;
-            }
-
-            let absDotNH = abs(pbr::cosTheta(wm));
-            let absDotNL = abs(pbr::cosTheta(wo));
-            let absDotNV = abs(pbr::cosTheta(wi));
-            let dotHL = dot(wm, wo);
-
-            let d = pbr::D_GTR1(absDotNH, lerp(0.1, 0.001, alpha));
-            let f = pbr::schlick(0.04, dotHL);
-            let gl = pbr::separableSmithGGXG1(wo, 0.25);
-            let gv = pbr::separableSmithGGXG1(wi, 0.25);
-
-            return 0.25 * clearcoat * d * f * gl * gv;
-        }
-
         static float3 evaluateSheen(const float3 baseColor, const float sheen, const float3 sheenTint, const float3 wi, const float3 wm, const float3 wo)
         {
             if(sheen <= 0.0) 
@@ -45,45 +25,89 @@ public struct Principle : IMaterial
             return sheen * lerp(float3(1.0), tint, sheenTint) * pbr::schlickWeight(dotHL);
         }
 
-        static Optional<BSDFSample> sampleDisneyClearcoat(const MaterialParams params, const float3 wi,
-                                         const float u, const float2 u2)
+        static float evaluateDisneyRetroDiffuse(const float roughness, const float3 wi, const float3 wm, const float3 wo)
         {
-            BSDFSample ret;
-            ret.flags = BSDFSample::Flags::Glossy | BSDFSample::Flags::Reflection; 
+            let dotNL = abs(pbr::cosTheta(wo));
+            let dotNV = abs(pbr::cosTheta(wi));
 
-            let a = 0.25;
-            let a2 = a * a;
+            // square
+            let alpha = roughness * roughness;
 
-            let c = sqrt(max(0.0, (1.0 - pow(a2, 1.0 - u2.x)) / (1.0 - a2)));
-            let s = sqrt(max(0.0, 1.0 - c * c));
-            let phi = 2. * k::pi * u2.y;
+            let rr = 0.5 + 2.0 * dotNL * dotNL * alpha;
+            let fl = pbr::schlickWeight(dotNL);
+            let fv = pbr::schlickWeight(dotNV);
 
-            float3 wm = float3(s * cos(phi), c, s * sin(phi));
-            if(dot(wm, wi) < 0.0) 
+            return rr * (fl + fv + fl * fv * (rr - 1.0));
+        }
+
+        static float evaluateDisneyDiffuse(const float3 baseColor, const float flatness, const float roughness, const float3 wi, const float3 wm,
+                                        const float3 wo)
+        {
+            let dotNL = abs(pbr::cosTheta(wo));
+            let dotNV = abs(pbr::cosTheta(wi));
+
+            let fl = pow((1.0 - dotNL), 5.0);
+            let fv = pow((1.0 - dotNV), 5.0);
+
+            float hanrahanKrueger = 0.0;
+
+            if (flatness > 0.0)
             {
-                wm = -wm;
+                let alpha = roughness * roughness;
+
+                let dotHL = dot(wm, wo);
+                let fss90 = dotHL * dotHL * alpha;
+                let fss   = lerp(1.0, fss90, fl) * lerp(1.0, fss90, fv);
+
+                hanrahanKrueger = 1.25 * (fss * (1.0 / (dotNL + dotNV) - 0.5) + 0.5);
             }
 
-            ret.wo = reflect(-wi, wm);
-            if(dot(wi, ret.wo) < 0.0)
+            let lambert = 1.0;
+            // what
+            let retro            = evaluateDisneyRetroDiffuse(roughness, wi, wm, wo);
+            let subsurfaceApprox = lerp(lambert, hanrahanKrueger, flatness);
+
+            return k::invPi * (retro + subsurfaceApprox * (1.0 - 0.5 * fl) * (1.0 - 0.5 * fv));
+        }
+
+        static Optional<BSDFSample> sampleDisneyDiffuse(const MaterialParams params, float3 wi,
+                                        const float u, const float2 u2)
+        {
+            BSDFSample ret;
+
+            float sign = pbr::sgn(pbr::cosTheta(wi));
+
+            ret.wo    = sign * Warp::toCosineWeightedHemisphere(u2);
+            float3 wm = normalize(wi + ret.wo);
+
+            let dotNL = pbr::cosTheta(ret.wo);
+            if (dotNL == 0.0)
             {
                 return none;
             }
 
-            let clearcoatWeight = params.clearcoat;
-            let clearcoatGloss = params.clearcoatGloss;
+            float dotNV  = pbr::cosTheta(wi);
+            float3 color = params.albedo;
+            float pdf;
+            if (u <= params.diffTrans)
+            {
+                wi  = -wi;
+                pdf = params.diffTrans;
 
-            let dotNH    = pbr::cosTheta(wm);
-            let dotLH    = dot(wm, ret.wo);
-            let absDotNL = abs(pbr::cosTheta(ret.wo));
-            let absDotNV = abs(pbr::cosTheta(wi));
+                color = sqrt(color);
+            }
+            else
+            {
+                pdf = (1.0 - params.diffTrans);
+            }
 
-            let d = pbr::D_GTR1(abs(dotNH), lerp(0.1, 0.001, clearcoatGloss));
-            let f = pbr::schlick(0.04, dotLH);
-            let g = pbr::separableSmithGGXG1(wi, 0.25) * pbr::separableSmithGGXG1(ret.wo, 0.25);
+            let sheen = evaluateSheen(params.albedo, params.sheen, params.sheenTint, wi, wm, ret.wo);
 
-            ret.f = float3(0.25 * clearcoatWeight * g * f * d);
-            ret.pdf = d / (4.0 * dot(wi, wm));
+            let diffuse = evaluateDisneyDiffuse(params.albedo, params.flatness, params.roughness, wi, wm, ret.wo);
+
+            ret.f     = sheen + color * diffuse;
+            ret.pdf   = abs(dotNL) * pdf;
+            ret.flags = BSDFSample::Flags::Diffuse | BSDFSample::Flags::Reflection;
 
             return ret;
         }
@@ -128,16 +152,19 @@ public struct Principle : IMaterial
             }
             else if(sample1 > pSpecular && sample1 <= (pSpecular + pClearcoat)) 
             {
-                if (let res = sampleDisneyClearcoat(params, si.wi, sample1, sample2))
+                MaterialParams clearcoatParams = params; // only for clearcoat
+                clearcoatParams.roughness      = lerp(0.1, 0.001, params.clearcoatGloss);
+                if (let res = Conductor.BSDF.sample(clearcoatParams, ctx, si, sample1, sample2))
                 {
                     var ret = res;
                     ret.pdf *= pClearcoat;
-                    return ret;                
+                    return ret;
                 }
             }
             else if(sample1 > pSpecular + pClearcoat && sample1 <= (pSpecular + pClearcoat + pDiffuse)) 
             {
-                if (let res = Lambert.BSDF.sample(params, ctx, si, sample1, sample2))
+                //if (let res = Lambert.BSDF.sample(params, ctx, si, sample1, sample2))
+                if (let res = sampleDisneyDiffuse(params, si.wi, sample1, sample2))
                 {
                     var ret = res;
                     ret.pdf *= pDiffuse;
@@ -175,23 +202,23 @@ public struct Principle : IMaterial
             let diffuseWeight = (1.0 - params.metallic) * (1.0 - params.specTrans);
             let transWeight   = (1.0 - params.metallic) * params.specTrans;
 
-            // while pdf
+            // whole pdf
             float pdf = 0.0;
 
             // clearcoat
             let upperHemisphere = dotNL > 0.0 && dotNV > 0.0;
             if (upperHemisphere && params.clearcoat > 0.0)
             {
-                let absDotNL = abs(pbr::cosTheta(wo));
-                let absDotNH = abs(pbr::cosTheta(wm));
-                let d        = pbr::D_GTR1(absDotNH, lerp(0.1, 0.001, params.roughness * params.roughness));
-                pdf += pClearcoat * d / (4.0 * absDotNL);
+                MaterialParams clearcoatParams = params;  // only for clearcoat
+                clearcoatParams.roughness = lerp(0.1, 0.001, params.roughness * params.roughness);
+                pdf += pClearcoat * Conductor.BSDF.pdf(clearcoatParams, ctx, si, wo);
             }
 
             // diffuse
             if (diffuseWeight > 0.0)
             {
-                pdf += pDiffuse * Lambert.BSDF.pdf(params, ctx, si, wo);
+                //pdf += pDiffuse * Lambert.BSDF.pdf(params, ctx, si, wo);
+                pdf += pDiffuse * abs(pbr::cosTheta(wo));
             }
 
             // transmission
@@ -206,7 +233,7 @@ public struct Principle : IMaterial
                 pdf += pBRDF * Conductor.BSDF.pdf(params, ctx, si, wo);
             }
 
-            return pdf;
+            return saturate(pdf);
         }
 
         public static float3 eval(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float3 wo)
@@ -233,16 +260,18 @@ public struct Principle : IMaterial
             bool upperHemisphere = dotNL > 0.0 && dotNV > 0.0;
             if(upperHemisphere && params.clearcoat > 0.0)
             {
-                let clearcoat = evaluateDisneyClearcoat(params.clearcoat, params.clearcoatGloss, si.wi, wm, wo);
-                reflectance += float3(clearcoat);
+                MaterialParams clearcoatParams = params;  // only for clearcoat
+                clearcoatParams.roughness      = lerp(0.1, 0.001, params.roughness * params.roughness);
+                let clearcoat                  = Conductor.BSDF.eval(clearcoatParams, ctx, si, wo);
+                reflectance += clearcoat;
             }
 
             // diffuse
             if(diffuseWeight > 0.0) 
             {
-                let diffuse = Lambert.BSDF.eval(params, ctx, si, wo);
-
-                float3 sheen = evaluateSheen(params.albedo, params.sheen, params.sheenTint, si.wi, wm, wo);
+                //let diffuse = Lambert.BSDF.eval(params, ctx, si, wo);
+                let diffuse = evaluateDisneyDiffuse(params.albedo, params.flatness, params.roughness, si.wi, wm, wo);
+                let sheen = evaluateSheen(params.albedo, params.sheen, params.sheenTint, si.wi, wm, wo);
 
                 reflectance += diffuseWeight * (diffuse * params.albedo + sheen);
             }

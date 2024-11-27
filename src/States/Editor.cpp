@@ -621,6 +621,8 @@ namespace palm
 
         static bool resizedWhenPresent = false;
 
+        // pre-render-----------------------------------------
+
         if (!window->update() || window->getKey(GLFW_KEY_ESCAPE))
         {
             exitApplication();
@@ -653,6 +655,8 @@ namespace palm
             onResized();
             return;
         }
+
+        // render-----------------------------------------
 
         mFences[mNow]->reset();
 
@@ -729,8 +733,13 @@ namespace palm
             changeState(*mChangeDst);
         }
 
+        // post-render-----------------------------------------
+        
         // update frame index
         mNow = (mNow + 1) % frameCount;
+
+        // update key input state
+        mDragging = window->getMouseKey(GLFW_MOUSE_BUTTON_LEFT);
     }
 
     Editor::~Editor()
@@ -799,7 +808,7 @@ namespace palm
         }
 
         // read clicked pixel's entity
-        if (isPointerOnRenderArea() && window->getMouseKey(GLFW_MOUSE_BUTTON_LEFT) && !ImGuizmo::IsUsing())
+        if (isPointerOnRenderArea() && window->getMouseKey(GLFW_MOUSE_BUTTON_LEFT) && !ImGuizmo::IsUsing() && !mDragging)
         {
             mPickedIDBuffer->read(
                 [&](const void* p)
@@ -1035,7 +1044,7 @@ namespace palm
                 }
 
                 const auto& viewMat     = camera.getViewMatrix();
-                glm::mat4 projectionMat = camera.getProjectionMatrix();
+                glm::mat4 projectionMat = camera.getProjectionMatrix(); // copy for modification
                 projectionMat[1][1] *= -1.f;  // HACK: too adhoc (for Vulkan's inverse Y)
 
                 // position editor (translation)
@@ -1106,10 +1115,10 @@ namespace palm
 
                 auto pos     = camera.getPos();
                 auto lookAt  = camera.getLookAt();
-                float fov    = camera.getFOV();
-                float aspect = camera.getAspect();
-                float near   = camera.getNear();
-                float far    = camera.getFar();
+                auto fov    = camera.getFOV();
+                auto aspect = camera.getAspect();
+                auto nearPlane   = camera.getNear(); // "near" is already defined by windows.h
+                auto farPlane    = camera.getFar();  // "far" is already defined by windows.h
 
                 if (ImGui::InputFloat3("Position", glm::value_ptr(pos)))
                 {
@@ -1119,21 +1128,21 @@ namespace palm
                 {
                     camera.setLookAt(lookAt);
                 }
-                if (ImGui::InputFloat("Field of view", &fov))
+                if (ImGui::InputDouble("Field of view", &fov))
                 {
                     camera.setFOV(fov);
                 }
-                if (ImGui::InputFloat("Aspect ratio", &aspect))
+                if (ImGui::InputDouble("Aspect ratio", &aspect))
                 {
                     camera.setAspect(aspect);
                 }
-                if (ImGui::InputFloat("Near", &near))
+                if (ImGui::InputDouble("Near", &nearPlane))
                 {
-                    camera.setNear(near);
+                    camera.setNear(nearPlane);
                 }
-                if (ImGui::InputFloat("Far", &far))
+                if (ImGui::InputDouble("Far", &farPlane))
                 {
-                    camera.setFar(far);
+                    camera.setFar(farPlane);
                 }
             }
 

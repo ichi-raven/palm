@@ -181,7 +181,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
 
                     let pathpdf   = G * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
                     let MISWeight = es.pdf / max(k::eps, es.pdf + pathpdf);
-                    
+
                     L += MISWeight * beta * f * G * cosine * es.emissive / es.pdf;
                 }
             }

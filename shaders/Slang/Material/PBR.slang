@@ -145,7 +145,7 @@ namespace pbr
     public float fresnelDielectric(float cosThetaI, float etaI, float etaT)
     {
         cosThetaI = clamp(cosThetaI, -1., 1.);
-        // Potentially swap indices of refraction
+        // potentially swap indices of refraction
         let entering = cosThetaI >= 0.;
         if (!entering)
         {
@@ -156,11 +156,11 @@ namespace pbr
             cosThetaI = abs(cosThetaI);
         }
 
-        // Compute _cosThetaT_ using Snell's law
+        // compute cosThetaT using Snell's law
         let sinThetaI = sqrt(max(0., 1. - cosThetaI * cosThetaI));
         let sinThetaT = etaI / etaT * sinThetaI;
 
-        // Handle total internal reflection
+        // handle total internal reflection
         if (sinThetaT >= 1.) 
         {
             return 1.;
@@ -195,8 +195,8 @@ namespace pbr
 
     public float thinTransmissionRoughness(const float IOR, const float roughness)
     {
-        // -- Disney scales by (.65 * eta - .35) based on figure 15 of the 2015 PBR course notes. Based on their figure
-        // -- the results match a geometrically thin solid fairly well.
+        // Disney scales by (.65 * eta - .35) based on figure 15 of the 2015 PBR course notes. Based on their figure
+        // the results match a geometrically thin solid fairly well
         return clamp((0.65 * IOR - 0.35) * roughness, 0.0, 1.0);
     }
 
@@ -270,8 +270,8 @@ namespace pbr
 
     public float3 calculateTint(const float3 baseColor)
     {
-        // -- The color tint is never mentioned in the SIGGRAPH presentations as far as I recall but it was done in
-        // --  the BRDF Explorer so I'll replicate that here.
+        // The color tint is never mentioned in the SIGGRAPH presentations as far as I recall but it was done in
+        // the BRDF Explorer so I'll replicate that here
         let luminance = dot(float3(0.3, 0.6, 1.0), baseColor);
         return (luminance > 0.0) ? baseColor * (1.0 / luminance) : float3(1.0);
     }
@@ -282,8 +282,8 @@ namespace pbr
 
         let tint = calculateTint(baseColor);
 
-        // -- See section 3.1 and 3.2 of the 2015 PBR presentation + the Disney BRDF explorer (which does their
-        // -- 2012 remapping rather than the SchlickR0FromRelativeIOR seen here but they mentioned the switch in 3.2).
+        // See section 3.1 and 3.2 of the 2015 PBR presentation + the Disney BRDF explorer (which does their
+        // 2012 remapping rather than the SchlickR0FromRelativeIOR seen here but they mentioned the switch in 3.2)
         float3 R0 = fresnelSchlickR0FromRelativeIOR(relativeIOR) * lerp(float3(1.0), tint, specularTint);
         R0 = lerp(R0, baseColor, metallic);
 

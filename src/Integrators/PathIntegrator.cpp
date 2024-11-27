@@ -1,6 +1,6 @@
 /*****************************************************************/ /**
  * @file   PathIntegrator.cpp
- * @brief  
+ * @brief  source file of PathIntegrator class
  * 
  * @author ichi-raven
  * @date   October 2024
@@ -128,20 +128,21 @@ namespace palm
                         Material::Params texIndexModified = mat.params;
                         if (mat.albedoTex)
                         {
-                            texIndexModified.albedoTexIndex = texIndex++;
+                            texIndexModified.albedoTexIndex = texIndex + 0;
                         }
                         if (mat.roughnessTex)
                         {
-                            texIndexModified.roughnessTexIndex = texIndex++;
+                            texIndexModified.roughnessTexIndex = texIndex + 1;
                         }
                         if (mat.metalnessTex)
                         {
-                            texIndexModified.metalnessTexIndex = texIndex++;
+                            texIndexModified.metalnessTexIndex = texIndex + 2;
                         }
                         if (mat.normalMapTex)
                         {
-                            texIndexModified.normalMapTexIndex = texIndex++;
+                            texIndexModified.normalMapTexIndex = texIndex + 3;
                         }
+                        texIndex += Material::kDefaultTexNum;
 
                         params.emplace_back(texIndexModified);
 
@@ -155,7 +156,7 @@ namespace palm
                 mMaterialBuffer = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eStorageBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
                 mMaterialBuffer->write(params.data(), size);
 
-                // if empty, set dummy image
+                // if all empty, set dummy image
                 if (mTextures.empty())
                 {
                     mTextures.emplace_back(mDummyTexture);
@@ -252,13 +253,13 @@ namespace palm
             // create bind layout
             const auto meshNum  = mScene.size<Mesh>();
             std::array bindings = {
-                // 0 : TLAS
+                // 0: TLAS
                 vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eAccelerationStructureKHR, 1, vk::ShaderStageFlagBits::eAll),
-                // 1 : result image
+                // 1: result image
                 vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eAll),
-                // 2 : result image
+                // 2: result image
                 vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eAll),
-                // 3 : scene parameters
+                // 3: scene parameters
                 vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAll),
                 // 4: vertex buffers
                 vk::DescriptorSetLayoutBinding(4, vk::DescriptorType::eStorageBuffer, meshNum, vk::ShaderStageFlagBits::eAll),
@@ -380,9 +381,11 @@ namespace palm
     void PathIntegrator::sample(Handle<vk2s::Command> command)
     {
         const auto extent = mOutputImage->getVkExtent();
+
         // trace ray
         command->setPipeline(mRaytracePipeline);
         command->setBindGroup(0, mBindGroup.get());
         command->traceRays(mShaderBindingTable.get(), extent.width, extent.height, 1);
     }
+
 }  // namespace palm

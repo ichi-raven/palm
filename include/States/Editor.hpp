@@ -18,6 +18,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <ImGuizmo.h>
+#include <imfilebrowser.h>
 
 #include "../include/AppStates.hpp"
 #include "../GraphicsPass.hpp"
@@ -182,6 +183,12 @@ namespace palm
 
         //! Current ImGuizmo operation mode (translate, rotate, scale)
         ImGuizmo::OPERATION mCurrentGizmoOperation;
+
+        //! To detect only the first frame mouse clicked
+        bool mDragging;
+
+        //! For arbitrary texture loading
+        ImGui::FileBrowser mFileBrowser;
 
         //! Current path (for explorer)
         std::filesystem::path mCurrentPath;
