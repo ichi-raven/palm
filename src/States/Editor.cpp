@@ -6,8 +6,6 @@
  * @date   February 2024
  *********************************************************************/
 
-//#define VULKAN_HPP_NO_CONSTRUCTORS
-
 #include "../include/States/Editor.hpp"
 #include "../include/Mesh.hpp"
 #include "../include/Material.hpp"
@@ -130,44 +128,64 @@ namespace palm
                     ci.extent          = vk::Extent3D(hostTex.width, hostTex.height, 1);
                     material.albedoTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
                     material.albedoTex->write(hostTex.pData, size);
+                    material.params.albedoTexIndex = 0;
                     createdImages.emplace_back(material.albedoTex);
                 }
+                else
+                {
+                    createdImages.emplace_back(mDummyTexture);
+                }
 
-                /*if (hostMaterial.roughnessTex != -1)
+                if (hostMaterial.roughnessTex != -1)
                 {
                     const auto& hostTex = hostTextures[hostMaterial.roughnessTex];
-                    const auto size     = hostTex.width * hostTex.height * sizeof(float);
+                    const auto size     = hostTex.width * hostTex.height * static_cast<uint32_t>(STBI_rgb_alpha);
 
                     ci.format             = vk::Format::eR8G8B8A8Unorm;
                     ci.extent             = vk::Extent3D(hostTex.width, hostTex.height, 1);
                     material.roughnessTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
                     material.roughnessTex->write(hostTex.pData, size);
+                    material.params.roughnessTexIndex = 1;
                     createdImages.emplace_back(material.roughnessTex);
+                }
+                else
+                {
+                    createdImages.emplace_back(mDummyTexture);
                 }
 
                 if (hostMaterial.metalnessTex != -1)
                 {
                     const auto& hostTex = hostTextures[hostMaterial.metalnessTex];
-                    const auto size     = hostTex.width * hostTex.height * sizeof(float);
+                    const auto size     = hostTex.width * hostTex.height * static_cast<uint32_t>(STBI_rgb_alpha);
 
-                    ci.format             = vk::Format::eR8G8B8A8Unorm;
-                    ci.extent             = vk::Extent3D(hostTex.width, hostTex.height, 1);
-                    material.metalnessTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+                                          ci.format = vk::Format::eR8G8B8A8Unorm;
+                    ci.extent                       = vk::Extent3D(hostTex.width, hostTex.height, 1);
+                    material.metalnessTex           = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
                     material.metalnessTex->write(hostTex.pData, size);
+                    material.params.metalnessTexIndex = 2;
                     createdImages.emplace_back(material.metalnessTex);
+                }
+                else
+                {
+                    createdImages.emplace_back(mDummyTexture);
                 }
 
                 if (hostMaterial.normalMapTex != -1)
                 {
                     const auto& hostTex = hostTextures[hostMaterial.normalMapTex];
-                    const auto size     = hostTex.width * hostTex.height * sizeof(float) * 3;
+                    const auto size     = hostTex.width * hostTex.height * static_cast<uint32_t>(STBI_rgb_alpha);
 
                     ci.format             = vk::Format::eR8G8B8A8Unorm;
                     ci.extent             = vk::Extent3D(hostTex.width, hostTex.height, 1);
                     material.normalMapTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
                     material.normalMapTex->write(hostTex.pData, size);
+                    material.params.normalMapTexIndex = 2;
                     createdImages.emplace_back(material.normalMapTex);
-                }*/
+                }
+                else
+                {
+                    createdImages.emplace_back(mDummyTexture);
+                }
 
                 {  // transition from initial layout
                     UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
@@ -196,6 +214,8 @@ namespace palm
                 {  // bindgroup
                     material.bindGroup = device.create<vk2s::BindGroup>(mGeometryPass.bindLayouts[2].get());
                     material.bindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, material.uniformBuffer.get());
+                    material.bindGroup->bind(1, vk::DescriptorType::eSampledImage, createdImages);
+                    material.bindGroup->bind(2, mDefaultSampler.get());
                 }
             }
 
@@ -359,6 +379,33 @@ namespace palm
             const auto [windowWidth, windowHeight] = window->getWindowSize();
             const auto frameCount                  = window->getFrameCount();
 
+            // create dummy image
+            {
+                // dummy texture
+                constexpr uint8_t kDummyColor[] = { 255, 0, 255, 255 };  // Magenta
+                const auto format               = vk::Format::eR8G8B8A8Srgb;
+                const uint32_t size             = vk2s::Compiler::getSizeOfFormat(format);  // 1 * 1
+
+                vk::ImageCreateInfo ci;
+                ci.arrayLayers   = 1;
+                ci.extent        = vk::Extent3D(1, 1, 1);  // 1 * 1
+                ci.format        = format;
+                ci.imageType     = vk::ImageType::e2D;
+                ci.mipLevels     = 1;
+                ci.usage         = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
+                ci.initialLayout = vk::ImageLayout::eUndefined;
+
+                // change format to pooling
+                mDummyTexture = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+                mDummyTexture->write(kDummyColor, size);
+
+                UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
+                cmd->begin(true);
+                cmd->transitionImageLayout(mDummyTexture.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eShaderReadOnlyOptimal);
+                cmd->end();
+                cmd->execute();
+            }
+
             // to share implementation with swap chain recreation
             createGBuffer();
 
@@ -386,9 +433,9 @@ namespace palm
                     // Material params
                     vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
                     // Material Textures
-                    //vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eSampledImage, Material::kDefaultTexNum, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eSampledImage, Material::kDefaultTexNum, vk::ShaderStageFlagBits::eAll),
                     // Sampler
-                    //vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eAll),
 
                 };
 
@@ -551,8 +598,11 @@ namespace palm
             scene.each<vk2s::Camera>([&](ec2s::Entity entity, vk2s::Camera& camera) { mCameraEntity = entity; });
         }
 
-        mLastTime = glfwGetTime();
-        mNow      = 0;
+        // member variables initialization
+        mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+        mCurrentPath           = std::filesystem::current_path();
+        mLastTime              = glfwGetTime();
+        mNow                   = 0;
     }
 
     void Editor::update()
@@ -822,7 +872,7 @@ namespace palm
                 {
                     if (ImGui::MenuItem("Point", NULL))
                     {
-                        static uint32_t pointEmitterNum = 0;  // HACK:
+                        static uint32_t pointEmitterNum = 0;  // HACK: for unique Emitter name
 
                         const auto added = scene.create<Emitter, Transform, EntityInfo>();
                         {
@@ -895,23 +945,21 @@ namespace palm
             ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * (1.0f - kRenderArea.y)));
             ImGui::Begin("FileExplorer", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
-            static std::filesystem::path current = std::filesystem::current_path();
-
-            ImGui::Text(current.string().c_str());
+            ImGui::Text(mCurrentPath.string().c_str());
 
             if (ImGui::Button("<="))
             {
-                current = current.parent_path();
+                mCurrentPath = mCurrentPath.parent_path();
             }
 
-            for (const auto& entry : std::filesystem::directory_iterator(current))
+            for (const auto& entry : std::filesystem::directory_iterator(mCurrentPath))
             {
                 if (entry.is_directory())
                 {
                     ImGui::SetNextItemOpen(false);
                     if (ImGui::TreeNode(entry.path().filename().string().c_str()))
                     {
-                        current = entry.path();
+                        mCurrentPath = entry.path();
 
                         ImGui::TreePop();
                     }
@@ -929,7 +977,6 @@ namespace palm
         }
 
         {
-            constexpr auto kMenuBarSize = 0.031;
             ImGui::SetNextWindowPos(ImVec2(windowWidth * kRenderArea.x, windowHeight * kMenuBarSize));  // right
             ImGui::SetNextWindowSize(ImVec2(windowWidth * (1.f - kRenderArea.x), windowHeight * (kRenderArea.y - kMenuBarSize)));
             ImGui::Begin("SceneEditor", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
@@ -947,7 +994,7 @@ namespace palm
                         mPickedEntity = entity;
                     }
 
-                    if (ImGui::IsItemHovered() && ImGui::IsKeyPressed(ImGuiKey_Delete, false))
+                    if (ImGui::IsItemHovered() && window->getKey(GLFW_KEY_DELETE))
                     {
                         removeEntity(entity);
                     }
@@ -974,9 +1021,21 @@ namespace palm
 
                 auto& transform = scene.get<Transform>(*mPickedEntity);
 
-                static ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::TRANSLATE;
-                const auto& viewMat                              = camera.getViewMatrix();
-                glm::mat4 projectionMat                          = camera.getProjectionMatrix();
+                if (window->getKey(GLFW_KEY_F1))
+                {
+                    mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+                }
+                if (window->getKey(GLFW_KEY_F2))
+                {
+                    mCurrentGizmoOperation = ImGuizmo::ROTATE;
+                }
+                if (window->getKey(GLFW_KEY_F3))
+                {
+                    mCurrentGizmoOperation = ImGuizmo::SCALE;
+                }
+
+                const auto& viewMat     = camera.getViewMatrix();
+                glm::mat4 projectionMat = camera.getProjectionMatrix();
                 projectionMat[1][1] *= -1.f;  // HACK: too adhoc (for Vulkan's inverse Y)
 
                 // position editor (translation)
@@ -989,22 +1048,9 @@ namespace palm
                 // update buffer value
                 transform.params.update(transform.pos, glm::radians(transform.rot), transform.scale);
 
-                if (ImGui::IsKeyPressed(ImGuiKey_1))
-                {
-                    currentGizmoOperation = ImGuizmo::TRANSLATE;
-                }
-                if (ImGui::IsKeyPressed(ImGuiKey_2))
-                {
-                    currentGizmoOperation = ImGuizmo::ROTATE;
-                }
-                if (ImGui::IsKeyPressed(ImGuiKey_3))
-                {
-                    currentGizmoOperation = ImGuizmo::SCALE;
-                }
-
                 // manipulate (the entity must not be picked during the operation, so the state is preserved)
-                ImGuizmo::Manipulate(glm::value_ptr(viewMat), glm::value_ptr(projectionMat), currentGizmoOperation, ImGuizmo::WORLD, glm::value_ptr(transform.params.world));
-                
+                ImGuizmo::Manipulate(glm::value_ptr(viewMat), glm::value_ptr(projectionMat), mCurrentGizmoOperation, ImGuizmo::WORLD, glm::value_ptr(transform.params.world));
+
                 glm::vec3 translation, rotation, scale;
                 ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform.params.world), glm::value_ptr(translation), glm::value_ptr(rotation), glm::value_ptr(scale));
 

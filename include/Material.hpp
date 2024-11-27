@@ -85,7 +85,7 @@ namespace palm
             int32_t albedoTexIndex    = kInvalidTexIndex;
             int32_t roughnessTexIndex = kInvalidTexIndex;
             int32_t metalnessTexIndex = kInvalidTexIndex;
-            int32_t normalmapTexIndex = kInvalidTexIndex;
+            int32_t normalMapTexIndex = kInvalidTexIndex;
 
             //! Emissive component of the material (usually used with emitters)
             glm::vec3 emissive   = glm::vec3(0.0);

@@ -1,4 +1,5 @@
-import "../../Material/Material.slang";
+import "../../Material/Material";
+import "../../Utility/Constants";
 
 struct SceneParams
 {
@@ -61,8 +62,8 @@ struct FSOutput
 [[vk::binding(0, 1)]] ConstantBuffer<EntityParams> entityParams;
 
 [[vk::binding(0, 2)]] ConstantBuffer<MaterialParams>    materialParams;
-// [[vk::binding(1, 2)]] Texture2D<float4>                 textures[];
-// [[vk::binding(2, 2)]] SamplerState                      sampler;
+[[vk::binding(1, 2)]] Texture2D<float4>                 textures[];
+[[vk::binding(2, 2)]] SamplerState                      sampler;
 
 [shader("vertex")]
 VSOutput vsmain(VSInput in)
@@ -81,11 +82,27 @@ VSOutput vsmain(VSInput in)
 [shader("fragment")]
 FSOutput fsmain(VSOutput in)
 {
+    let albedo = textures[0].Sample(sampler, in.worldInfo.uv);
+    let roughness = textures[1].Sample(sampler, in.worldInfo.uv).x;
+    let metalness = textures[2].Sample(sampler, in.worldInfo.uv).x;
+    let normal = textures[3].Sample(sampler, in.worldInfo.uv).x;
+
     FSOutput output = (FSOutput)0;
     output.albedo               = float4(materialParams.albedo, 1.0);
+    if (materialParams.albedoTexIndex != k::invalidTexIndex)
+    {
+        output.albedo               = albedo;
+    }
+
+    output.roughnessMetalness   = float4(materialParams.roughness, materialParams.metallic, 1.0, 1.0);
+    // if (materialParams.albedoTexIndex != k::invalidTexIndex)
+    // {
+    //     output.roughnessMetalness.x = roughness;
+    //     output.roughnessMetalness.y = metalness;
+    // }
+
     output.normal               = float4(in.worldInfo.normal, reinterpret<float>(entityParams.entitySlot));
     output.worldPos             = float4(in.worldInfo.pos, reinterpret<float>(entityParams.entityIndex));
-    output.roughnessMetalness   = float4(materialParams.roughness, materialParams.metallic, 1.0, 1.0);
 
     return output;
 }

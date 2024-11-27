@@ -17,6 +17,8 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <ImGuizmo.h>
+
 #include "../include/AppStates.hpp"
 #include "../GraphicsPass.hpp"
 
@@ -127,8 +129,11 @@ namespace palm
         bool isPointerOnRenderArea() const;
 
     private:
-        //! Percentage of the total window that is in the rendering area (outside of this is the GUI)
+        //! Percentage of the rendering area in the window (outside of this is the GUI)
         inline const static glm::vec2 kRenderArea = glm::vec2(0.75f, 0.75f);
+
+        //! Relative height of menu bar
+        constexpr static double kMenuBarSize = 0.031;
 
         //! Maximum number of emitters that the editor can reflect in the drawing (must always sync with shader side)
         constexpr static size_t kMaxEmitterNum = 10;
@@ -151,8 +156,11 @@ namespace palm
         //! Lighting path for deferred shading (apply shading to G-Buffer)
         GraphicsPass mLightingPass;
 
-        //! Sampler with default settings for G-Buffer readout, etc.
+        //! Sampler with default settings for G-Buffer reading, etc.
         UniqueHandle<vk2s::Sampler> mDefaultSampler;
+
+        //! Dummy image for pseudo binding
+        UniqueHandle<vk2s::Image> mDummyTexture;
 
         //! Uniform buffer to write SceneParams
         UniqueHandle<vk2s::DynamicBuffer> mSceneBuffer;
@@ -172,6 +180,11 @@ namespace palm
         //! If State is to be changed, where to change it (to fix processing order)
         std::optional<AppState> mChangeDst;
 
+        //! Current ImGuizmo operation mode (translate, rotate, scale)
+        ImGuizmo::OPERATION mCurrentGizmoOperation;
+
+        //! Current path (for explorer)
+        std::filesystem::path mCurrentPath;
         //! Elapsed time to previous frame
         double mLastTime     = 0;
         //! Index of the frame buffer currently being processed

@@ -140,7 +140,7 @@ namespace palm
                         }
                         if (mat.normalMapTex)
                         {
-                            texIndexModified.normalmapTexIndex = texIndex++;
+                            texIndexModified.normalMapTexIndex = texIndex++;
                         }
 
                         params.emplace_back(texIndexModified);

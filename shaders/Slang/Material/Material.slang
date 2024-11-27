@@ -39,14 +39,14 @@ public struct MaterialParams // std140
         {
             params.albedo = textures[NonUniformResourceIndex(params.albedoTexIndex)].Sample(sampler, uv).xyz;
         }
-        if (params.roughnessTexIndex != k::invalidTexIndex)
-        {
-            params.roughness = textures[NonUniformResourceIndex(params.roughnessTexIndex)].Sample(sampler, uv).x;
-        }
-        if (params.metalnessTexIndex != k::invalidTexIndex)
-        {
-            params.metallic = textures[NonUniformResourceIndex(params.metalnessTexIndex)].Sample(sampler, uv).x;
-        }
+        // if (params.roughnessTexIndex != k::invalidTexIndex)
+        // {
+        //     params.roughness = saturate(textures[NonUniformResourceIndex(params.roughnessTexIndex)].Sample(sampler, uv).x);
+        // }
+        // if (params.metalnessTexIndex != k::invalidTexIndex)
+        // {
+        //     params.metallic = saturate(textures[NonUniformResourceIndex(params.metalnessTexIndex)].Sample(sampler, uv).x);
+        // }
 
         if (params.normalmapTexIndex != k::invalidTexIndex)
         {
