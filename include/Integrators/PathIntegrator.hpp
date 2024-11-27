@@ -31,6 +31,14 @@ namespace palm
         virtual void sample(Handle<vk2s::Command> command) override;
 
     private:
+
+        // shader groups
+        constexpr static int kIndexRaygen     = 0;
+        constexpr static int kIndexMiss       = 1;
+        constexpr static int kIndexShadow     = 2;
+        constexpr static int kIndexClosestHit = 3;
+
+    private:
         struct SceneParams  // std140
         {
             glm::mat4 view;

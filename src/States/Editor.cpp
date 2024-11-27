@@ -158,9 +158,9 @@ namespace palm
                     const auto& hostTex = hostTextures[hostMaterial.metalnessTex];
                     const auto size     = hostTex.width * hostTex.height * static_cast<uint32_t>(STBI_rgb_alpha);
 
-                                          ci.format = vk::Format::eR8G8B8A8Unorm;
-                    ci.extent                       = vk::Extent3D(hostTex.width, hostTex.height, 1);
-                    material.metalnessTex           = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+                    ci.format             = vk::Format::eR8G8B8A8Unorm;
+                    ci.extent             = vk::Extent3D(hostTex.width, hostTex.height, 1);
+                    material.metalnessTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
                     material.metalnessTex->write(hostTex.pData, size);
                     material.params.metalnessTexIndex = 2;
                     createdImages.emplace_back(material.metalnessTex);
@@ -628,6 +628,11 @@ namespace palm
             exitApplication();
         }
 
+        if (window->getKey(GLFW_KEY_F5) && scene.size<Mesh>() > 0 && scene.size<Emitter>() > 0)
+        {
+            mChangeDst = AppState::eRenderer;
+        }
+
         // update time
         const double currentTime = glfwGetTime();
         const float deltaTime    = static_cast<float>(currentTime - mLastTime);
@@ -734,7 +739,7 @@ namespace palm
         }
 
         // post-render-----------------------------------------
-        
+
         // update frame index
         mNow = (mNow + 1) % frameCount;
 
@@ -942,6 +947,7 @@ namespace palm
                 {
                     mChangeDst = AppState::eMaterialViewer;
                 }
+
                 ImGui::EndMenu();
             }
 
@@ -1044,8 +1050,8 @@ namespace palm
                 }
 
                 const auto& viewMat     = camera.getViewMatrix();
-                glm::mat4 projectionMat = camera.getProjectionMatrix(); // copy for modification
-                projectionMat[1][1] *= -1.f;  // HACK: too adhoc (for Vulkan's inverse Y)
+                glm::mat4 projectionMat = camera.getProjectionMatrix();  // copy for modification
+                projectionMat[1][1] *= -1.f;                             // HACK: too adhoc (for Vulkan's inverse Y)
 
                 // position editor (translation)
                 ImGui::InputFloat3("Translate", glm::value_ptr(transform.pos));
@@ -1113,12 +1119,12 @@ namespace palm
 
                 auto& camera = scene.get<vk2s::Camera>(*mPickedEntity);
 
-                auto pos     = camera.getPos();
-                auto lookAt  = camera.getLookAt();
-                auto fov    = camera.getFOV();
-                auto aspect = camera.getAspect();
-                auto nearPlane   = camera.getNear(); // "near" is already defined by windows.h
-                auto farPlane    = camera.getFar();  // "far" is already defined by windows.h
+                auto pos       = camera.getPos();
+                auto lookAt    = camera.getLookAt();
+                auto fov       = camera.getFOV();
+                auto aspect    = camera.getAspect();
+                auto nearPlane = camera.getNear();  // "near" is already defined by windows.h
+                auto farPlane  = camera.getFar();   // "far" is already defined by windows.h
 
                 if (ImGui::InputFloat3("Position", glm::value_ptr(pos)))
                 {

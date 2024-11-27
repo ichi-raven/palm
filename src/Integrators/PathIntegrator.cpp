@@ -279,12 +279,6 @@ namespace palm
 
             mBindLayout = device.create<vk2s::BindLayout>(bindings);
 
-            // shader groups
-            constexpr int kIndexRaygen     = 0;
-            constexpr int kIndexMiss       = 1;
-            constexpr int kIndexShadow     = 2;
-            constexpr int kIndexClosestHit = 3;
-
             // create ray tracing pipeline
             vk2s::Pipeline::RayTracingPipelineInfo rpi{
                 .raygenShaders = { raygenShader },
