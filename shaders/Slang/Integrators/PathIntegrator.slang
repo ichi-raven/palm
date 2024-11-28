@@ -180,7 +180,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                     let f = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
 
                     let pathpdf   = G * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
-                    let MISWeight = es.pdf / max(k::eps, es.pdf + pathpdf);
+                    let MISWeight = es.pdf / (es.pdf + pathpdf);
 
                     L += MISWeight * beta * f * G * cosine * es.emissive / es.pdf;
                 }
@@ -213,7 +213,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                     }
 
                     let cosine    = abs(dot(si.normal, si.frame.toWorld(bs.wo)));
-                    let MISWeight = bs.pdf / max(k::eps, emitterpdf + bs.pdf);
+                    let MISWeight = bs.pdf / (emitterpdf + bs.pdf);
                     L += MISWeight * beta * bs.f * cosine * emissive / bs.pdf;
                 }
 

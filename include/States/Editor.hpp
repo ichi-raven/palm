@@ -132,12 +132,14 @@ namespace palm
     private:
         //! Percentage of the rendering area in the window (outside of this is the GUI)
         inline const static glm::vec2 kRenderArea = glm::vec2(0.75f, 0.75f);
-
         //! Relative height of menu bar
         constexpr static double kMenuBarSize = 0.031;
-
         //! Maximum number of emitters that the editor can reflect in the drawing (must always sync with shader side)
         constexpr static size_t kMaxEmitterNum = 10;
+        //! Camera movement speed
+        constexpr static double kCameraMoveSpeed = 2.0;
+        //! Camera viewpoint movement speed
+        constexpr static double kCameraViewpointSpeed = 0.7;
 
     private:
         //! GPU commands (per frame)

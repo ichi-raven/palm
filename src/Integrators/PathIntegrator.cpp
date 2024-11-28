@@ -192,7 +192,8 @@ namespace palm
                 mEmittersBuffer->write(params.data(), size);
             }
 
-            {  // create sampler
+            // create sampler
+            {  
                 mSampler = device.create<vk2s::Sampler>(vk::SamplerCreateInfo());
             }
 

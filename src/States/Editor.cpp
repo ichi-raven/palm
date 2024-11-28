@@ -117,8 +117,8 @@ namespace palm
                 ci.usage         = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
                 ci.initialLayout = vk::ImageLayout::eUndefined;
 
-                std::vector<Handle<vk2s::Image>> createdImages;
-
+                // albedo texture
+                // TODO: other texture creating
                 if (hostMaterial.albedoTex != -1)
                 {
                     const auto& hostTex = hostTextures[hostMaterial.albedoTex];
@@ -128,72 +128,12 @@ namespace palm
                     ci.extent          = vk::Extent3D(hostTex.width, hostTex.height, 1);
                     material.albedoTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
                     material.albedoTex->write(hostTex.pData, size);
-                    material.params.albedoTexIndex = 0;
-                    createdImages.emplace_back(material.albedoTex);
-                }
-                else
-                {
-                    createdImages.emplace_back(mDummyTexture);
-                }
+                    material.params.albedoTexIndex = 0;  // not Material::Params::kInvalidTexIndex
 
-                if (hostMaterial.roughnessTex != -1)
-                {
-                    const auto& hostTex = hostTextures[hostMaterial.roughnessTex];
-                    const auto size     = hostTex.width * hostTex.height * static_cast<uint32_t>(STBI_rgb_alpha);
-
-                    ci.format             = vk::Format::eR8G8B8A8Unorm;
-                    ci.extent             = vk::Extent3D(hostTex.width, hostTex.height, 1);
-                    material.roughnessTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
-                    material.roughnessTex->write(hostTex.pData, size);
-                    material.params.roughnessTexIndex = 1;
-                    createdImages.emplace_back(material.roughnessTex);
-                }
-                else
-                {
-                    createdImages.emplace_back(mDummyTexture);
-                }
-
-                if (hostMaterial.metalnessTex != -1)
-                {
-                    const auto& hostTex = hostTextures[hostMaterial.metalnessTex];
-                    const auto size     = hostTex.width * hostTex.height * static_cast<uint32_t>(STBI_rgb_alpha);
-
-                    ci.format             = vk::Format::eR8G8B8A8Unorm;
-                    ci.extent             = vk::Extent3D(hostTex.width, hostTex.height, 1);
-                    material.metalnessTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
-                    material.metalnessTex->write(hostTex.pData, size);
-                    material.params.metalnessTexIndex = 2;
-                    createdImages.emplace_back(material.metalnessTex);
-                }
-                else
-                {
-                    createdImages.emplace_back(mDummyTexture);
-                }
-
-                if (hostMaterial.normalMapTex != -1)
-                {
-                    const auto& hostTex = hostTextures[hostMaterial.normalMapTex];
-                    const auto size     = hostTex.width * hostTex.height * static_cast<uint32_t>(STBI_rgb_alpha);
-
-                    ci.format             = vk::Format::eR8G8B8A8Unorm;
-                    ci.extent             = vk::Extent3D(hostTex.width, hostTex.height, 1);
-                    material.normalMapTex = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
-                    material.normalMapTex->write(hostTex.pData, size);
-                    material.params.normalMapTexIndex = 2;
-                    createdImages.emplace_back(material.normalMapTex);
-                }
-                else
-                {
-                    createdImages.emplace_back(mDummyTexture);
-                }
-
-                {  // transition from initial layout
+                    // transition from initial layout
                     UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
                     cmd->begin(true);
-                    for (auto& tex : createdImages)
-                    {
-                        cmd->transitionImageLayout(tex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eShaderReadOnlyOptimal);
-                    }
+                    cmd->transitionImageLayout(material.albedoTex.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eShaderReadOnlyOptimal);
                     cmd->end();
                     cmd->execute();
                 }
@@ -214,7 +154,14 @@ namespace palm
                 {  // bindgroup
                     material.bindGroup = device.create<vk2s::BindGroup>(mGeometryPass.bindLayouts[2].get());
                     material.bindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, material.uniformBuffer.get());
-                    material.bindGroup->bind(1, vk::DescriptorType::eSampledImage, createdImages);
+                    if (material.albedoTex)
+                    {
+                        material.bindGroup->bind(1, vk::DescriptorType::eSampledImage, material.albedoTex);
+                    }
+                    else
+                    {
+                        material.bindGroup->bind(1, vk::DescriptorType::eSampledImage, mDummyTexture);
+                    }
                     material.bindGroup->bind(2, mDefaultSampler.get());
                 }
             }
@@ -433,7 +380,7 @@ namespace palm
                     // Material params
                     vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
                     // Material Textures
-                    vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eSampledImage, Material::kDefaultTexNum, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),
                     // Sampler
                     vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eAll),
 
@@ -445,10 +392,11 @@ namespace palm
 
                 vk::VertexInputBindingDescription inputBinding(0, sizeof(Mesh::Vertex));
                 const auto& inputAttributes = std::get<0>(mGeometryPass.vs->getReflection());
-                vk::Viewport viewport(0.f, 0.f, static_cast<float>(windowWidth), static_cast<float>(windowHeight), 0.f, 1.f);
-                vk::Rect2D scissor({ 0, 0 }, window->getVkSwapchainExtent());
                 vk::PipelineColorBlendAttachmentState colorBlendAttachment(VK_FALSE);
                 colorBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
+
+                const auto dynamicStates = std::array{ vk::DynamicState::eViewport, vk::DynamicState::eScissor };
+
                 // G-Buffer color
                 std::array attachments = { colorBlendAttachment, colorBlendAttachment, colorBlendAttachment, colorBlendAttachment };
 
@@ -459,11 +407,12 @@ namespace palm
                     .renderPass    = mGeometryPass.renderpass,
                     .inputState    = vk::PipelineVertexInputStateCreateInfo({}, inputBinding, inputAttributes),
                     .inputAssembly = vk::PipelineInputAssemblyStateCreateInfo({}, vk::PrimitiveTopology::eTriangleList),
-                    .viewportState = vk::PipelineViewportStateCreateInfo({}, 1, &viewport, 1, &scissor),
+                    .viewportState = vk::PipelineViewportStateCreateInfo({}, 1, {}, 1, {}),
                     .rasterizer    = vk::PipelineRasterizationStateCreateInfo({}, VK_FALSE, VK_FALSE, vk::PolygonMode::eFill, vk::CullModeFlagBits::eNone, vk::FrontFace::eClockwise, VK_FALSE, 0.0f, 0.0f, 0.0f, 1.0f),
                     .multiSampling = vk::PipelineMultisampleStateCreateInfo({}, vk::SampleCountFlagBits::e1, VK_FALSE),
                     .depthStencil  = vk::PipelineDepthStencilStateCreateInfo({}, VK_TRUE, VK_TRUE, vk::CompareOp::eLess, VK_FALSE),
                     .colorBlending = vk::PipelineColorBlendStateCreateInfo({}, VK_FALSE, vk::LogicOp::eCopy, attachments),
+                    .dynamicStates = vk::PipelineDynamicStateCreateInfo({}, dynamicStates),
                 };
 
                 mGeometryPass.pipeline = device.create<vk2s::Pipeline>(gpi);
@@ -489,10 +438,10 @@ namespace palm
                 mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
                 mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings1));
 
-                vk::Viewport viewport(0.f, 0.f, static_cast<float>(windowWidth) * kRenderArea.x, static_cast<float>(windowHeight) * kRenderArea.y, 0.f, 1.f);
-                vk::Rect2D scissor({ 0, 0 }, window->getVkSwapchainExtent());
                 vk::PipelineColorBlendAttachmentState colorBlendAttachment(VK_FALSE);
                 colorBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
+
+                const auto dynamicStates = std::array{ vk::DynamicState::eViewport, vk::DynamicState::eScissor };
 
                 vk2s::Pipeline::GraphicsPipelineInfo gpi{
                     .vs            = mLightingPass.vs,
@@ -501,11 +450,12 @@ namespace palm
                     .renderPass    = mLightingPass.renderpass,
                     .inputState    = vk::PipelineVertexInputStateCreateInfo(),
                     .inputAssembly = vk::PipelineInputAssemblyStateCreateInfo({}, vk::PrimitiveTopology::eTriangleStrip),
-                    .viewportState = vk::PipelineViewportStateCreateInfo({}, 1, &viewport, 1, &scissor),
+                    .viewportState = vk::PipelineViewportStateCreateInfo({}, 1, {}, 1, {}),
                     .rasterizer    = vk::PipelineRasterizationStateCreateInfo({}, VK_FALSE, VK_FALSE, vk::PolygonMode::eFill, vk::CullModeFlagBits::eNone, vk::FrontFace::eClockwise, VK_FALSE, 0.0f, 0.0f, 0.0f, 1.0f),
                     .multiSampling = vk::PipelineMultisampleStateCreateInfo({}, vk::SampleCountFlagBits::e1, VK_FALSE),
                     .depthStencil  = vk::PipelineDepthStencilStateCreateInfo({}, VK_TRUE, VK_TRUE, vk::CompareOp::eLess, VK_FALSE),
                     .colorBlending = vk::PipelineColorBlendStateCreateInfo({}, VK_FALSE, vk::LogicOp::eCopy, 1, &colorBlendAttachment),
+                    .dynamicStates = vk::PipelineDynamicStateCreateInfo({}, dynamicStates),
                 };
 
                 mLightingPass.pipeline = device.create<vk2s::Pipeline>(gpi);
@@ -576,6 +526,7 @@ namespace palm
         auto& window = common()->window;
         auto& scene  = common()->scene;
 
+        // search camera entity
         if (scene.size<vk2s::Camera>() == 0)
         {
             mCameraEntity = scene.create<vk2s::Camera, EntityInfo>();
@@ -597,6 +548,19 @@ namespace palm
         {
             scene.each<vk2s::Camera>([&](ec2s::Entity entity, vk2s::Camera& camera) { mCameraEntity = entity; });
         }
+
+        // update material binding
+        scene.each<Material>(
+            [&](Material& material)
+            {
+                // bind dummy texture
+                if (!material.albedoTex)
+                {
+                    material.bindGroup->bind(1, vk::DescriptorType::eSampledImage, mDummyTexture);
+                }
+                // bind default sampler
+                material.bindGroup->bind(2, mDefaultSampler.get());
+            });
 
         // member variables initialization
         mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
@@ -639,8 +603,8 @@ namespace palm
         mLastTime                = currentTime;
 
         // update camera
-        const double speed      = 2.0f * deltaTime;
-        const double mouseSpeed = 0.7f * deltaTime;
+        const double speed      = kCameraMoveSpeed * deltaTime;
+        const double mouseSpeed = kCameraViewpointSpeed * deltaTime;
         scene.get<vk2s::Camera>(mCameraEntity).update(window->getpGLFWWindow(), speed, mouseSpeed);
 
         // wait and reset fence
@@ -674,6 +638,11 @@ namespace palm
 
             command->setPipeline(mGeometryPass.pipeline);
 
+            const vk::Viewport viewport(0.f, 0.f, static_cast<float>(windowWidth), static_cast<float>(windowHeight), 0.f, 1.f);
+            const vk::Rect2D scissor({ 0, 0 }, window->getVkSwapchainExtent());
+            command->setViewport(0, viewport);
+            command->setScissor(0, scissor);
+
             command->setBindGroup(0, mSceneBindGroup.get(), { mNow * static_cast<uint32_t>(mSceneBuffer->getBlockSize()) });
             // draw call
             scene.each<Mesh, Material, Transform>(
@@ -703,6 +672,12 @@ namespace palm
             command->beginRenderPass(mLightingPass.renderpass.get(), imageIndex, vk::Rect2D({ 0, 0 }, { windowWidth, windowHeight }), colorClearValue);
 
             command->setPipeline(mLightingPass.pipeline);
+
+            const vk::Viewport viewport(0.f, 0.f, static_cast<float>(windowWidth) * kRenderArea.x, static_cast<float>(windowHeight) * kRenderArea.y, 0.f, 1.f);
+            const vk::Rect2D scissor({ 0, 0 }, window->getVkSwapchainExtent());
+            command->setViewport(0, viewport);
+            command->setScissor(0, scissor);
+
             command->setBindGroup(0, mGBuffer.bindGroup.get());
             command->setBindGroup(1, mLightingBindGroup.get(), { mNow * static_cast<uint32_t>(mSceneBuffer->getBlockSize()), mNow * static_cast<uint32_t>(mEmitterBuffer->getBlockSize()) });
             command->draw(4, 1, 0, 0);
@@ -728,7 +703,6 @@ namespace palm
         if (window->present(imageIndex, mRenderCompletedSems[mNow].get()))
         {
             onResized();
-            return;
         }
 
         // change state
@@ -740,11 +714,11 @@ namespace palm
 
         // post-render-----------------------------------------
 
-        // update frame index
-        mNow = (mNow + 1) % frameCount;
-
         // update key input state
         mDragging = window->getMouseKey(GLFW_MOUSE_BUTTON_LEFT);
+
+        // update frame index
+        mNow = (mNow + 1) % frameCount;
     }
 
     Editor::~Editor()
@@ -1164,6 +1138,9 @@ namespace palm
         auto& window = getCommonRegion()->window;
 
         window->resize();
+
+        const auto [width, height] = window->getWindowSize();
+        std::cout << "new size: (" << width << ", " << height << ")\n";
 
         createGBuffer();
 
