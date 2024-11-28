@@ -325,10 +325,6 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     // sample BSDF and emitter
     MaterialParams params = MaterialParams::loadWithTextures(materialParams[instanceIndex], textures, sampler, payload.si.value.uv);
     // load material params and normal
-    // if (let mappedNormal = params.loadIfSetTexture(textures, sampler, payload.si.value.uv))
-    // {
-    //     // TODO: apply local normal (mappedNormal) to worldNormal
-    // }
 
     if (dot(params.emissive, params.emissive) > 0.)// HACK:
     {
