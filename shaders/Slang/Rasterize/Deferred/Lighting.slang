@@ -36,11 +36,12 @@ struct SceneParams
 VSOutput vsmain(uint id : SV_VertexID)
 {
     VSOutput output = (VSOutput)0;
-    float x = float(id / 2);
-    float y = float(id % 2);
+    let x = float(id / 2);
+    let y = float(id % 2);
 
     output.uv = float2(x, y);
     output.SVPos = float4(x * 2.f - 1.f, y * 2.f - 1.f, 0, 1.0);
+
     return output;
 }
 
@@ -70,13 +71,13 @@ float4 fsmain(VSOutput in) : SV_Target
         pickedID[0] = entity;
     }
 
-    MaterialParams params = MaterialParams();
+    var params = MaterialParams();
     params.type = MaterialType::Principle;
     params.albedo = albedo.xyz;
     params.roughness = roughnessMetalness.x;
     params.metallic = roughnessMetalness.y;
 
-    // there are no context
+    // there is no context
     var dummyCtx = BSDFContext();
     dummyCtx.lastIOR = 1.0;
 
@@ -87,12 +88,12 @@ float4 fsmain(VSOutput in) : SV_Target
     let ambient = 0.25 * albedo.xyz;
     var finalColor = ambient;
 
-    // treat all emitters as pseudo point emitter
-    for (int i = 0; i < 10; ++i)
+    // limited direct sampling, treat all emitters as pseudo point emitter
+    for (int i = 0; i < k::fixedEmitterLimit; ++i)
     {
         var to = emitterParams[i].pos - si.pos;
         let distance = length(to);
-        to = normalize(to);
+        to = 1. / distance * (to);
 
         let wo = frame.toLocal(to);
         let emissive = emitterParams[i].emissive;

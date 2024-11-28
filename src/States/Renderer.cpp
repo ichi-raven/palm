@@ -240,17 +240,17 @@ namespace palm
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));  // left
         ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.03));
-        ImGui::Begin("MenuBar", NULL, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+        ImGui::Begin("MenuBar", nullptr, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
         if (ImGui::BeginMenuBar())
         {
             if (ImGui::BeginMenu("File"))
             {
-                if (ImGui::MenuItem("Save Rendered Image", NULL))
+                if (ImGui::MenuItem("Save Rendered Image", nullptr))
                 {
                     saveImage(std::filesystem::path("rendered.png"));
                 }
 
-                if (ImGui::MenuItem("Save As", NULL))
+                if (ImGui::MenuItem("Save As", nullptr))
                 {
                     mFileBrowser.SetTitle("save rendered image");
                     mFileBrowser.Open();
@@ -261,7 +261,7 @@ namespace palm
 
             if (ImGui::BeginMenu("Mode"))
             {
-                if (ImGui::MenuItem("Editor", NULL))
+                if (ImGui::MenuItem("Editor", nullptr))
                 {
                     mChangeDst = AppState::eEditor;
                 }

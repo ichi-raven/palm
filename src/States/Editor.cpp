@@ -873,7 +873,7 @@ namespace palm
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));  // left
         ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * 0.03));
-        ImGui::Begin("MenuBar", NULL, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+        ImGui::Begin("MenuBar", nullptr, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
         if (ImGui::BeginMenuBar())
         {
@@ -884,7 +884,7 @@ namespace palm
             {
                 if (ImGui::BeginMenu("Emitter"))
                 {
-                    if (ImGui::MenuItem("Point", NULL))
+                    if (ImGui::MenuItem("Point", nullptr))
                     {
                         static uint32_t pointEmitterNum = 0;  // HACK: for unique Emitter name
 
@@ -926,7 +926,7 @@ namespace palm
 
                         ++pointEmitterNum;
                     }
-                    if (ImGui::MenuItem("Infinite", NULL))
+                    if (ImGui::MenuItem("Infinite", nullptr))
                     {
                         // TODO: select constant or envmap -> set color or load texture
                     }
@@ -939,11 +939,11 @@ namespace palm
 
             if (ImGui::BeginMenu("Mode"))
             {
-                if (ImGui::MenuItem("Renderer", NULL) && scene.size<Mesh>() != 0 && scene.size<Emitter>() != 0)
+                if (ImGui::MenuItem("Renderer", nullptr) && scene.size<Mesh>() != 0 && scene.size<Emitter>() != 0)
                 {
                     mChangeDst = AppState::eRenderer;
                 }
-                if (ImGui::MenuItem("MaterialViewer", NULL) && mPickedEntity)
+                if (ImGui::MenuItem("MaterialViewer", nullptr) && mPickedEntity)
                 {
                     mChangeDst = AppState::eMaterialViewer;
                 }
@@ -958,7 +958,7 @@ namespace palm
         {
             ImGui::SetNextWindowPos(ImVec2(0, windowHeight * kRenderArea.y));  // bottom
             ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * (1.0f - kRenderArea.y)));
-            ImGui::Begin("FileExplorer", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+            ImGui::Begin("FileExplorer", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
             ImGui::Text(mCurrentPath.string().c_str());
 
@@ -994,7 +994,7 @@ namespace palm
         {
             ImGui::SetNextWindowPos(ImVec2(windowWidth * kRenderArea.x, windowHeight * kMenuBarSize));  // right
             ImGui::SetNextWindowSize(ImVec2(windowWidth * (1.f - kRenderArea.x), windowHeight * (kRenderArea.y - kMenuBarSize)));
-            ImGui::Begin("SceneEditor", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+            ImGui::Begin("SceneEditor", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
             ImGui::Text("Scene Editor");
 

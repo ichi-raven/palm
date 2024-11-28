@@ -16,6 +16,8 @@ public namespace k
 
     public static let invalidTexIndex = -1;
 
+    public static let fixedEmitterLimit = 10;
+
     public static let zeros = float4(0.0);
     public static let ones  = float4(1.0);
 
