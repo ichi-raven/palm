@@ -165,14 +165,14 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
 
         if (enableMIS)
         {
-            // NEE
+            // NEE (direct light sampling)
             if (!bs.isSpecular()) 
             {
                 if (!occluded(si.pos, es)) // Slang (HLSL) does not support short circuit
                 {
                     MaterialParams params = MaterialParams::loadWithTextures(materialParams[si.instanceIndex], textures, sampler, si.uv);
 
-                    // Add emitter directional contribution to L
+                    // add emitter directional contribution to L
                     let wo = si.frame.toLocal(normalize(es.to));
                     let lightCos = abs(dot(normalize(es.to), es.normal));
                     let G = lightCos / (es.distance * es.distance);
@@ -180,7 +180,8 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                     let f = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
 
                     let pathpdf   = G * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
-                    let MISWeight = es.pdf / (es.pdf + pathpdf);
+                    // balance heuristic
+                    let MISWeight = (es.pdf + pathpdf) == 0. ? 0. : es.pdf / (es.pdf + pathpdf);
 
                     L += MISWeight * beta * f * G * cosine * es.emissive / es.pdf;
                 }
@@ -206,14 +207,13 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                     {
                         if (!bs.isSpecular())
                         {
-                            uint emitterCount, emitterStride;
-                            emitterParams.GetDimensions(emitterCount, emitterStride);
-                            emitterpdf = EmitterSampler.pdf(si, bsdfSi, emitterCount);
+                            emitterpdf = EmitterSampler.pdf(si, bsdfSi, sceneParams.areaEmitterNum);
                         }
                     }
 
                     let cosine    = abs(dot(si.normal, si.frame.toWorld(bs.wo)));
-                    let MISWeight = bs.pdf / (emitterpdf + bs.pdf);
+                    // balance heuristic
+                    let MISWeight = (emitterpdf + bs.pdf) == 0. ? 0. : bs.pdf / (emitterpdf + bs.pdf);
                     L += MISWeight * beta * bs.f * cosine * emissive / bs.pdf;
                 }
 

@@ -20,7 +20,6 @@ namespace palm
     {
         eEditor,
         eRenderer,
-        eMaterialViewer,
     };
 
     /**

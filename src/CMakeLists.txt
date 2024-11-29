@@ -42,7 +42,7 @@ main.cpp
 
 States/Editor.cpp
 States/Renderer.cpp
-States/MaterialViewer.cpp
+#States/MaterialViewer.cpp
 
 Integrators/PathIntegrator.cpp
 ${IMGUI_SOURCE_FILES}
@@ -64,7 +64,7 @@ set (EXEC_HEADERS
 
 ../include/States/Editor.hpp
 ../include/States/Renderer.hpp
-../include/States/MaterialViewer.hpp
+#../include/States/MaterialViewer.hpp
 )
 
 add_executable(${MAIN_EXE} ${EXEC_SRCS})

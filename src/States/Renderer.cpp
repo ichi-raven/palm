@@ -33,9 +33,7 @@ namespace palm
     void Renderer::update()
     {
         constexpr auto colorClearValue   = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 1.0f });
-        constexpr auto gbufferClearValue = vk::ClearValue(std::array{ 0.1f, 0.1f, 0.1f, 1.0f });
         constexpr auto depthClearValue   = vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0));
-        constexpr std::array clearValues = { gbufferClearValue, gbufferClearValue, gbufferClearValue, depthClearValue };
 
         auto& device = common()->device;
         auto& window = common()->window;
@@ -53,7 +51,7 @@ namespace palm
 
         // update time
         const double currentTime = glfwGetTime();
-        const float deltaTime          = static_cast<float>(currentTime - mLastTime);
+        const float deltaTime    = static_cast<float>(currentTime - mLastTime);
         mLastTime                = currentTime;
 
         // wait and reset fence
@@ -79,11 +77,19 @@ namespace palm
         auto& command = mCommands[mNow];
         // start writing command
         command->begin();
+        
+        {// clear output image
+            const vk::ImageSubresourceRange range(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1);
+            command->clearImage(mOutputImage.get(), vk::ImageLayout::eGeneral, colorClearValue, range);
+        }
 
-        // integrator
+        // sample if integrator is valid
         if (mIntegrator)
         {
             mIntegrator->sample(command);
+        }
+
+        {// copy output image
 
             const auto region = vk::ImageCopy()
                                     .setExtent({ windowWidth, windowHeight, 1 })
@@ -167,10 +173,8 @@ namespace palm
 
         try
         {
-            // ImGui pass
-            {
-                mGuiPass.renderpass = device.create<vk2s::RenderPass>(window.get(), vk::AttachmentLoadOp::eLoad);
-            }
+            // ImGui pass (initialized by clear op)
+            mGuiPass.renderpass = device.create<vk2s::RenderPass>(window.get(), vk::AttachmentLoadOp::eLoad);
 
             // initialize ImGui
             device.initImGui(window.get(), mGuiPass.renderpass.get());
@@ -200,7 +204,7 @@ namespace palm
                 ci.format        = format;
                 ci.imageType     = vk::ImageType::e2D;
                 ci.mipLevels     = 1;
-                ci.usage         = vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eStorage;
+                ci.usage         = vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eStorage;
                 ci.initialLayout = vk::ImageLayout::eUndefined;
 
                 mOutputImage = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
@@ -275,6 +279,7 @@ namespace palm
         ImGui::Begin("Select Integrator");
         if (ImGui::Selectable("path"))
         {
+            // set integrator
             mIntegrator = std::make_unique<PathIntegrator>(device, scene, mOutputImage);
         }
 
@@ -346,7 +351,7 @@ namespace palm
             {
                 for (size_t w = 0; w < extent.width; ++w)
                 {
-                    const size_t index             = h * extent.width + w;
+                    const size_t index    = h * extent.width + w;
                     output[index * 3 + 0] = p[index * 4 + 0];
                     output[index * 3 + 1] = p[index * 4 + 1];
                     output[index * 3 + 2] = p[index * 4 + 2];

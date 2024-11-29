@@ -760,6 +760,7 @@ namespace palm
         auto& camera = scene.get<vk2s::Camera>(mCameraEntity);
 
         const auto [mx, my]        = window->getMousePos();
+        std::cout << mx << ", " << my << "\n";
         const auto [width, height] = window->getWindowSize();
 
         // scene information
@@ -898,11 +899,8 @@ namespace palm
                             transform.bindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, transform.uniformBuffer.get());
                         }
 
+                        mPickedEntity = added;
                         ++pointEmitterNum;
-                    }
-                    if (ImGui::MenuItem("Infinite", nullptr))
-                    {
-                        // TODO: select constant or envmap -> set color or load texture
                     }
 
                     ImGui::EndMenu();
@@ -916,10 +914,6 @@ namespace palm
                 if (ImGui::MenuItem("Renderer", nullptr) && scene.size<Mesh>() != 0 && scene.size<Emitter>() != 0)
                 {
                     mChangeDst = AppState::eRenderer;
-                }
-                if (ImGui::MenuItem("MaterialViewer", nullptr) && mPickedEntity)
-                {
-                    mChangeDst = AppState::eMaterialViewer;
                 }
 
                 ImGui::EndMenu();
@@ -935,6 +929,7 @@ namespace palm
             ImGui::Begin("FileExplorer", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
             ImGui::Text(mCurrentPath.string().c_str());
+            ImGui::SeparatorText("Model explorer");
 
             if (ImGui::Button("<="))
             {
@@ -989,9 +984,10 @@ namespace palm
                     }
                 });
 
-            if (mPickedEntity && ImGui::IsKeyPressed(ImGuiKey_Delete, false))
+            if (mPickedEntity && window->getKey(GLFW_KEY_DELETE))
             {
                 removeEntity(*mPickedEntity);
+                mPickedEntity.reset();
             }
 
             ImGui::SeparatorText("Information");
@@ -1140,7 +1136,6 @@ namespace palm
         window->resize();
 
         const auto [width, height] = window->getWindowSize();
-        std::cout << "new size: (" << width << ", " << height << ")\n";
 
         createGBuffer();
 
