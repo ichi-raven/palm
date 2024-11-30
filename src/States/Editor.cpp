@@ -838,6 +838,10 @@ namespace palm
 
         // write emitters
         {
+            constexpr size_t size = sizeof(Emitter::Params) * kMaxEmitterNum;
+            std::byte zeros[size] = { static_cast<std::byte>(0) };
+            mEmitterBuffer->write(zeros, size, mNow * mEmitterBuffer->getBlockSize());
+
             std::vector<Emitter::Params> emitterParams;
             emitterParams.reserve(kMaxEmitterNum);
             scene.each<Emitter, Transform>(
@@ -855,12 +859,6 @@ namespace palm
             if (!emitterParams.empty())
             {
                 mEmitterBuffer->write(emitterParams.data(), sizeof(Emitter::Params) * emitterParams.size(), mNow * mEmitterBuffer->getBlockSize());
-            }
-            else  // zero crear
-            {
-                constexpr size_t size = sizeof(Emitter::Params) * kMaxEmitterNum;
-                std::byte zeros[size] = { static_cast<std::byte>(0) };
-                mEmitterBuffer->write(zeros, size, mNow * mEmitterBuffer->getBlockSize());
             }
         }
     }
