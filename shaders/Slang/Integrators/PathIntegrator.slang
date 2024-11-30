@@ -26,7 +26,7 @@ struct InstanceParams : IInstance
     float4x4 worldInvTrans;
 }
 
-struct Payload //<Sampler: ISampler> TODO:
+struct Payload //<Sampler: ISampler> TODO: selecting sampler
 {
     __init(const IndependentSampler sampler_, const bool sampleOnlyEmissive_ = false)
     {
@@ -91,12 +91,12 @@ struct Vertex : IVertex// std140
     }
 }
 
-RayDesc getCameraRay(uint2 threadIdx, float2 u)
+RayDesc getCameraRay(uint2 threadIdx, float2 sample2)
 {
     let pixelCenter = float2(threadIdx.xy) + float2(0.5);
     let screenPos = pixelCenter / DispatchRaysDimensions().xy;
     
-    const float2 offset = u / DispatchRaysDimensions().xy;
+    let offset = sample2 / DispatchRaysDimensions().xy;
     
     // TODO: lens sampling
     let d         = (screenPos + offset) * 2.0 - 1.0;
@@ -117,10 +117,11 @@ bool occluded(const float3 pos, const EmitterSample es)
     RayDesc shadowRay;
     shadowRay.Origin               = pos;
     shadowRay.Direction            = normalize(es.to);
-    shadowRay.TMin                 = k::eps;  // WARN: adhoc
-    shadowRay.TMax                 = es.distance - k::eps;
+    shadowRay.TMin                 = k::eps;  
+    shadowRay.TMax                 = es.distance - k::eps;// WARN: adhoc
 
-    bool ret = true;// payload, true if hit other object
+    // payload, true if hit other object
+    bool ret = true;
     TraceRay(sceneBVH, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, ~0, 0, 0, 1, shadowRay, ret);
 
     return ret;
@@ -138,7 +139,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
     RayDesc ray = getCameraRay(DispatchRaysIndex().xy, payload.sampler.next2D());
     TraceRay(sceneBVH, RAY_FLAG_NONE, ~0, 0, 0, 0, ray, payload);
 
-    // required for MIS (luminance for first hit)
+    // required for MIS (for primal hit)
     if (enableMIS)
     {
         if (let emissive = payload.emissive)
@@ -324,7 +325,6 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     
     // sample BSDF and emitter
     MaterialParams params = MaterialParams::loadWithTextures(materialParams[instanceIndex], textures, sampler, payload.si.value.uv);
-    // load material params and normal
 
     if (dot(params.emissive, params.emissive) > 0.)// HACK:
     {
@@ -333,6 +333,7 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
 
     if (payload.skipSampling())
     {
+        // just want to know if this surface is emissive
         return;
     }
 

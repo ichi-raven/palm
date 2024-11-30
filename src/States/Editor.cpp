@@ -25,13 +25,20 @@
 
 namespace palm
 {
+    // for casting path UTF-8 string to normal string
+    std::string to_string(const std::filesystem::path& path)
+    {
+        const auto u8str = path.u8string();
+        return std::string(reinterpret_cast<const char*>(u8str.data()), u8str.size());
+    }
+
     void Editor::addEntity(const std::filesystem::path& path)
     {
         auto& device = common()->device;
         auto& window = getCommonRegion()->window;
         auto& scene  = common()->scene;
 
-        vk2s::Scene model(path.string());
+        vk2s::Scene model(to_string(path));
 
         const std::vector<vk2s::Mesh>& hostMeshes        = model.getMeshes();
         const std::vector<vk2s::Material>& hostMaterials = model.getMaterials();
@@ -96,7 +103,7 @@ namespace palm
                 material.params.emissive  = glm::vec3(hostMaterial.emissive);
 
                 // add emitter component if the material has emissive value
-                if (material.params.emissive.length() > 0.0)
+                if (glm::dot(material.params.emissive, material.params.emissive) > 0.0)
                 {
                     scene.add<Emitter>(entity);
 
@@ -574,6 +581,7 @@ namespace palm
         constexpr auto colorClearValue   = vk::ClearValue(std::array{ 0.1f, 0.1f, 0.1f, 1.0f });
         constexpr auto gbufferClearValue = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 0.0f });
         constexpr auto depthClearValue   = vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0));
+        // HACK:
         constexpr std::array clearValues = { gbufferClearValue, gbufferClearValue, gbufferClearValue, gbufferClearValue, depthClearValue };
 
         auto& device = common()->device;
@@ -583,29 +591,50 @@ namespace palm
         const auto [windowWidth, windowHeight] = window->getWindowSize();
         const auto frameCount                  = window->getFrameCount();
 
-        static bool resizedWhenPresent = false;
-
         // pre-render-----------------------------------------
-
-        if (!window->update() || window->getKey(GLFW_KEY_ESCAPE))
-        {
-            exitApplication();
-        }
-
-        if (window->getKey(GLFW_KEY_F5) && scene.size<Mesh>() > 0 && scene.size<Emitter>() > 0)
-        {
-            mChangeDst = AppState::eRenderer;
-        }
 
         // update time
         const double currentTime = glfwGetTime();
         const float deltaTime    = static_cast<float>(currentTime - mLastTime);
         mLastTime                = currentTime;
 
-        // update camera
-        const double speed      = kCameraMoveSpeed * deltaTime;
-        const double mouseSpeed = kCameraViewpointSpeed * deltaTime;
-        scene.get<vk2s::Camera>(mCameraEntity).update(window->getpGLFWWindow(), speed, mouseSpeed);
+        {  // key input
+            if (!window->update() || window->getKey(GLFW_KEY_ESCAPE))
+            {
+                exitApplication();
+            }
+
+            if (window->getKey(GLFW_KEY_F5) && scene.size<Mesh>() > 0 && scene.size<Emitter>() > 0)
+            {
+                mChangeDst = AppState::eRenderer;
+            }
+
+            // update camera
+            const double speed      = kCameraMoveSpeed * deltaTime;
+            const double mouseSpeed = kCameraViewpointSpeed * deltaTime;
+            scene.get<vk2s::Camera>(mCameraEntity).update(window->getpGLFWWindow(), speed, mouseSpeed);
+
+            // remove picked entity with delete
+            if (mPickedEntity && window->getKey(GLFW_KEY_DELETE))
+            {
+                removeEntity(*mPickedEntity);
+                mPickedEntity.reset();
+            }
+
+            // change Guizmo operation
+            if (window->getKey(GLFW_KEY_F1))
+            {
+                mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+            }
+            if (window->getKey(GLFW_KEY_F2))
+            {
+                mCurrentGizmoOperation = ImGuizmo::ROTATE;
+            }
+            if (window->getKey(GLFW_KEY_F3))
+            {
+                mCurrentGizmoOperation = ImGuizmo::SCALE;
+            }
+        }
 
         // wait and reset fence
         mFences[mNow]->wait();
@@ -705,14 +734,14 @@ namespace palm
             onResized();
         }
 
+        // post-render-----------------------------------------
+
         // change state
         if (mChangeDst)
         {
             device.waitIdle();
             changeState(*mChangeDst);
         }
-
-        // post-render-----------------------------------------
 
         // update key input state
         mDragging = window->getMouseKey(GLFW_MOUSE_BUTTON_LEFT);
@@ -760,7 +789,6 @@ namespace palm
         auto& camera = scene.get<vk2s::Camera>(mCameraEntity);
 
         const auto [mx, my]        = window->getMousePos();
-        std::cout << mx << ", " << my << "\n";
         const auto [width, height] = window->getWindowSize();
 
         // scene information
@@ -828,6 +856,12 @@ namespace palm
             {
                 mEmitterBuffer->write(emitterParams.data(), sizeof(Emitter::Params) * emitterParams.size(), mNow * mEmitterBuffer->getBlockSize());
             }
+            else  // zero crear
+            {
+                constexpr size_t size = sizeof(Emitter::Params) * kMaxEmitterNum;
+                std::byte zeros[size] = { static_cast<std::byte>(0) };
+                mEmitterBuffer->write(zeros, size, mNow * mEmitterBuffer->getBlockSize());
+            }
         }
     }
 
@@ -861,7 +895,8 @@ namespace palm
                 {
                     if (ImGui::MenuItem("Point", nullptr))
                     {
-                        static uint32_t pointEmitterNum = 0;  // HACK: for unique Emitter name
+                        // HACK: for unique Emitter name
+                        static uint32_t pointEmitterNum = 0;
 
                         const auto added = scene.create<Emitter, Transform, EntityInfo>();
                         {
@@ -928,7 +963,7 @@ namespace palm
             ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight * (1.0f - kRenderArea.y)));
             ImGui::Begin("FileExplorer", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
-            ImGui::Text(mCurrentPath.string().c_str());
+            ImGui::Text(to_string(mCurrentPath).c_str());
             ImGui::SeparatorText("Model explorer");
 
             if (ImGui::Button("<="))
@@ -941,7 +976,8 @@ namespace palm
                 if (entry.is_directory())
                 {
                     ImGui::SetNextItemOpen(false);
-                    if (ImGui::TreeNode(entry.path().filename().string().c_str()))
+
+                    if (ImGui::TreeNode(to_string(entry.path().filename()).c_str()))
                     {
                         mCurrentPath = entry.path();
 
@@ -950,7 +986,7 @@ namespace palm
                 }
                 else
                 {
-                    if (ImGui::Selectable(entry.path().filename().string().c_str()))
+                    if (ImGui::Selectable(to_string(entry.path().filename()).c_str()))
                     {
                         addEntity(entry.path());
                     }
@@ -977,18 +1013,7 @@ namespace palm
                     {
                         mPickedEntity = entity;
                     }
-
-                    if (ImGui::IsItemHovered() && window->getKey(GLFW_KEY_DELETE))
-                    {
-                        removeEntity(entity);
-                    }
                 });
-
-            if (mPickedEntity && window->getKey(GLFW_KEY_DELETE))
-            {
-                removeEntity(*mPickedEntity);
-                mPickedEntity.reset();
-            }
 
             ImGui::SeparatorText("Information");
             ImGui::Text("device: %s", device.getPhysicalDeviceName().data());
@@ -1005,19 +1030,6 @@ namespace palm
                 ImGui::Text("Picked: %s", scene.get<EntityInfo>(*mPickedEntity).entityName.c_str());
 
                 auto& transform = scene.get<Transform>(*mPickedEntity);
-
-                if (window->getKey(GLFW_KEY_F1))
-                {
-                    mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
-                }
-                if (window->getKey(GLFW_KEY_F2))
-                {
-                    mCurrentGizmoOperation = ImGuizmo::ROTATE;
-                }
-                if (window->getKey(GLFW_KEY_F3))
-                {
-                    mCurrentGizmoOperation = ImGuizmo::SCALE;
-                }
 
                 const auto& viewMat     = camera.getViewMatrix();
                 glm::mat4 projectionMat = camera.getProjectionMatrix();  // copy for modification
@@ -1057,8 +1069,9 @@ namespace palm
                 // show material editing UI
                 material.updateAndDrawMaterialUI(enableEmissive);
 
-                if (enableEmissive)  // add emissive component
+                if (enableEmissive)
                 {
+                    // add emissive component
                     if (!scene.contains<Emitter>(*mPickedEntity))
                     {
                         scene.add<Emitter>(*mPickedEntity);
@@ -1071,8 +1084,9 @@ namespace palm
                     emitter.params.type     = static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::eArea);
                     emitter.params.faceNum  = scene.get<Mesh>(*mPickedEntity).hostMesh.indices.size() / 3;
                 }
-                else if (material.params.emissive.length() == 0.0 && scene.contains<Emitter>(*mPickedEntity))
+                else if (glm::dot(material.params.emissive, material.params.emissive) == 0. && scene.contains<Emitter>(*mPickedEntity))
                 {
+                    // remove emissive component
                     scene.remove<Emitter>(*mPickedEntity);
                 }
             }

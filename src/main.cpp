@@ -13,7 +13,7 @@ inline void setupImGuiStyle()
 {
     ImGui::CreateContext();
 
-#ifdef _WIN32  // HACK: load from Windows default Arial fonts
+#ifdef _WIN32  // HACK: load from Windows default fonts
     {
         ImGuiIO& io = ImGui::GetIO();
         io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/Arial.ttf", 24.0f);
