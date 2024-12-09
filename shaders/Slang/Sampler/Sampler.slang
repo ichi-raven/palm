@@ -19,7 +19,7 @@ public uint tea(uint v0, uint v1)
     uint s0 = 0;
 
     [unroll]
-    for(uint n = 0; n < 16; n++)
+    for(uint n = 0; n < 16; ++n)
     {
         s0 += 0x9e3779b9;
         v0 += ((v1 << 4) + 0xa341316c) ^ (v1 + s0) ^ ((v1 >> 5) + 0xc8013ea4);
