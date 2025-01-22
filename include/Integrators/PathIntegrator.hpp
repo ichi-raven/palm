@@ -20,6 +20,14 @@ namespace palm
     class PathIntegrator : public Integrator
     {
     public:
+        // can be modified from ImGui
+        struct GUIParams
+        {
+            int spp            = 1;
+            int accumulatedSpp = 0;
+        };
+
+    public:
         PathIntegrator(vk2s::Device& device, ec2s::Registry& scene, Handle<vk2s::Image> output);
 
         virtual ~PathIntegrator() override;
@@ -29,6 +37,8 @@ namespace palm
         virtual void updateShaderResources() override;
 
         virtual void sample(Handle<vk2s::Command> command) override;
+
+        GUIParams& getGUIParamsRef();
 
     private:
 
@@ -56,13 +66,6 @@ namespace palm
         {
             glm::mat4 world;
             glm::mat4 worldInvTrans;
-        };
-
-        // can be modified from ImGui
-        struct GUIParams
-        {
-            int spp            = 1;
-            int accumulatedSpp = 0;
         };
 
         GUIParams mGUIParams;

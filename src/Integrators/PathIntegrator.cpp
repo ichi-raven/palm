@@ -383,4 +383,9 @@ namespace palm
         command->traceRays(mShaderBindingTable.get(), extent.width, extent.height, 1);
     }
 
+    PathIntegrator::GUIParams& PathIntegrator::getGUIParamsRef()
+    {
+        return mGUIParams;
+    }
+
 }  // namespace palm
