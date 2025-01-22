@@ -1,6 +1,6 @@
 /*****************************************************************/ /**
  * @file   PathIntegrator.hpp
- * @brief  
+ * @brief  header file of path integrator class
  * 
  * @author ichi-raven
  * @date   October 2024

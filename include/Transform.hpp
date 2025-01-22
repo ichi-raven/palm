@@ -8,6 +8,8 @@
 #ifndef PALM_INCLUDE_TRANSFORM_HPP_
 #define PALM_INCLUDE_TRANSFORM_HPP_
 
+#define GLM_ENABLE_EXPERIMENTAL
+
 #include <EC2S.hpp>
 
 #include <glm/glm.hpp>

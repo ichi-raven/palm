@@ -140,6 +140,11 @@ public class EmitterSampler
 
     public static float pdf(const SurfaceInteraction si, const SurfaceInteraction bsdfSi, const uint32_t emitterNum)
     {
+        if (emitterNum == 0)
+        {
+            return 0.;
+        }
+        
         let to = bsdfSi.pos - si.pos;
         let distSq = dot(to, to);
 
