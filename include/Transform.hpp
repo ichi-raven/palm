@@ -8,14 +8,11 @@
 #ifndef PALM_INCLUDE_TRANSFORM_HPP_
 #define PALM_INCLUDE_TRANSFORM_HPP_
 
-#define GLM_ENABLE_EXPERIMENTAL
-
 #include <EC2S.hpp>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
-#include <glm/gtx/quaternion.hpp>
 
 #include <vulkan/vulkan.hpp>
 
@@ -53,11 +50,11 @@ namespace palm
              * @param rotation rotation vector
              * @param scaling scaling vector
              */
-            void update(glm::vec3 translate, const glm::vec3& rotationInEuler, const glm::vec3& scaling)
+            void update(glm::vec3 translate, const glm::quat& rotation, const glm::vec3& scaling)
             {
                 vel = translate - glm::vec3(world[0][3], world[1][3], world[2][3]);
 
-                world             = glm::translate(glm::mat4(1.f), translate) * glm::toMat4(glm::quat(rotationInEuler)) * glm::scale(glm::mat4(1.f), scaling);
+                world             = glm::translate(glm::identity<glm::mat4>(), translate) * glm::mat4_cast(rotation) * glm::scale(glm::identity<glm::mat4>(), scaling);
                 worldInvTranspose = glm::transpose(glm::inverse(world));
             }
 
@@ -82,8 +79,8 @@ namespace palm
         Params params;
         //! Position (translate) vector
         glm::vec3 pos   = { 0.f, 0.f, 0.f };
-        //! Rotation vector (in Euler angle)
-        glm::vec3 rot   = { 0.f, 0.f, 0.f };
+        //! Rotation quaternion
+        glm::quat rot   = { 1.f, 0.f, 0.f, 0.f };
         //! Scale vector
         glm::vec3 scale = { 1.f, 1.f, 1.f };
         //! Uniform buffer to write Params

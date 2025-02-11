@@ -15,6 +15,7 @@
 
 #include <stb_image.h>
 #include <glm/glm.hpp>
+#include <glm/gtx/string_cast.hpp>
 
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
@@ -1036,12 +1037,14 @@ namespace palm
                 // position editor (translation)
                 ImGui::InputFloat3("Translate", glm::value_ptr(transform.pos));
                 // rotation editor (Euler angles)
-                ImGui::InputFloat3("Rotate", glm::value_ptr(transform.rot));
+                glm::vec3 rotInEuler = glm::degrees(glm::eulerAngles(transform.rot));
+                ImGui::InputFloat3("Rotate", glm::value_ptr(rotInEuler));
+                transform.rot = glm::quat(glm::radians(rotInEuler));
                 // scale editor
                 ImGui::InputFloat3("Scale", glm::value_ptr(transform.scale));
 
                 // update buffer value
-                transform.params.update(transform.pos, glm::radians(transform.rot), transform.scale);
+                transform.params.update(transform.pos, transform.rot, transform.scale);
 
                 // manipulate (the entity must not be picked during the operation, so the state is preserved)
                 ImGuizmo::Manipulate(glm::value_ptr(viewMat), glm::value_ptr(projectionMat), mCurrentGizmoOperation, ImGuizmo::WORLD, glm::value_ptr(transform.params.world));
@@ -1050,10 +1053,10 @@ namespace palm
                 ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform.params.world), glm::value_ptr(translation), glm::value_ptr(rotation), glm::value_ptr(scale));
 
                 transform.pos   = translation;
-                transform.rot   = rotation;
+                transform.rot   = glm::quat(glm::radians(rotation));
                 transform.scale = scale;
                 // re-calculate
-                transform.params.update(transform.pos, glm::radians(transform.rot), transform.scale);
+                transform.params.update(transform.pos, transform.rot, transform.scale);
             }
 
             if (mPickedEntity && scene.contains<Material>(*mPickedEntity) && scene.contains<Transform>(*mPickedEntity))
