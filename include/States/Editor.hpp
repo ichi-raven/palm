@@ -1,4 +1,4 @@
-/*****************************************************************//**
+/*****************************************************************/ /**
  * @file   Editor.hpp
  * @brief  header file of editor state
  * 
@@ -189,15 +189,20 @@ namespace palm
         //! To detect only the first frame mouse clicked
         bool mDragging;
 
-        //! For arbitrary texture loading
-        ImGui::FileBrowser mFileBrowser;
+        //! For envmap texture loading
+        ImGui::FileBrowser mEnvmapBrowser;
+        //! For material texture loading
+        ImGui::FileBrowser mMaterialTexBrowser;
+
+        //! Infinite emitter entity
+        std::optional<ec2s::Entity> mInfiniteEmitterEntity;
 
         //! Current path (for explorer)
         std::filesystem::path mCurrentPath;
         //! Elapsed time to previous frame
-        double mLastTime     = 0;
+        double mLastTime = 0;
         //! Index of the frame buffer currently being processed
-        uint32_t mNow        = 0;
+        uint32_t mNow = 0;
     };
 
 }  // namespace palm

@@ -440,7 +440,8 @@ namespace palm
                 std::vector bindings1 = {
                     vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
                     vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
-                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll), vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),         vk::DescriptorSetLayoutBinding(4, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eAll),
                 };
 
                 mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
@@ -506,6 +507,7 @@ namespace palm
             mLightingBindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, mSceneBuffer.get());
             mLightingBindGroup->bind(1, vk::DescriptorType::eStorageBuffer, mPickedIDBuffer.get());
             mLightingBindGroup->bind(2, vk::DescriptorType::eUniformBufferDynamic, mEmitterBuffer.get());
+            mLightingBindGroup->bind(3, vk::DescriptorType::eSampledImage, mDummyTexture);
 
             // create commands and sync objects
 
@@ -575,6 +577,9 @@ namespace palm
         mCurrentPath           = std::filesystem::current_path();
         mLastTime              = glfwGetTime();
         mNow                   = 0;
+
+        mEnvmapBrowser      = ImGui::FileBrowser(ImGuiFileBrowserFlags_EnterNewFilename | ImGuiFileBrowserFlags_CreateNewDir | ImGuiFileBrowserFlags_ConfirmOnEnter | ImGuiFileBrowserFlags_SkipItemsCausingError);
+        mMaterialTexBrowser = ImGui::FileBrowser(ImGuiFileBrowserFlags_EnterNewFilename | ImGuiFileBrowserFlags_CreateNewDir | ImGuiFileBrowserFlags_ConfirmOnEnter | ImGuiFileBrowserFlags_SkipItemsCausingError);
     }
 
     void Editor::update()
@@ -862,6 +867,15 @@ namespace palm
                 mEmitterBuffer->write(emitterParams.data(), sizeof(Emitter::Params) * emitterParams.size(), mNow * mEmitterBuffer->getBlockSize());
             }
         }
+
+        if (mInfiniteEmitterEntity)
+        {
+            auto& infiniteEmitter = scene.get<Emitter>(*mInfiniteEmitterEntity);
+            if (infiniteEmitter.emissiveTex)
+            {
+                mLightingBindGroup->bind(3, vk::DescriptorType::eSampledImage, infiniteEmitter.emissiveTex);
+            }
+        }
     }
 
     void Editor::updateAndRenderImGui(const double deltaTime)
@@ -935,6 +949,25 @@ namespace palm
 
                         mPickedEntity = added;
                         ++pointEmitterNum;
+                    }
+                    else if (ImGui::MenuItem("Infinite", nullptr))
+                    {
+                        mEnvmapBrowser.SetTitle("load environment map image");
+                        mEnvmapBrowser.SetTypeFilters({ ".png" });
+                        mEnvmapBrowser.Open();
+
+                        if (!mInfiniteEmitterEntity)
+                        {
+                            mInfiniteEmitterEntity = scene.create<Emitter, EntityInfo>();
+                        }
+
+                        {
+                            auto& info      = scene.get<EntityInfo>(*mInfiniteEmitterEntity);
+                            info.entityID   = *mInfiniteEmitterEntity;
+                            info.entityName = std::string("Infinite emitter");
+                            info.groupName  = "emitter";
+                            info.editable   = true;
+                        }
                     }
 
                     ImGui::EndMenu();
@@ -1138,6 +1171,21 @@ namespace palm
             }
 
             ImGui::End();
+        }
+
+        mEnvmapBrowser.Display();
+        mMaterialTexBrowser.Display();
+
+        if (mEnvmapBrowser.HasSelected())
+        {
+            const std::string& path = mEnvmapBrowser.GetSelected().string();
+            std::cout << "loaded envmap image: " << mEnvmapBrowser.GetSelected().string() << std::endl;
+            mEnvmapBrowser.ClearSelected();
+
+            auto& emitter       = scene.get<Emitter>(*mInfiniteEmitterEntity);
+            emitter.params.type = static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::eInfinite);
+
+            emitter.emissiveTex = device.create<vk2s::Image>(path);
         }
 
         ImGui::Render();

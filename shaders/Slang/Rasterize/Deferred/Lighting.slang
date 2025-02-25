@@ -31,6 +31,7 @@ struct SceneParams
 [[vk::binding(0, 1)]] ConstantBuffer<SceneParams>  sceneParams;
 [[vk::binding(1, 1)]] RWStructuredBuffer<uint64_t>  pickedID;
 [[vk::binding(2, 1)]] ConstantBuffer<EmitterParams[10]>  emitterParams;
+[[vk::binding(3, 1)]] Texture2D<float4> envmapTex;
 
 [shader("vertex")]
 VSOutput vsmain(uint id : SV_VertexID)
@@ -55,7 +56,8 @@ float4 fsmain(VSOutput in) : SV_Target
 
     if (albedo.w == 0.)
     {
-        return float4(k::white * 0.2, 0.0);
+        //wdasdawdreturn float4(k::white * 0.2, 0.0);
+        return float4(envmapTex.Sample(sampler, in.uv).xyz, 1.0);
     }
 
     let slot    = reinterpret<uint32_t>(normal.w);
@@ -85,7 +87,7 @@ float4 fsmain(VSOutput in) : SV_Target
     let frame = Frame(normal.xyz);
     let si = SurfaceInteraction(worldPos.xyz, invView, normal.xyz, float2(0.0, 0.0), 0.0, index, frame);
 
-    let ambient = 0.25 * albedo.xyz;
+    let ambient = 0.2 * albedo.xyz;
     var finalColor = ambient;
 
     // limited direct sampling, treat all emitters as pseudo point emitter
@@ -103,6 +105,8 @@ float4 fsmain(VSOutput in) : SV_Target
 
         finalColor += emissive * f * G * abs(dot(si.normal, si.frame.toWorld(wo)));
     }
+
+    // envmap lighting
 
     return float4(finalColor, 1.0);
 }

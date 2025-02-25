@@ -27,6 +27,12 @@ namespace palm
      */
     struct CommonRegion
     {
+        CommonRegion()
+            : device(vk2s::Device::Extensions{.useRayTracingExt = true, .useNVMotionBlurExt = false})
+        {
+
+        }
+
         //! vk2s device
         vk2s::Device device;
         //! vk2s window
