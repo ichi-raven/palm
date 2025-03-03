@@ -58,8 +58,8 @@ namespace palm
                 const auto size = sizeof(SceneParams);
                 mSceneBuffer    = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eUniformBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
-                glm::mat4 view, proj;
-                glm::vec3 camPos;
+                glm::mat4 view(1.0), proj(1.0);
+                glm::vec3 camPos(0.0);
                 mScene.each<vk2s::Camera>(
                     [&](const vk2s::Camera& camera)
                     {
