@@ -10,6 +10,8 @@ struct SceneParams
     float4 camPos;
     float2 mousePos;
     uint2 frameSize;
+    float2 camPolarAngle;
+    uint padding;
 }
 
 struct EntityParams

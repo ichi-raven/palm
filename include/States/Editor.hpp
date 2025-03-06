@@ -13,6 +13,7 @@
 #include <vk2s/Camera.hpp>
 #include <vk2s/Scene.hpp>
 
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -48,6 +49,8 @@ namespace palm
             glm::vec4 camPos;
             glm::vec2 mousePos;
             glm::uvec2 frameSize;
+            glm::vec2 camPolar;
+            uint32_t padding[2];
         };
 
         /**

@@ -13,6 +13,7 @@
 #include "../include/Transform.hpp"
 #include "../include/Emitter.hpp"
 
+#define GLM_ENABLE_EXPERIMENTAL
 #include <stb_image.h>
 #include <glm/glm.hpp>
 #include <glm/gtx/string_cast.hpp>
@@ -36,7 +37,7 @@ namespace palm
     void Editor::addEntity(const std::filesystem::path& path)
     {
         auto& device = common()->device;
-        auto& window = getCommonRegion()->window;
+        auto& window = common()->window;
         auto& scene  = common()->scene;
 
         vk2s::Scene model(to_string(path));
@@ -438,8 +439,7 @@ namespace palm
                 };
 
                 std::vector bindings1 = {
-                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),
-                    vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll), vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
                     vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll), vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),
                     vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),         vk::DescriptorSetLayoutBinding(4, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eAll),
                 };
@@ -808,6 +808,8 @@ namespace palm
             const auto x = static_cast<float>(mx / renderAreaWidth);
             const auto y = static_cast<float>(my / renderAreaHeight);
 
+            constexpr double debug = 3.14159265358979 / 180.0;
+
             SceneParams sceneParams{
                 .view      = view,
                 .proj      = proj,
@@ -816,6 +818,8 @@ namespace palm
                 .camPos    = glm::vec4(camera.getPos(), 1.0),
                 .mousePos  = glm::vec2(x, y),
                 .frameSize = glm::uvec2(renderAreaWidth, renderAreaHeight),
+                .camPolar  = glm::vec2(debug * camera.getPhi(), debug * camera.getTheta()),
+                .padding   = {},
             };
 
             mSceneBuffer->write(&sceneParams, sizeof(SceneParams), mNow * mSceneBuffer->getBlockSize());
@@ -865,15 +869,6 @@ namespace palm
             if (!emitterParams.empty())
             {
                 mEmitterBuffer->write(emitterParams.data(), sizeof(Emitter::Params) * emitterParams.size(), mNow * mEmitterBuffer->getBlockSize());
-            }
-        }
-
-        if (mInfiniteEmitterEntity)
-        {
-            auto& infiniteEmitter = scene.get<Emitter>(*mInfiniteEmitterEntity);
-            if (infiniteEmitter.emissiveTex)
-            {
-                mLightingBindGroup->bind(3, vk::DescriptorType::eSampledImage, infiniteEmitter.emissiveTex);
             }
         }
     }
@@ -1055,7 +1050,7 @@ namespace palm
             ImGui::Text("pos: (%.3lf, %.3lf, %.3lf)", pos.x, pos.y, pos.z);
             ImGui::Text("lookat: (%.3lf, %.3lf, %.3lf)", lookAt.x, lookAt.y, lookAt.z);
 
-            // transform editing (experimental)
+            // transform editing
             if (mPickedEntity && scene.contains<Transform>(*mPickedEntity))
             {
                 ImGui::SeparatorText("Manipulation");
@@ -1063,9 +1058,11 @@ namespace palm
 
                 auto& transform = scene.get<Transform>(*mPickedEntity);
 
-                const auto& viewMat     = camera.getViewMatrix();
-                glm::mat4 projectionMat = camera.getProjectionMatrix();  // copy for modification
-                projectionMat[1][1] *= -1.f;                             // HACK: too adhoc (for Vulkan's inverse Y)
+                const auto& viewMat = camera.getViewMatrix();
+                // copy for modification
+                glm::mat4 projectionMat = camera.getProjectionMatrix();
+                // HACK: too adhoc (for Vulkan's inverse Y)
+                projectionMat[1][1] *= -1.f;
 
                 // position editor (translation)
                 ImGui::InputFloat3("Translate", glm::value_ptr(transform.pos));
@@ -1176,16 +1173,21 @@ namespace palm
         mEnvmapBrowser.Display();
         mMaterialTexBrowser.Display();
 
-        if (mEnvmapBrowser.HasSelected())
+        if (mInfiniteEmitterEntity && mEnvmapBrowser.HasSelected())
         {
             const std::string& path = mEnvmapBrowser.GetSelected().string();
-            std::cout << "loaded envmap image: " << mEnvmapBrowser.GetSelected().string() << std::endl;
             mEnvmapBrowser.ClearSelected();
 
             auto& emitter       = scene.get<Emitter>(*mInfiniteEmitterEntity);
             emitter.params.type = static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::eInfinite);
 
             emitter.emissiveTex = device.create<vk2s::Image>(path);
+
+            if (emitter.emissiveTex)
+            {
+                mLightingBindGroup->bind(3, vk::DescriptorType::eSampledImage, emitter.emissiveTex);
+            }
+            std::cout << "loaded envmap image: " << mEnvmapBrowser.GetSelected().string() << std::endl;
         }
 
         ImGui::Render();

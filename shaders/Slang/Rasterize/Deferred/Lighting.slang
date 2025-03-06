@@ -20,6 +20,8 @@ struct SceneParams
     float4 camPos;
     float2 mousePos;
     uint2 frameSize;
+    float2 camPolarAngle;
+    uint padding;
 }
 
 [[vk::binding(0, 0)]] Texture2D<float4> albedoTex;
@@ -52,21 +54,31 @@ float4 fsmain(VSOutput in) : SV_Target
     let albedo              = albedoTex.Sample(sampler, in.uv);
     let worldPos            = worldPosTex.Sample(sampler, in.uv); 
     let normal              = normalTex.Sample(sampler, in.uv); 
-    let roughnessMetalness  = roughnessMetalnessTex.Sample(sampler, in.uv); 
+    let roughnessMetalness  = roughnessMetalnessTex.Sample(sampler, in.uv);
+
+    let uvYinv       = float2(saturate(in.uv.x), saturate(1.0 - in.uv.y));
+    let mouseInFrame = uint2(sceneParams.mousePos * sceneParams.frameSize);
+    let uvInFrame    = uint2(uvYinv * sceneParams.frameSize);
 
     if (albedo.w == 0.)
     {
-        //wdasdawdreturn float4(k::white * 0.2, 0.0);
-        return float4(envmapTex.Sample(sampler, in.uv).xyz, 1.0);
+        let screenPos = uvYinv;
+
+        let d         = screenPos * 2.0 - 1.0;
+        let target    = mul(sceneParams.projInv, float4(d.x, d.y, 1, 1));
+        let direction = normalize(mul(sceneParams.viewInv, float4(target.xyz, 0)).xyz);
+
+        //return float4(k::white * 0.2, 0.0);
+        const float phi   = k::inv2Pi * sign(direction.z) * acos(direction.x / sqrt(direction.x * direction.x + direction.z * direction.z));
+        const float theta = k::invPi * acos(direction.y / length(direction));
+        let angle = float2(phi, theta);
+
+        return float4(envmapTex.Sample(sampler, angle).xyz, 1.0);
     }
 
     let slot    = reinterpret<uint32_t>(normal.w);
     let index   = reinterpret<uint32_t>(worldPos.w);
     let entity  = uint64_t(uint64_t(slot) << 32 | index);
-
-    let uvYinv          = float2(saturate(in.uv.x), saturate(1.0 - in.uv.y));
-    let mouseInFrame    = uint2(sceneParams.mousePos * sceneParams.frameSize);
-    let uvInFrame       = uint2(uvYinv * sceneParams.frameSize);
 
     if (all(mouseInFrame == uvInFrame))
     {

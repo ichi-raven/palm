@@ -13,6 +13,7 @@
 #include <vk2s/Camera.hpp>
 #include <vk2s/Scene.hpp>
 
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
