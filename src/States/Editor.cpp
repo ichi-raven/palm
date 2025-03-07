@@ -849,7 +849,6 @@ namespace palm
                 [&](const void* p)
                 {
                     const auto hovered = *(reinterpret_cast<const ec2s::Entity*>(p));
-                    std::cout << hovered << "\n";
                     if (hovered != 0 && (!mPickedEntity || *mPickedEntity != hovered))
                     {
                         mPickedEntity = hovered;

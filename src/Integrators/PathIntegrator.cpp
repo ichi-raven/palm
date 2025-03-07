@@ -144,14 +144,16 @@ namespace palm
                 mScene.each<Emitter>(
                     [&](const ec2s::Entity entity, Emitter& emitter)
                     {
-                        if (emitter.params.type == static_cast<int32_t>(Emitter::Type::eInfinite))
+                        if (emitter.params.type != static_cast<int32_t>(Emitter::Type::eInfinite))
                         {
-                            // register envmap texture
-                            if (emitter.emissiveTex)
-                            {
-                                emitter.params.texIndex = mTextures.size();
-                                mTextures.emplace_back(emitter.emissiveTex);
-                            }
+                            return;
+                        }
+
+                        // register envmap texture
+                        if (emitter.emissiveTex)
+                        {
+                            emitter.params.texIndex = mTextures.size();
+                            mTextures.emplace_back(emitter.emissiveTex);
                         }
 
                         emitter.params.pos = glm::vec3(0.0);
