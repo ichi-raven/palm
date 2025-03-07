@@ -5,6 +5,27 @@ import Constants;
 public namespace Warp
 {
     [ForceInline]
+    public float toNormalDistribution(const float2 u)
+    {
+        // Box-Muller transform
+        let sqrtLog = sqrt(-2. * log(u.x));
+        let c       = cos(2. * k::pi * u.y);
+
+        return sqrtLog * c;
+    }
+
+    [ForceInline]
+    public float2 toNormalDistribution2D(const float2 u)
+    {
+        // Box-Muller transform
+        let sqrtLog = sqrt(-2. * log(u.x));
+        let c       = cos(2. * k::pi * u.y);
+        let s       = sin(2. * k::pi * u.y);
+
+        return sqrtLog * float2(c, s);
+    }
+
+    [ForceInline]
     public float3 toUniformSphere(float2 u)
     {
         let a = u.x * 2. * k::pi;
