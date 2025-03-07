@@ -373,7 +373,8 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     }
 
     // emitter sample
-    payload.emitterSample = EmitterSampler.sample<Vertex, InstanceParams, IndependentSampler>(emitterParams, vertices, indices, instanceParams, textures, texSampler, payload.si.value, payload.sampler.next1D(), payload.sampler.next2D(), payload.sampler.next1D());
+    //payload.emitterSample = EmitterSampler.sample<Vertex, InstanceParams, IndependentSampler>(emitterParams, vertices, indices, instanceParams, textures, texSampler, payload.si.value, payload.sampler.next1D(), payload.sampler.next2D(), payload.sampler.next1D());
+    payload.emitterSample = EmitterSampler.sample<Vertex, InstanceParams, IndependentSampler>(emitterParams, vertices, indices, instanceParams, textures, texSampler, payload.si.value, payload.sampler);
 }
 
 [shader("miss")]

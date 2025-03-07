@@ -87,8 +87,11 @@ public class EmitterSampler
         float area;
     }
 
-    public static EmitterSample sample<V : IVertex, I : IInstance, S : ISampler>(StructuredBuffer<EmitterParams> params, StructuredBuffer<V> vertices[], StructuredBuffer<uint32_t> indices[], StructuredBuffer<I> instances, Texture2D<float4> textures[], SamplerState texSampler, const SurfaceInteraction si, const float sample1, const float2 sample2, const float sample3)
+    public static EmitterSample sample<V : IVertex, I : IInstance, S : ISampler>(StructuredBuffer<EmitterParams> params, StructuredBuffer<V> vertices[], StructuredBuffer<uint32_t> indices[], StructuredBuffer<I> instances, Texture2D<float4> textures[], SamplerState texSampler, const SurfaceInteraction si, inout S sampler)
     {
+        let sample1 = sampler.next1D();
+        let sample2 = sampler.next2D();
+        let sample3 = sampler.next1D();
 
         // TODO: should be originally sampled based on distance and area
         uint emitterCount = 0, emitterStride = 0;
