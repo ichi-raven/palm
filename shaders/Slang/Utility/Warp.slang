@@ -60,14 +60,9 @@ public namespace Warp
     [ForceInline]
     public float3 toCosineWeightedHemisphere(float2 u)
     {
+        // pbrt implementation
         let d = toUniformDiskConcentric(u);
         let z = sqrt(max(1 - (d.x * d.x) - (d.y * d.y), 0.));
         return float3(d.x, d.y, z);
-
-        // const float r2Sqrt = sqrt(u.y);
-        // const float z      = sqrt(1 - u.y);
-        // const float phi    = 2. * k::pi * u.x;
-
-        // return float3(cos(phi) * r2Sqrt, sin(phi) * r2Sqrt, z);
     }
 }

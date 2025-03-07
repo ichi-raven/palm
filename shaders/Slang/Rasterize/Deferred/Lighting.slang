@@ -20,8 +20,6 @@ struct SceneParams
     float4 camPos;
     float2 mousePos;
     uint2 frameSize;
-    float2 camPolarAngle;
-    uint padding;
 }
 
 [[vk::binding(0, 0)]] Texture2D<float4> albedoTex;
@@ -34,6 +32,7 @@ struct SceneParams
 [[vk::binding(1, 1)]] RWStructuredBuffer<uint64_t>  pickedID;
 [[vk::binding(2, 1)]] ConstantBuffer<EmitterParams[10]>  emitterParams;
 [[vk::binding(3, 1)]] Texture2D<float4> envmapTex;
+[[vk::binding(4, 1)]] SamplerState envmapSampler;
 
 [shader("vertex")]
 VSOutput vsmain(uint id : SV_VertexID)
@@ -68,9 +67,8 @@ float4 fsmain(VSOutput in) : SV_Target
         let target    = mul(sceneParams.projInv, float4(d.x, d.y, 1, 1));
         let direction = normalize(mul(sceneParams.viewInv, float4(target.xyz, 0)).xyz);
 
-        //return float4(k::white * 0.2, 0.0);
-        const float phi   = k::inv2Pi * sign(direction.z) * acos(direction.x / sqrt(direction.x * direction.x + direction.z * direction.z));
-        const float theta = k::invPi * acos(direction.y / length(direction));
+        let phi   = k::inv2Pi * sign(direction.z) * acos(direction.x / sqrt(direction.x * direction.x + direction.z * direction.z));
+        let theta = k::invPi * acos(direction.y / length(direction));
         let angle = float2(phi, theta);
 
         return float4(envmapTex.Sample(sampler, angle).xyz, 1.0);
@@ -78,7 +76,7 @@ float4 fsmain(VSOutput in) : SV_Target
 
     let slot    = reinterpret<uint32_t>(normal.w);
     let index   = reinterpret<uint32_t>(worldPos.w);
-    let entity  = uint64_t(uint64_t(slot) << 32 | index);
+    let entity  = uint64_t((uint64_t(slot) << 32) | index);
 
     if (all(mouseInFrame == uvInFrame))
     {
@@ -99,7 +97,7 @@ float4 fsmain(VSOutput in) : SV_Target
     let frame = Frame(normal.xyz);
     let si = SurfaceInteraction(worldPos.xyz, invView, normal.xyz, float2(0.0, 0.0), 0.0, index, frame);
 
-    let ambient = 0.2 * albedo.xyz;
+    let ambient = 0.05 * albedo.xyz;
     var finalColor = ambient;
 
     // limited direct sampling, treat all emitters as pseudo point emitter
@@ -120,5 +118,7 @@ float4 fsmain(VSOutput in) : SV_Target
 
     // envmap lighting
 
-    return float4(finalColor, 1.0);
+    let gamma             = 2.2;  // HACK: gamma correction
+    float3 gammaCorrected = pow(finalColor, 1. / gamma);
+    return float4(gammaCorrected, 1.0);
 }

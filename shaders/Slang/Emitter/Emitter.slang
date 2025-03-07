@@ -3,18 +3,20 @@ module Emitter;
 import "../Utility/Constants";
 import "../Utility/Warp";
 import "../Utility/SurfaceInteraction";
+import "../Sampler/Sampler";
 
 public struct EmitterSample
 {
-    public float pdf;
-    public float3 emissive;
-    public float3 to;
-    public float distance;
-    public float3 normal;
+    public float pdf        = 1.0;
+    public float3 emissive  = k::black;
+    public float3 to        = k::zeros.xyz;
+    public float distance   = 0.0;
+    public float3 normal    = float3(0., 0., 1.);
+    public bool isInfinite  = false;
 }
 
 // **always synchronize with CPU side**
-public enum Type
+public enum EmitterType
 {
     Point = 0,
     Area = 1,
@@ -24,8 +26,8 @@ public enum Type
 // all parameters bound from CPU, **always synchronize with CPU side**
 public struct EmitterParams
 {
-    public float3 pos = k::zeros.xyz;
-    public int32_t type = Type::Point;
+    public float3 pos   = k::zeros.xyz;
+    public int32_t type = EmitterType::Point;
 
     public uint32_t faceNum  = 0;
     public int32_t meshIndex = -1;
@@ -85,27 +87,29 @@ public class EmitterSampler
         float area;
     }
 
-    public static EmitterSample sample<V : IVertex, I : IInstance>(StructuredBuffer<EmitterParams> params, StructuredBuffer<V> vertices[], StructuredBuffer<uint32_t> indices[], StructuredBuffer<I> instances, const SurfaceInteraction si, const float sample1, const float2 sample2, const float sample3)
+    public static EmitterSample sample<V : IVertex, I : IInstance, S : ISampler>(StructuredBuffer<EmitterParams> params, StructuredBuffer<V> vertices[], StructuredBuffer<uint32_t> indices[], StructuredBuffer<I> instances, Texture2D<float4> textures[], SamplerState texSampler, const SurfaceInteraction si, const float sample1, const float2 sample2, const float sample3)
     {
+
         // TODO: should be originally sampled based on distance and area
-        uint emitterCount, emitterStride;
+        uint emitterCount = 0, emitterStride = 0;
         params.GetDimensions(emitterCount, emitterStride);
         let sampled   = params[uint32_t(emitterCount * sample1)];
         let selectPdf = 1. / float(emitterCount); // apply after
 
-        EmitterSample ret;
+        EmitterSample ret = EmitterSample();
 
         switch (sampled.type)
         {
-        case Type::Point:
+        case EmitterType::Point:
             ret.pdf      = 1.0;
             ret.distance = distance(si.pos, sampled.pos);
             ret.emissive = sampled.emissive;
             ret.to       = sampled.pos - si.pos;
-            ret.normal   = (-1.0 / ret.distance) * ret.to;
+            ret.normal     = (-1.0 / ret.distance) * ret.to;
+            ret.isInfinite = false;
             break;
 
-        case Type::Area:
+        case EmitterType::Area:
             // TODO: more effective sampling
             let faceIndex = uint(sample3 * sampled.faceNum);
             let meshIndex = sampled.meshIndex;
@@ -119,12 +123,33 @@ public class EmitterSampler
             ret.distance = distance(si.pos, v.pos);
             ret.emissive = sampled.emissive;
             ret.to       = v.pos - si.pos;
-            ret.normal   = v.normal;
+            ret.normal     = v.normal;
+            ret.isInfinite = false;
             break;
 
-        case Type::Infinite:  // TODO:
-            ret.emissive = k::black; // DEBUG:
-            ret.pdf = 0.0;
+        case EmitterType::Infinite:
+
+            // TODO: uniform 
+            ret.pdf      = k::inv4Pi;
+            ret.distance = k::infty;
+            ret.to       = Warp::toUniformSphere(sample2);
+            ret.normal     = -ret.to;
+            ret.isInfinite = true;
+
+            if (sampled.texIndex == -1) // constant emissive
+            {
+                ret.emissive = sampled.emissive;
+            }
+            else // envmap 
+            {
+                // sample the direction of ret.to
+                let phi   = k::inv2Pi * sign(ret.to.z) * acos(ret.to.x / sqrt(ret.to.x * ret.to.x + ret.to.z * ret.to.z));
+                let theta = k::invPi * acos(ret.to.y / length(ret.to));
+                let angle = float2(phi, theta);
+
+                ret.emissive = textures[sampled.texIndex].Sample(texSampler, angle).xyz;
+            }
+
             break;
         default: // invalid
             ret.emissive = k::black; // DEBUG:
@@ -138,19 +163,26 @@ public class EmitterSampler
         return ret;
     }
 
-    public static float pdf(const SurfaceInteraction si, const SurfaceInteraction bsdfSi, const uint32_t emitterNum)
+    public static float pdf(const SurfaceInteraction si, const Optional<SurfaceInteraction> bsdfSi, const uint32_t emitterNum)
     {
         if (emitterNum == 0)
         {
             return 0.;
         }
-        
-        let to = bsdfSi.pos - si.pos;
-        let distSq = dot(to, to);
 
-        let lightCos = abs(dot(normalize(to), bsdfSi.normal));
+        if (let bs = bsdfSi)
+        {
+            let to     = bs.pos - si.pos;
+            let distSq = dot(to, to);
 
-        let invG = distSq / lightCos;
-        return invG / bsdfSi.area / emitterNum;
+            let lightCos = abs(dot(normalize(to), bs.normal));
+
+            let invG = distSq / lightCos;
+            return invG / bs.area / emitterNum;
+        }
+
+        // infinite emitter
+        // TODO: uniform
+        return k::inv4Pi;
     }
 }

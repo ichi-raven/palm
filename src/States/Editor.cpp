@@ -13,8 +13,9 @@
 #include "../include/Transform.hpp"
 #include "../include/Emitter.hpp"
 
-#define GLM_ENABLE_EXPERIMENTAL
 #include <stb_image.h>
+
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtx/string_cast.hpp>
 
@@ -171,7 +172,7 @@ namespace palm
                     {
                         material.bindGroup->bind(1, vk::DescriptorType::eSampledImage, mDummyTexture);
                     }
-                    material.bindGroup->bind(2, mDefaultSampler.get());
+                    material.bindGroup->bind(2, mLinearSampler.get());
                 }
             }
 
@@ -192,7 +193,7 @@ namespace palm
                 transform.params.world             = glm::identity<glm::mat4>();
                 transform.params.worldInvTranspose = glm::identity<glm::mat4>();
                 transform.params.vel               = glm::vec3(0.f);
-                transform.params.entitySlot        = static_cast<uint32_t>((entity & ec2s::kEntitySlotMask) >> ec2s::kEntitySlotShiftWidth);
+                transform.params.entitySlot        = static_cast<uint32_t>(entity >> ec2s::kEntitySlotShiftWidth);
                 transform.params.entityIndex       = static_cast<uint32_t>(entity & ec2s::kEntityIndexMask);
 
                 const auto frameCount = window->getFrameCount();
@@ -325,8 +326,10 @@ namespace palm
 
         try
         {
-            // default sampler
-            mDefaultSampler = device.create<vk2s::Sampler>(vk::SamplerCreateInfo());
+            // nearest sampler
+            mNearestSampler = device.create<vk2s::Sampler>(vk::SamplerCreateInfo({}, vk::Filter::eNearest, vk::Filter::eNearest));
+            // linear sampler
+            mLinearSampler = device.create<vk2s::Sampler>(vk::SamplerCreateInfo({}, vk::Filter::eLinear, vk::Filter::eLinear));
 
             // create G-Buffer
             auto& device = getCommonRegion()->device;
@@ -337,10 +340,14 @@ namespace palm
 
             // create dummy image
             {
-                // dummy texture
-                constexpr uint8_t kDummyColor[] = { 255, 0, 255, 255 };  // Magenta
-                const auto format               = vk::Format::eR8G8B8A8Srgb;
-                const uint32_t size             = vk2s::Compiler::getSizeOfFormat(format);  // 1 * 1
+// dummy texture
+#ifndef NDEBUG
+                constexpr uint8_t kDummyColor[] = { 255, 0, 255, 0 };  // Magenta
+#else
+                constexpr uint8_t kDummyColor[] = { 0, 0, 0, 0 };  // Black
+#endif
+                const auto format   = vk::Format::eR8G8B8A8Srgb;
+                const uint32_t size = vk2s::Compiler::getSizeOfFormat(format);  // 1 * 1
 
                 vk::ImageCreateInfo ci;
                 ci.arrayLayers   = 1;
@@ -501,13 +508,14 @@ namespace palm
             mGBuffer.bindGroup->bind(1, vk::DescriptorType::eSampledImage, mGBuffer.worldPosTex);
             mGBuffer.bindGroup->bind(2, vk::DescriptorType::eSampledImage, mGBuffer.normalTex);
             mGBuffer.bindGroup->bind(3, vk::DescriptorType::eSampledImage, mGBuffer.roughnessMetalnessTex);
-            mGBuffer.bindGroup->bind(4, mDefaultSampler.get());
+            mGBuffer.bindGroup->bind(4, mNearestSampler.get());
 
             mLightingBindGroup = device.create<vk2s::BindGroup>(mLightingPass.bindLayouts[1].get());
             mLightingBindGroup->bind(0, vk::DescriptorType::eUniformBufferDynamic, mSceneBuffer.get());
             mLightingBindGroup->bind(1, vk::DescriptorType::eStorageBuffer, mPickedIDBuffer.get());
             mLightingBindGroup->bind(2, vk::DescriptorType::eUniformBufferDynamic, mEmitterBuffer.get());
             mLightingBindGroup->bind(3, vk::DescriptorType::eSampledImage, mDummyTexture);
+            mLightingBindGroup->bind(4, mLinearSampler.get());
 
             // create commands and sync objects
 
@@ -559,6 +567,19 @@ namespace palm
             scene.each<vk2s::Camera>([&](ec2s::Entity entity, vk2s::Camera& camera) { mCameraEntity = entity; });
         }
 
+        // set envmap
+        scene.each<Emitter>(
+            [&](const Emitter& emitter)
+            {
+                if (emitter.params.type == static_cast<int32_t>(Emitter::Type::eInfinite))
+                {
+                    if (emitter.emissiveTex)
+                    {
+                        mLightingBindGroup->bind(3, vk::DescriptorType::eSampledImage, emitter.emissiveTex);
+                    }
+                }
+            });
+
         // update material binding
         scene.each<Material>(
             [&](Material& material)
@@ -569,7 +590,7 @@ namespace palm
                     material.bindGroup->bind(1, vk::DescriptorType::eSampledImage, mDummyTexture);
                 }
                 // bind default sampler
-                material.bindGroup->bind(2, mDefaultSampler.get());
+                material.bindGroup->bind(2, mNearestSampler.get());
             });
 
         // member variables initialization
@@ -584,7 +605,7 @@ namespace palm
 
     void Editor::update()
     {
-        constexpr auto colorClearValue   = vk::ClearValue(std::array{ 0.1f, 0.1f, 0.1f, 1.0f });
+        constexpr auto colorClearValue   = vk::ClearValue(std::array{ 0.1f, 0.1f, 0.1f, 0.0f });
         constexpr auto gbufferClearValue = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 0.0f });
         constexpr auto depthClearValue   = vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0));
         // HACK:
@@ -808,8 +829,6 @@ namespace palm
             const auto x = static_cast<float>(mx / renderAreaWidth);
             const auto y = static_cast<float>(my / renderAreaHeight);
 
-            constexpr double debug = 3.14159265358979 / 180.0;
-
             SceneParams sceneParams{
                 .view      = view,
                 .proj      = proj,
@@ -818,8 +837,6 @@ namespace palm
                 .camPos    = glm::vec4(camera.getPos(), 1.0),
                 .mousePos  = glm::vec2(x, y),
                 .frameSize = glm::uvec2(renderAreaWidth, renderAreaHeight),
-                .camPolar  = glm::vec2(debug * camera.getPhi(), debug * camera.getTheta()),
-                .padding   = {},
             };
 
             mSceneBuffer->write(&sceneParams, sizeof(SceneParams), mNow * mSceneBuffer->getBlockSize());
@@ -832,6 +849,7 @@ namespace palm
                 [&](const void* p)
                 {
                     const auto hovered = *(reinterpret_cast<const ec2s::Entity*>(p));
+                    std::cout << hovered << "\n";
                     if (hovered != 0 && (!mPickedEntity || *mPickedEntity != hovered))
                     {
                         mPickedEntity = hovered;
@@ -948,7 +966,7 @@ namespace palm
                     else if (ImGui::MenuItem("Infinite", nullptr))
                     {
                         mEnvmapBrowser.SetTitle("load environment map image");
-                        mEnvmapBrowser.SetTypeFilters({ ".png" });
+                        mEnvmapBrowser.SetTypeFilters({ ".png", ".jpg" });
                         mEnvmapBrowser.Open();
 
                         if (!mInfiniteEmitterEntity)

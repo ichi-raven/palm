@@ -1,7 +1,7 @@
 
 implementing Sampler;
 
-public struct IndependentSampler// : ISampler
+public struct IndependentSampler : ISampler
 {
     public __init(uint32_t seed) 
     {

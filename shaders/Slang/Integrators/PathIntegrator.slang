@@ -171,21 +171,24 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
             {
                 if (!occluded(si.pos, es)) // Slang (HLSL) does not support short circuit
                 {
-                    MaterialParams params = MaterialParams::loadWithTextures(materialParams[si.instanceIndex], textures, sampler, si.uv);
+                    MaterialParams params = MaterialParams::loadWithTextures(materialParams[si.instanceIndex], textures, texSampler, si.uv);
 
                     // add emitter directional contribution to L
                     let wo = si.frame.toLocal(normalize(es.to));
                     let lightCos = abs(dot(normalize(es.to), es.normal));
-                    let G = lightCos / (es.distance * es.distance);
                     let cosine = abs(dot(si.normal, normalize(es.to)));
-                    let f = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
 
+                    // if infinite emitter, G term will be infinite
+                    let G = es.isInfinite ? 1. : lightCos / (es.distance * es.distance);
+
+                    // calculate BSDF contribution
+                    let f         = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
                     let pathpdf   = G * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
                     // balance heuristic
                     let MISWeight = (es.pdf + pathpdf) == 0. ? 0. : es.pdf / (es.pdf + pathpdf);
 
                     L += MISWeight * beta * f * G * cosine * es.emissive / es.pdf;
-                }
+                }                                                                                                                                                    
             }
 
             // BSDF sampling
@@ -208,7 +211,10 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                     {
                         if (!bs.isSpecular())
                         {
-                            emitterpdf = EmitterSampler.pdf(si, bsdfSi, sceneParams.areaEmitterNum);
+                            uint size   = sceneParams.areaEmitterNum;
+                            uint stride = 0;
+                            emitterParams.GetDimensions(size, stride);
+                            emitterpdf = EmitterSampler.pdf(si, bsdfSi, size);
                         }
                     }
 
@@ -261,7 +267,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
 [[vk::binding(7, 0)]] StructuredBuffer<MaterialParams> materialParams;
 [[vk::binding(8, 0)]] StructuredBuffer<EmitterParams> emitterParams;
 [[vk::binding(9, 0)]] Texture2D<float4> textures[];
-[[vk::binding(10, 0)]] SamplerState sampler;
+[[vk::binding(10, 0)]] SamplerState texSampler;
 
 [shader("raygeneration")]
 void rayGenShader()
@@ -298,10 +304,29 @@ void rayGenShader()
 void missShader(inout Payload payload : SV_RayPayload)
 {
     payload.si = none;
-    payload.bsdfSample = none;
-    // TODO: infinite emitter
+    payload.bsdfSample    = none;
     payload.emitterSample = none;
-    payload.emissive = none;
+    payload.emissive      = none;
+
+    // infinite emitter
+    if (emitterParams[0].type == EmitterType::Infinite)
+    {
+        if (emitterParams[0].texIndex == -1)  // constant emissive
+        {
+            payload.emissive = emitterParams[0].emissive;
+        }
+        else  // envmap
+        {
+            let dir = normalize(WorldRayDirection());
+
+            // sample the direction of ret.to
+            let phi   = k::inv2Pi * sign(dir.z) * acos(dir.x / sqrt(dir.x * dir.x + dir.z * dir.z));
+            let theta = k::invPi * acos(dir.y);
+            let angle = float2(phi, theta);
+
+            payload.emissive = textures[emitterParams[0].texIndex].Sample(texSampler, angle).xyz;
+        }
+    }
 }
 
 [shader("closesthit")]
@@ -322,9 +347,9 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     // create SurfaceInteraction (world)
     let area = area(vertices[instanceIndex][index.x].pos, vertices[instanceIndex][index.y].pos, vertices[instanceIndex][index.z].pos);
     payload.si = SurfaceInteraction(worldPos, -worldRayDir, worldNormal, vertex.uv, area, instanceIndex, Frame(worldNormal));
-    
+
     // sample BSDF and emitter
-    MaterialParams params = MaterialParams::loadWithTextures(materialParams[instanceIndex], textures, sampler, payload.si.value.uv);
+    MaterialParams params = MaterialParams::loadWithTextures(materialParams[instanceIndex], textures, texSampler, payload.si.value.uv);
 
     if (dot(params.emissive, params.emissive) > 0.)// HACK:
     {
@@ -348,7 +373,7 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     }
 
     // emitter sample
-    payload.emitterSample = EmitterSampler.sample<Vertex, InstanceParams>(emitterParams, vertices, indices, instanceParams, payload.si.value, payload.sampler.next1D(), payload.sampler.next2D(), payload.sampler.next1D());
+    payload.emitterSample = EmitterSampler.sample<Vertex, InstanceParams, IndependentSampler>(emitterParams, vertices, indices, instanceParams, textures, texSampler, payload.si.value, payload.sampler.next1D(), payload.sampler.next2D(), payload.sampler.next1D());
 }
 
 [shader("miss")]

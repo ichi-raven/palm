@@ -40,7 +40,7 @@ namespace palm
         /**
          * @brief  Parameters shared across the Scene (passed to the GPU)
          */
-        struct SceneParams  // std140
+        struct SceneParams  // std430
         {
             glm::mat4 view;
             glm::mat4 proj;
@@ -49,8 +49,6 @@ namespace palm
             glm::vec4 camPos;
             glm::vec2 mousePos;
             glm::uvec2 frameSize;
-            glm::vec2 camPolar;
-            uint32_t padding[2];
         };
 
         /**
@@ -163,7 +161,10 @@ namespace palm
         GraphicsPass mLightingPass;
 
         //! Sampler with default settings for G-Buffer reading, etc.
-        UniqueHandle<vk2s::Sampler> mDefaultSampler;
+        UniqueHandle<vk2s::Sampler> mNearestSampler;
+
+        //! Sampler with linear filter settings for envmap sampling, etc.
+        UniqueHandle<vk2s::Sampler> mLinearSampler;
 
         //! Dummy image for pseudo binding
         UniqueHandle<vk2s::Image> mDummyTexture;

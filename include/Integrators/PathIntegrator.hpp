@@ -59,7 +59,7 @@ namespace palm
 
             uint32_t sppPerFrame;
             uint32_t areaEmitterNum;
-            float padding[2];
+            uint32_t padding[2];
         };
 
         struct InstanceParams
@@ -73,6 +73,9 @@ namespace palm
         // TLAS
         UniqueHandle<vk2s::AccelerationStructure> mTLAS;
 
+        // CPU parameter for scene buffer
+        uint32_t mInfiniteEmitterIndex;
+
         // shader resources
         UniqueHandle<vk2s::Buffer> mSceneBuffer;
         UniqueHandle<vk2s::Buffer> mInstanceBuffer;
@@ -81,7 +84,6 @@ namespace palm
         UniqueHandle<vk2s::Buffer> mEmittersBuffer;
         UniqueHandle<vk2s::Image> mPoolImage;
         UniqueHandle<vk2s::Sampler> mSampler;
-        Handle<vk2s::Image> mDummyTexture;
 
         // WARN: VB, IB and textures have no ownership
         std::vector<Handle<vk2s::Buffer>> mVertexBuffers;

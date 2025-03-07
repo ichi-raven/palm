@@ -44,6 +44,7 @@ States/Editor.cpp
 States/Renderer.cpp
 #States/MaterialViewer.cpp
 
+Integrators/Integrator.cpp
 Integrators/PathIntegrator.cpp
 ${IMGUI_SOURCE_FILES}
 ${IMGUIZMO_SOURCE_FILES}

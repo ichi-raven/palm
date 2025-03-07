@@ -10,8 +10,6 @@ struct SceneParams
     float4 camPos;
     float2 mousePos;
     uint2 frameSize;
-    float2 camPolarAngle;
-    uint padding;
 }
 
 struct EntityParams
@@ -94,7 +92,6 @@ FSOutput fsmain(VSOutput in)
     }
 
     output.roughnessMetalness   = float4(materialParams.roughness, materialParams.metallic, 1.0, 1.0);
-
     output.normal               = float4(in.worldInfo.normal, reinterpret<float>(entityParams.entitySlot));
     output.worldPos             = float4(in.worldInfo.pos, reinterpret<float>(entityParams.entityIndex));
 

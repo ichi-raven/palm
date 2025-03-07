@@ -26,33 +26,6 @@ namespace palm
 
         try
         {
-            // create dummy image
-            {
-                // dummy texture
-                constexpr uint8_t kDummyColor[] = { 255, 0, 255, 255 }; // Magenta
-                const auto format               = vk::Format::eR8G8B8A8Srgb;
-                const uint32_t size             = vk2s::Compiler::getSizeOfFormat(format);  // 1 * 1
-
-                vk::ImageCreateInfo ci;
-                ci.arrayLayers   = 1;
-                ci.extent        = vk::Extent3D(1, 1, 1);  // 1 * 1
-                ci.format        = format;
-                ci.imageType     = vk::ImageType::e2D;
-                ci.mipLevels     = 1;
-                ci.usage         = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
-                ci.initialLayout = vk::ImageLayout::eUndefined;
-
-                // change format to pooling
-                mDummyTexture = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
-                mDummyTexture->write(kDummyColor, size);
-
-                UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
-                cmd->begin(true);
-                cmd->transitionImageLayout(mDummyTexture.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eShaderReadOnlyOptimal);
-                cmd->end();
-                cmd->execute();
-            }
-
             // create scene buffer
             {
                 const auto size = sizeof(SceneParams);
@@ -86,7 +59,7 @@ namespace palm
                     .camPos         = glm::vec4(camPos, 1.0f),
                     .sppPerFrame    = 4,
                     .areaEmitterNum = areaEmitterNum,
-                    .padding        = { 0.f },
+                    .padding        = { 0 },
                 };
 
                 mSceneBuffer->write(&params, sizeof(SceneParams));
@@ -166,6 +139,26 @@ namespace palm
             // create emitter buffer
             {
                 std::vector<Emitter::Params> params;
+
+                // WARN: ensures that the infinity light source is the first element of the emitterParams if exists
+                mScene.each<Emitter>(
+                    [&](const ec2s::Entity entity, Emitter& emitter)
+                    {
+                        if (emitter.params.type == static_cast<int32_t>(Emitter::Type::eInfinite))
+                        {
+                            // register envmap texture
+                            if (emitter.emissiveTex)
+                            {
+                                emitter.params.texIndex = mTextures.size();
+                                mTextures.emplace_back(emitter.emissiveTex);
+                            }
+                        }
+
+                        emitter.params.pos = glm::vec3(0.0);
+                        params.emplace_back(emitter.params);
+                    });
+
+                // for emitter with transform
                 mScene.each<Emitter, Transform>(
                     [&](const ec2s::Entity entity, Emitter& emitter, Transform& transform)
                     {
@@ -183,6 +176,16 @@ namespace palm
                                 });
                         }
 
+                        if (emitter.params.type == static_cast<int32_t>(Emitter::Type::eInfinite))
+                        {
+                            // register envmap texture
+                            if (emitter.emissiveTex)
+                            {
+                                emitter.params.texIndex = mTextures.size();
+                                mTextures.emplace_back(emitter.emissiveTex);
+                            }
+                        }
+
                         emitter.params.pos = transform.pos;
                         params.emplace_back(emitter.params);
                     });
@@ -193,8 +196,8 @@ namespace palm
             }
 
             // create sampler
-            {  
-                mSampler = device.create<vk2s::Sampler>(vk::SamplerCreateInfo());
+            {
+                mSampler = device.create<vk2s::Sampler>(vk::SamplerCreateInfo({}, vk::Filter::eLinear, vk::Filter::eLinear));
             }
 
             //create pool image
@@ -367,7 +370,7 @@ namespace palm
             .projInv     = glm::inverse(proj),
             .camPos      = glm::vec4(camPos, 1.0f),
             .sppPerFrame = static_cast<uint32_t>(mGUIParams.spp),
-            .padding     = { 0.f },
+            .padding     = { 0 },
         };
 
         mSceneBuffer->write(&params, sizeof(SceneParams));

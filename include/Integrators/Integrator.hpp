@@ -1,4 +1,4 @@
-/*****************************************************************//**
+/*****************************************************************/ /**
  * @file   Integrator.hpp
  * @brief  
  * 
@@ -28,17 +28,13 @@ namespace palm
          * @param scene Scene to be rendered
          * @param outputImage Image to which the drawing result (current progress) for each frame is written
          */
-        Integrator(vk2s::Device& device, ec2s::Registry& scene, Handle<vk2s::Image> outputImage)
-            : mDevice(device)
-            , mScene(scene)
-            , mOutputImage(outputImage)
-            {}
-         
+        Integrator(vk2s::Device& device, ec2s::Registry& scene, Handle<vk2s::Image> outputImage);
+
         /** 
          * @brief  destructor (virtual)
          *  
          */
-        virtual ~Integrator(){}
+        virtual ~Integrator();
 
         /** 
          * @brief  Virtual function for setting parameters from GUI for each integrator
@@ -61,15 +57,25 @@ namespace palm
          */
         virtual void sample(Handle<vk2s::Command> command) = 0;
 
-    protected:
+        /**
+         * @brief  Build a pdf image from the image according to the luminance value
+         * 
+         * @param image target image
+         * @return pdf image
+         */
+        Handle<vk2s::Image> buildPDFImage(Handle<vk2s::Image> image);
 
-        //! Reference to vk2s device 
+    protected:
+        //! Reference to vk2s device
         vk2s::Device& mDevice;
         //! Reference to scene
         ec2s::Registry& mScene;
 
         //! Handle of output destination image
         Handle<vk2s::Image> mOutputImage;
+
+        //! Handle of dummy texture
+        Handle<vk2s::Image> mDummyTexture;
     };
 }  // namespace palm
 
