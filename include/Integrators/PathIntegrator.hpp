@@ -73,8 +73,7 @@ namespace palm
         // TLAS
         UniqueHandle<vk2s::AccelerationStructure> mTLAS;
 
-        // CPU parameter for scene buffer
-        uint32_t mInfiniteEmitterIndex;
+        UniqueHandle<vk2s::Image> mEnvmapPDFImage;
 
         // shader resources
         UniqueHandle<vk2s::Buffer> mSceneBuffer;
