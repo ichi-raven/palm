@@ -47,6 +47,36 @@ VSOutput vsmain(uint id : SV_VertexID)
     return output;
 }
 
+float4 getPseudoFilteredEnvmap(const float alpha, const float2 uv, Texture2D<float4> texture, SamplerState texSampler)
+{
+    const float kernel          = 0.02 * alpha;
+    const static int kernelSize = 2;
+    const static int pixNum     = (kernelSize + 1) * (kernelSize + 1);
+
+    var rtn = float4(0.0);
+
+    [[unroll]]
+    for (int i = -kernelSize; i <= kernelSize; ++i)
+    {
+        [[unroll]]
+        for (int j = -kernelSize; j <= kernelSize; ++j)
+        {
+            let shifted = uv + float2(i * kernel, j * kernel);
+            rtn += 1. / pixNum * texture.Sample(texSampler, shifted);
+        }
+    }
+
+    return rtn;
+}
+
+inline float2 toPolar(const float3 direction)
+{
+    let phi   = k::inv2Pi * sign(direction.z) * acos(direction.x / sqrt(direction.x * direction.x + direction.z * direction.z));
+    let theta = k::invPi * acos(direction.y / length(direction));
+
+    return float2(phi, theta);
+}
+
 [shader("fragment")]
 float4 fsmain(VSOutput in) : SV_Target
 {
@@ -59,6 +89,8 @@ float4 fsmain(VSOutput in) : SV_Target
     let mouseInFrame = uint2(sceneParams.mousePos * sceneParams.frameSize);
     let uvInFrame    = uint2(uvYinv * sceneParams.frameSize);
 
+    static let gamma = 2.2;  // HACK: gamma correction
+
     if (albedo.w == 0.)
     {
         let screenPos = uvYinv;
@@ -67,11 +99,9 @@ float4 fsmain(VSOutput in) : SV_Target
         let target    = mul(sceneParams.projInv, float4(d.x, d.y, 1, 1));
         let direction = normalize(mul(sceneParams.viewInv, float4(target.xyz, 0)).xyz);
 
-        let phi   = k::inv2Pi * sign(direction.z) * acos(direction.x / sqrt(direction.x * direction.x + direction.z * direction.z));
-        let theta = k::invPi * acos(direction.y / length(direction));
-        let angle = float2(phi, theta);
+        let angle = toPolar(direction);
 
-        return float4(envmapTex.Sample(sampler, angle).xyz, 1.0);
+        return float4(pow(envmapTex.Sample(sampler, angle).xyz, 1. / gamma), 1.0);
     }
 
     let slot    = reinterpret<uint32_t>(normal.w);
@@ -97,12 +127,24 @@ float4 fsmain(VSOutput in) : SV_Target
     let frame = Frame(normal.xyz);
     let si = SurfaceInteraction(worldPos.xyz, invView, normal.xyz, float2(0.0, 0.0), 0.0, index, frame);
 
-    let ambient = 0.05 * albedo.xyz;
+    let ambient = 0.01 * albedo.xyz;
     var finalColor = ambient;
 
     // limited direct sampling, treat all emitters as pseudo point emitter
     for (int i = 0; i < k::fixedEmitterLimit; ++i)
     {
+        if (emitterParams[i].type == EmitterType::Infinite)
+        {
+            let to       = reflect(si.wi, normal.xyz);
+            let wo       = frame.toLocal(to);
+            let f        = DynamicMaterial.BSDF.eval(params, dummyCtx, si.toLocal(), wo);
+
+            let uv       = toPolar(to) * float2(1, -1);
+            let emissive = getPseudoFilteredEnvmap(params.roughness, uv, envmapTex, sampler).xyz;
+            finalColor += emissive * f * abs(dot(si.normal, si.frame.toWorld(wo)));
+            continue;
+        }
+
         var to = emitterParams[i].pos - si.pos;
         let distance = length(to);
         to = 1. / distance * (to);
@@ -116,9 +158,10 @@ float4 fsmain(VSOutput in) : SV_Target
         finalColor += emissive * f * G * abs(dot(si.normal, si.frame.toWorld(wo)));
     }
 
-    // envmap lighting
+    // TODO: envmap lighting
+    // (transfer DG-integrated texture and filter)
 
-    let gamma             = 2.2;  // HACK: gamma correction
+
     float3 gammaCorrected = pow(finalColor, 1. / gamma);
     return float4(gammaCorrected, 1.0);
 }

@@ -6,7 +6,7 @@ list(PREPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 # Options
 
 # Common targets
-set(MAIN_EXE "main")
+set(MAIN_EXE "palm")
 
 # C++ standard
 set(CMAKE_CXX_STANDARD 20)

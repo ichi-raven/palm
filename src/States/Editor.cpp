@@ -440,15 +440,19 @@ namespace palm
                 mLightingPass.fs         = device.create<vk2s::Shader>("../../shaders/Slang/Rasterize/Deferred/Lighting.slang", "fsmain");
 
                 std::array bindings0 = {
-                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll), vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),
-                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll), vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),
-                    vk::DescriptorSetLayoutBinding(4, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),  //
+                    vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),  //
+                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),  //
+                    vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),  //
+                    vk::DescriptorSetLayoutBinding(4, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eAll),       //
                 };
 
                 std::vector bindings1 = {
-                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll), vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
-                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll), vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),
-                    vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),         vk::DescriptorSetLayoutBinding(4, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eAll),
+                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),  //
+                    vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),         //
+                    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eAll),  //
+                    vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eAll),          //
+                    vk::DescriptorSetLayoutBinding(4, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eAll),               //
                 };
 
                 mLightingPass.bindLayouts.emplace_back(device.create<vk2s::BindLayout>(bindings0));
@@ -871,15 +875,20 @@ namespace palm
 
             std::vector<Emitter::Params> emitterParams;
             emitterParams.reserve(kMaxEmitterNum);
-            scene.each<Emitter, Transform>(
-                [&](Emitter& emitter, const Transform& transform)
+
+            scene.each<Emitter>(
+                [&](const ec2s::Entity entity, Emitter& emitter)
                 {
                     if (emitterParams.size() >= kMaxEmitterNum)
                     {
                         return;
                     }
 
-                    emitter.params.pos = transform.pos;
+                    if (scene.contains<Transform>(entity))
+					{
+						emitter.params.pos = scene.get<Transform>(entity).pos;
+					}
+
                     emitterParams.emplace_back(emitter.params);
                 });
 

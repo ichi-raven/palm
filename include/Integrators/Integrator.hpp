@@ -57,14 +57,6 @@ namespace palm
          */
         virtual void sample(Handle<vk2s::Command> command) = 0;
 
-        /**
-         * @brief  Build a pdf image from the image according to the luminance value
-         * 
-         * @param image target image
-         * @return pdf image
-         */
-        Handle<vk2s::Image> buildPDFImage(Handle<vk2s::Image> image);
-
     protected:
         //! Reference to vk2s device
         vk2s::Device& mDevice;
