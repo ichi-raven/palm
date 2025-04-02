@@ -15,6 +15,6 @@ path integrator (including MIS)
 ![damagedhelmet](https://github.com/user-attachments/assets/4da7ad20-521c-4cd5-8849-c3f18d198c7e)
 
 ## demo movies
-https://youtu.be/d4tDj9GgomA 
-https://youtu.be/6aE84OVUUNU
-https://youtu.be/lDB0LfxbZOc
+https://youtu.be/d4tDj9GgomA  
+https://youtu.be/6aE84OVUUNU  
+https://youtu.be/lDB0LfxbZOc  
