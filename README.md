@@ -2,12 +2,12 @@
 toy scene editor + physically-based(?)renderer
 
 ## now supporting
-- editor  
-mesh loading
-material editing
-emitter adding
-- renderer  
-path integrator (including MIS)
+### editor  
+- mesh loading
+- material editing
+- emitter adding (now supported: point, infinite)
+### renderer  
+- path integrator (including MIS)
 
 ## images 
 ![cornellbox_modified](https://github.com/user-attachments/assets/cdc1b5cf-472c-4ed5-90fb-2deca8178bd1)
