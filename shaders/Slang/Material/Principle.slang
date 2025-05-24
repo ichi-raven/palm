@@ -163,8 +163,8 @@ public struct Principle : IMaterial
             }
             else if(sample1 > pSpecular + pClearcoat && sample1 <= (pSpecular + pClearcoat + pDiffuse)) 
             {
-                //if (let res = Lambert.BSDF.sample(params, ctx, si, sample1, sample2))
-                if (let res = sampleDisneyDiffuse(params, si.wi, sample1, sample2))
+                //if (let res = sampleDisneyDiffuse(params, si.wi, sample1, sample2))
+                if (let res = Lambert.BSDF.sample(params, ctx, si, sample1, sample2))
                 {
                     var ret = res;
                     ret.pdf *= pDiffuse;
@@ -217,8 +217,8 @@ public struct Principle : IMaterial
             // diffuse
             if (diffuseWeight > 0.0)
             {
-                //pdf += pDiffuse * Lambert.BSDF.pdf(params, ctx, si, wo);
-                pdf += pDiffuse * abs(pbr::cosTheta(wo));
+                pdf += pDiffuse * Lambert.BSDF.pdf(params, ctx, si, wo);
+                //pdf += pDiffuse * abs(pbr::cosTheta(wo));
             }
 
             // transmission
@@ -269,8 +269,8 @@ public struct Principle : IMaterial
             // diffuse
             if(diffuseWeight > 0.0) 
             {
-                //let diffuse = Lambert.BSDF.eval(params, ctx, si, wo);
-                let diffuse = evaluateDisneyDiffuse(params.albedo, params.flatness, params.roughness, si.wi, wm, wo);
+                let diffuse = Lambert.BSDF.eval(params, ctx, si, wo);
+                //let diffuse = evaluateDisneyDiffuse(params.albedo, params.flatness, params.roughness, si.wi, wm, wo);
                 let sheen = evaluateSheen(params.albedo, params.sheen, params.sheenTint, si.wi, wm, wo);
 
                 reflectance += diffuseWeight * (diffuse * params.albedo + sheen);

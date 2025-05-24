@@ -132,11 +132,12 @@ public class EmitterSampler
 
         case EmitterType::Infinite:
 
+            let localDir = Warp::toUniformSphere(sample2);
             // TODO: uniform 
             ret.pdf      = k::inv4Pi;
             ret.distance = k::infty;
-            ret.to       = Warp::toUniformSphere(sample2);
-            ret.normal     = -ret.to;
+            ret.to         = si.frame.toWorld(localDir);
+            ret.normal     = -localDir;
             ret.isInfinite = true;
 
             if (sampled.texIndex == -1) // constant emissive
@@ -146,14 +147,15 @@ public class EmitterSampler
             else // envmap 
             {
                 // sample the direction of ret.to
-                let phi   = k::inv2Pi * sign(ret.to.z) * acos(ret.to.x / sqrt(ret.to.x * ret.to.x + ret.to.z * ret.to.z));
-                let theta = k::invPi * acos(ret.to.y / length(ret.to));
+                let phi   = k::inv2Pi * sign(localDir.z) * acos(localDir.x / sqrt(localDir.x * localDir.x + localDir.z * localDir.z));
+                let theta = k::invPi * acos(localDir.y / length(localDir));
                 let angle = float2(phi, theta);
 
                 ret.emissive = textures[sampled.texIndex].Sample(texSampler, angle).xyz;
             }
 
             break;
+
         default: // invalid
             ret.emissive = k::black; // DEBUG:
             ret.pdf = 0.0;
@@ -186,6 +188,6 @@ public class EmitterSampler
 
         // infinite emitter
         // TODO: uniform
-        return k::inv4Pi;
+        return k::inv4Pi / emitterNum;
     }
 }

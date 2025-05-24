@@ -255,6 +255,11 @@ namespace palm
 
         if (scene.contains<Emitter>(entity))
         {
+            if (mInfiniteEmitterEntity && mInfiniteEmitterEntity == entity)
+            {
+                mInfiniteEmitterEntity.reset();
+            }
+
             auto& emitter = scene.get<Emitter>(entity);
             device.destroy(emitter.emissiveTex);
         }
@@ -573,12 +578,13 @@ namespace palm
 
         // set envmap
         scene.each<Emitter>(
-            [&](const Emitter& emitter)
+            [&](const ec2s::Entity entity, const Emitter& emitter)
             {
                 if (emitter.params.type == static_cast<int32_t>(Emitter::Type::eInfinite))
                 {
                     if (emitter.emissiveTex)
                     {
+                        mInfiniteEmitterEntity = entity;
                         mLightingBindGroup->bind(3, vk::DescriptorType::eSampledImage, emitter.emissiveTex);
                     }
                 }
@@ -895,6 +901,17 @@ namespace palm
             if (!emitterParams.empty())
             {
                 mEmitterBuffer->write(emitterParams.data(), sizeof(Emitter::Params) * emitterParams.size(), mNow * mEmitterBuffer->getBlockSize());
+            }
+
+            // update bind group
+            mLightingBindGroup->bind(3, vk::DescriptorType::eSampledImage, mDummyTexture);
+            if (mInfiniteEmitterEntity)
+            {
+                auto& emitter       = scene.get<Emitter>(*mInfiniteEmitterEntity);
+                if (emitter.emissiveTex)
+                {
+                    mLightingBindGroup->bind(3, vk::DescriptorType::eSampledImage, emitter.emissiveTex);
+                }
             }
         }
     }

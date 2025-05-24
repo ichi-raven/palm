@@ -44,6 +44,7 @@ struct Payload //<Sampler: ISampler> TODO: selecting sampler
     IndependentSampler sampler;
 
     bool sampleOnlyEmissive;
+    Optional<uint> hitSurfaceFaceNum;
 
     bool skipSampling()
     {
@@ -151,7 +152,8 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
     // trace ray recursively
     for (int depth = 1; depth < k::maxDepth && payload.continue(); ++depth)
     {
-        {// russian roulette
+        // russian roulette
+        {
             let prr = max(max(beta.x, beta.y), beta.z);
             if (payload.sampler.next1D() >= prr)
             {
@@ -179,19 +181,20 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                     let cosine = abs(dot(si.normal, normalize(es.to)));
 
                     // if infinite emitter, G term will be infinite
-                    let G = es.isInfinite ? 1. : lightCos / (es.distance * es.distance);
+                    let G = (es.isInfinite ? 1. : lightCos / (es.distance * es.distance));
 
                     // calculate BSDF contribution
                     let f         = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
                     let pathpdf   = G * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
                     // balance heuristic
-                    let MISWeight = (es.pdf + pathpdf) == 0. ? 0. : es.pdf / (es.pdf + pathpdf);
+                    let MISWeight = es.pdf / (es.pdf + pathpdf);
 
                     L += MISWeight * beta * f * G * cosine * es.emissive / es.pdf;
                 }                                                                                                                                                    
             }
 
             // BSDF sampling
+            //if (false)
             {
                 Payload bsdfPayload = Payload(payload.sampler, true);
 
@@ -214,13 +217,18 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                             uint size   = sceneParams.areaEmitterNum;
                             uint stride = 0;
                             emitterParams.GetDimensions(size, stride);
+                            if (let faceNum = bsdfPayload.hitSurfaceFaceNum)
+                            {
+                                size *= faceNum;
+                            }
+
                             emitterpdf = EmitterSampler.pdf(si, bsdfSi, size);
                         }
                     }
 
                     let cosine    = abs(dot(si.normal, si.frame.toWorld(bs.wo)));
                     // balance heuristic
-                    let MISWeight = (emitterpdf + bs.pdf) == 0. ? 0. : bs.pdf / (emitterpdf + bs.pdf);
+                    let MISWeight = bs.pdf / (emitterpdf + bs.pdf);
                     L += MISWeight * beta * bs.f * cosine * emissive / bs.pdf;
                 }
 
@@ -286,7 +294,14 @@ void rayGenShader()
     for (int sampleID = 0; sampleID < sceneParams.sppPerFrame; ++sampleID)
     {
         // true if doing MIS
-        L += sampleL<true>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
+        if (1. * threadIdx.x / DispatchRaysDimensions().x < 1. * threadIdx.y / DispatchRaysDimensions().y)
+        {
+            L += sampleL<true>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
+        }
+        else
+        {
+            L += sampleL<false>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
+        }
     }
 
     let rate = float(sceneParams.sppPerFrame) / accumulatedSpp;
@@ -351,9 +366,13 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     // sample BSDF and emitter
     MaterialParams params = MaterialParams::loadWithTextures(materialParams[instanceIndex], textures, texSampler, payload.si.value.uv);
 
-    if (dot(params.emissive, params.emissive) > 0.)// HACK:
+    if (any(params.emissive > 0.))
     {
-        payload.emissive = params.emissive;
+        uint size = 0, stride = 0;
+        indices[instanceIndex].GetDimensions(size, stride);
+        
+        payload.emissive          = params.emissive;
+        payload.hitSurfaceFaceNum = size / 3; // number of faces in this instance
     }
 
     if (payload.skipSampling())
