@@ -36,15 +36,15 @@ struct Payload //<Sampler: ISampler> TODO: selecting sampler
         resetForNextBounce();
     }
 
-    BSDFContext ctx;
     Optional<SurfaceInteraction> si;
     Optional<BSDFSample> bsdfSample;
     Optional<EmitterSample> emitterSample;
     Optional<float3> emissive;
-    IndependentSampler sampler;
-
-    bool sampleOnlyEmissive;
     Optional<uint> hitSurfaceFaceNum;
+    
+    BSDFContext ctx;
+    IndependentSampler sampler;
+    bool sampleOnlyEmissive;
 
     bool skipSampling()
     {
@@ -63,6 +63,7 @@ struct Payload //<Sampler: ISampler> TODO: selecting sampler
         bsdfSample      = none;
         emitterSample   = none;
         emissive        = none;
+        hitSurfaceFaceNum = none;
     }
 }
 
@@ -176,12 +177,16 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                     MaterialParams params = MaterialParams::loadWithTextures(materialParams[si.instanceIndex], textures, texSampler, si.uv);
 
                     // add emitter directional contribution to L
-                    let wo = si.frame.toLocal(normalize(es.to));
-                    let lightCos = abs(dot(normalize(es.to), es.normal));
+                    let wo     = si.frame.toLocal(normalize(es.to));
                     let cosine = abs(dot(si.normal, normalize(es.to)));
+                    let lightCos = abs(dot(normalize(es.to), es.normal));
 
-                    // if infinite emitter, G term will be infinite
-                    let G = (es.isInfinite ? 1. : lightCos / (es.distance * es.distance));
+                    // if infinite emitter, G term's denom will be infinite (and cancelled)
+                    float G = lightCos;
+                    if (!es.isInfinite)
+                    {
+                        G /= (es.distance * es.distance);
+                    }
 
                     // calculate BSDF contribution
                     let f         = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
@@ -194,7 +199,6 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
             }
 
             // BSDF sampling
-            //if (false)
             {
                 Payload bsdfPayload = Payload(payload.sampler, true);
 
@@ -280,6 +284,8 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
 [shader("raygeneration")]
 void rayGenShader()
 {
+    const static bool kEnableMIS = true; // enable MIS
+
     uint2 threadIdx = DispatchRaysIndex().xy;
     if (threadIdx.x >= DispatchRaysDimensions().x) return;
     if (threadIdx.y >= DispatchRaysDimensions().y) return;
@@ -293,15 +299,16 @@ void rayGenShader()
 
     for (int sampleID = 0; sampleID < sceneParams.sppPerFrame; ++sampleID)
     {
-        // true if doing MIS
-        if (1. * threadIdx.x / DispatchRaysDimensions().x < 1. * threadIdx.y / DispatchRaysDimensions().y)
-        {
-            L += sampleL<true>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
-        }
-        else
-        {
-            L += sampleL<false>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
-        }
+        L += sampleL<kEnableMIS>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
+        // for MIS debug
+        // if (1. * threadIdx.x / DispatchRaysDimensions().x < 1. * threadIdx.y / DispatchRaysDimensions().y)
+        // {
+        //     L += sampleL<true>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
+        // }
+        // else
+        // {
+        //     L += sampleL<false>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
+        // }
     }
 
     let rate = float(sceneParams.sppPerFrame) / accumulatedSpp;
