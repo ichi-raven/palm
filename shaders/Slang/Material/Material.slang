@@ -2,6 +2,7 @@ module Material;
 
 import "../Utility/Frame";
 import "../Utility/Warp";
+import "../Sampler/Sampler";
 import "../Utility/Constants";
 import "../Utility/SurfaceInteraction";
 
@@ -128,7 +129,7 @@ public interface IMaterial
 
 public interface IBSDF
 {
-    public static Optional<BSDFSample> sample(MaterialParams params, inout BSDFContext ctx, SurfaceInteraction si, float sample1, float2 sample2);
+    public static Optional<BSDFSample> sample<S : ISampler>(MaterialParams params, inout BSDFContext ctx, SurfaceInteraction si, inout S sampler);
 
     public static float pdf(MaterialParams params, inout BSDFContext ctx, SurfaceInteraction si, float3 wo);
 
@@ -140,20 +141,20 @@ public struct DynamicMaterial : IMaterial
     
     public struct BSDF: IBSDF
     {
-        public static Optional<BSDFSample> sample(MaterialParams params, inout BSDFContext ctx, SurfaceInteraction si, float sample1, float2 sample2)
+        public static Optional<BSDFSample> sample<S : ISampler>(MaterialParams params, inout BSDFContext ctx, SurfaceInteraction si, inout S sampler)
         {
             switch (params.type)
             {
                 case MaterialType::Lambert:
-                    return Lambert.BSDF.sample(params, ctx, si, sample1, sample2);
+                    return Lambert.BSDF.sample(params, ctx, si, sampler);
                 case MaterialType::Conductor:
-                    params.metallic = 1.0;
-                    return Conductor.BSDF.sample(params, ctx, si, sample1, sample2);
+                    return Conductor.BSDF.sample(params, ctx, si, sampler);
                 case MaterialType::Dielectric:
-                    return Dielectric.BSDF.sample(params, ctx, si, sample1, sample2);
+                    return Dielectric.BSDF.sample(params, ctx, si, sampler);
                 case MaterialType::Principle:
-                    return Principle.BSDF.sample(params, ctx, si, sample1, sample2);
-                default: // invalid
+                    return Principle.BSDF.sample(params, ctx, si, sampler);
+                default:  // invalid
+                    break;
             }
 
             return none;
@@ -166,13 +167,13 @@ public struct DynamicMaterial : IMaterial
                 case MaterialType::Lambert:
                     return Lambert.BSDF.pdf(params, ctx, si, wo);
                 case MaterialType::Conductor:
-                    params.metallic = 1.0;
                     return Conductor.BSDF.pdf(params, ctx, si, wo);
                 case MaterialType::Dielectric:
                     return Dielectric.BSDF.pdf(params, ctx, si, wo);
                 case MaterialType::Principle:
                     return Principle.BSDF.pdf(params, ctx, si, wo);
-                default: // invalid
+                default:  // invalid
+                    break;
             }
 
             return 0.0;
@@ -185,13 +186,13 @@ public struct DynamicMaterial : IMaterial
                 case MaterialType::Lambert:
                     return Lambert.BSDF.eval(params, ctx, si, wo);
                 case MaterialType::Conductor:
-                    params.metallic = 1.0;
                     return Conductor.BSDF.eval(params, ctx, si, wo);
                 case MaterialType::Dielectric:
                     return Dielectric.BSDF.eval(params, ctx, si, wo);
                 case MaterialType::Principle:
                     return Principle.BSDF.eval(params, ctx, si, wo);
-                default: // invalid
+                default:  // invalid
+                    break;
             }
 
             return k::zeros.xyz;

@@ -189,15 +189,13 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                     let wo         = si.frame.toLocal(es.to);
                     let f          = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
                     let pathpdf    = jacobian * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
-                    let MISWeight  = 1.0;//Warp::heuristic<k::MISHeuristicBeta>(es.pdf, { es.pdf, pathpdf });
-
+                    let MISWeight  = Warp::heuristic<k::MISHeuristicBeta>(es.pdf, { es.pdf, pathpdf });
                     // add contribution to L
                     L += MISWeight * beta * f * G * es.emissive / es.pdf;
                 }
             }
 
             // BSDF sampling (directional sampling)
-            if (false)
             {
                 Payload bsdfPayload = Payload(payload.sampler, true);
 
@@ -210,7 +208,6 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
 
                 if (let emissive = bsdfPayload.emissive)
                 {
-                    // add BSDF directional contribution to L
                     uint emitterNum = 0, stride = 0;
                     emitterParams.GetDimensions(emitterNum, stride);
                     if (let faceNum = bsdfPayload.hitSurfaceFaceNum)
@@ -222,7 +219,6 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
 
                     let cosine    = abs(dot(si.normal, si.frame.toWorld(bs.wo)));
                     let MISWeight = Warp::heuristic<k::MISHeuristicBeta>(bs.pdf, { emitterpdf, bs.pdf });
-
                     // add contribution to L
                     L += MISWeight * beta * bs.f * cosine * emissive / bs.pdf;
                 }
@@ -235,9 +231,9 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
         // update parameters
         beta *= bs.f * abs(dot(si.normal, si.frame.toWorld(bs.wo))) / bs.pdf;
 
-        ray.Origin      = si.pos + k::eps * si.normal;
+        ray.Origin      = si.pos;
         ray.Direction   = si.frame.toWorld(bs.wo);
-        ray.TMin        = 0;
+        ray.TMin        = k::eps;
         ray.TMax        = k::infty;
         payload.resetForNextBounce();
 
@@ -379,7 +375,7 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
         return;
     }
 
-    payload.bsdfSample = DynamicMaterial.BSDF.sample(params, payload.ctx, payload.si.value.toLocal(), payload.sampler.next1D(), payload.sampler.next2D());
+    payload.bsdfSample = DynamicMaterial.BSDF.sample(params, payload.ctx, payload.si.value.toLocal(), payload.sampler);
     if (let bs = payload.bsdfSample) // update BSDFContext
     {
         payload.ctx.update(bs, params.IOR);
@@ -390,8 +386,7 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     }
 
     // emitter sample
-    //payload.emitterSample = EmitterSampler.sample<Vertex, InstanceParams, IndependentSampler>(emitterParams, vertices, indices, instanceParams, textures, texSampler, payload.si.value, payload.sampler.next1D(), payload.sampler.next2D(), payload.sampler.next1D());
-    payload.emitterSample = EmitterSampler.sample<Vertex, InstanceParams, IndependentSampler>(emitterParams, vertices, indices, instanceParams, textures, texSampler, payload.si.value, payload.sampler);
+    payload.emitterSample = EmitterSampler.sample(emitterParams, vertices, indices, instanceParams, textures, texSampler, payload.si.value, payload.sampler);
 }
 
 [shader("miss")]

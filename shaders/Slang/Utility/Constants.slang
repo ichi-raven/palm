@@ -15,7 +15,7 @@ public namespace k
     public const static uint maxDepth  = 16;
 
     public const static int invalidTexIndex     = -1;
-    public const static uint MISHeuristicBeta   = 2;
+    public const static uint MISHeuristicBeta   = 1;
     public const static uint fixedEmitterLimit  = 10;
 
     public const static float4 zeros = float4(0.0);

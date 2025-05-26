@@ -1,6 +1,7 @@
 implementing Material;
 
 import "../Utility/Constants";
+import "../Sampler/Sampler";
 import PBR;
 import GGX;
 
@@ -8,8 +9,10 @@ public struct Conductor : IMaterial
 {
     public struct BSDF : IBSDF
     {
-        public static Optional<BSDFSample> sample(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float sample1, float2 sample2)
+        public static Optional<BSDFSample> sample<S: ISampler>(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, inout S sampler)
         {
+            let sample2 = sampler.next2D();
+
             BSDFSample ret;
             // glossy by default
             ret.flags = BSDFSample::Flags::Glossy | BSDFSample::Flags::Reflection;
