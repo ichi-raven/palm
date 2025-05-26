@@ -107,8 +107,8 @@ public class EmitterSampler
             ret.pdf      = 1.0;
             ret.distance = distance(si.pos, sampled.pos);
             ret.emissive = sampled.emissive;
-            ret.to       = sampled.pos - si.pos;
-            ret.normal     = (-1.0 / ret.distance) * ret.to;
+            ret.to       = (sampled.pos - si.pos) / ret.distance; // normalize
+            ret.normal     = -ret.to;
             ret.isInfinite = false;
             break;
 
@@ -125,7 +125,7 @@ public class EmitterSampler
             ret.pdf = 1.0 / (sampled.faceNum * face.area);
             ret.distance = distance(si.pos, v.pos);
             ret.emissive = sampled.emissive;
-            ret.to       = v.pos - si.pos;
+            ret.to       = (v.pos - si.pos) / ret.distance; // normalize
             ret.normal     = v.normal;
             ret.isInfinite = false;
             break;
@@ -135,8 +135,8 @@ public class EmitterSampler
             // TODO: uniform 
             ret.pdf      = k::inv4Pi;
             ret.distance = k::infty;
-            ret.to       = Warp::toUniformSphere(sample2);
-            ret.normal     = k::zeros.xyz; // no normal for infinite emitter
+            ret.to       = si.frame.toWorld(Warp::toUniformSphere(sample2));
+            ret.normal     = -ret.to;
             ret.isInfinite = true;
 
             if (sampled.texIndex == -1) // constant emissive
@@ -179,10 +179,10 @@ public class EmitterSampler
             let to     = bs.pos - si.pos;
             let distSq = dot(to, to);
 
-            let lightCos = abs(dot(normalize(to), bs.normal));
+            let lightCos = abs(dot(-normalize(to), bs.normal));
 
-            let invG = distSq / lightCos;
-            return invG / bs.area / emitterNum;
+            let invJacobian = distSq / lightCos; // from point sampling to directional sampling
+            return invJacobian / bs.area / emitterNum;
         }
 
         // infinite emitter

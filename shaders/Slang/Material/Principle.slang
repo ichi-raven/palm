@@ -120,17 +120,17 @@ public struct Principle : IMaterial
             let specularBSDF   = (1.0 - params.metallic) * params.specTrans;
             let dielectricBRDF = (1.0 - params.specTrans) * (1.0 - params.metallic);
 
-            let specularWeight = metallicBRDF + dielectricBRDF;
+            let specularWeight     = metallicBRDF;
             let transmissionWeight = specularBSDF;
             let diffuseWeight      = dielectricBRDF;
-            let clearcoatWeight    = clamp(params.clearcoat, 0.0, 1.0); 
+            let clearcoatWeight    = saturate(params.clearcoat);
 
             let norm = 1.0 / (specularWeight + transmissionWeight + diffuseWeight + clearcoatWeight);
 
-            pSpecular  = specularWeight     * norm;
+            pSpecular  = specularWeight * norm;
             pSpecTrans = transmissionWeight * norm;
-            pDiffuse   = diffuseWeight      * norm;
-            pClearcoat = clearcoatWeight    * norm;
+            pDiffuse   = diffuseWeight * norm;
+            pClearcoat = clearcoatWeight * norm;
         }
 
         public static Optional<BSDFSample> sample(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float sample1, float2 sample2)
@@ -140,7 +140,7 @@ public struct Principle : IMaterial
             float pClearcoat = 0;
             float pTransmission = 0;
             calcLobePdfs(params, pSpecular, pDiffuse, pClearcoat, pTransmission);
-            
+
             if (sample1 <= pSpecular) 
             {
                 if (let res = Conductor.BSDF.sample(params, ctx, si, sample1, sample2))
@@ -153,7 +153,9 @@ public struct Principle : IMaterial
             else if(sample1 > pSpecular && sample1 <= (pSpecular + pClearcoat)) 
             {
                 MaterialParams clearcoatParams = params; // only for clearcoat
-                clearcoatParams.roughness      = lerp(0.1, 0.001, params.clearcoatGloss);
+                clearcoatParams.roughness         = lerp(0.1, 0.001, params.clearcoatGloss);
+                clearcoatParams.metalnessTexIndex = k::invalidTexIndex;
+                clearcoatParams.albedo            = k::white;
                 if (let res = Conductor.BSDF.sample(clearcoatParams, ctx, si, sample1, sample2))
                 {
                     var ret = res;
@@ -161,10 +163,12 @@ public struct Principle : IMaterial
                     return ret;
                 }
             }
-            else if(sample1 > pSpecular + pClearcoat && sample1 <= (pSpecular + pClearcoat + pDiffuse)) 
+            else if(sample1 > (pSpecular + pClearcoat) && sample1 <= (pSpecular + pClearcoat + pDiffuse)) 
             {
-                //if (let res = sampleDisneyDiffuse(params, si.wi, sample1, sample2))
-                if (let res = Lambert.BSDF.sample(params, ctx, si, sample1, sample2))
+                //if (let res = Lambert.BSDF.sample(params, ctx, si, sample1, sample2))
+                params.roughness = 1.0;//
+                params.metallic = 1.0;
+                if (let res = Conductor.BSDF.sample(params, ctx, si, sample1, sample2))
                 {
                     var ret = res;
                     ret.pdf *= pDiffuse;
@@ -217,8 +221,10 @@ public struct Principle : IMaterial
             // diffuse
             if (diffuseWeight > 0.0)
             {
-                pdf += pDiffuse * Lambert.BSDF.pdf(params, ctx, si, wo);
-                //pdf += pDiffuse * abs(pbr::cosTheta(wo));
+                //pdf += pDiffuse * Lambert.BSDF.pdf(params, ctx, si, wo);
+                params.roughness = 1.0;
+                params.metallic = 1.0;
+                pdf += pDiffuse * Conductor.BSDF.pdf(params, ctx, si, wo);
             }
 
             // transmission
@@ -233,7 +239,7 @@ public struct Principle : IMaterial
                 pdf += pBRDF * Conductor.BSDF.pdf(params, ctx, si, wo);
             }
 
-            return saturate(pdf);
+            return pdf;
         }
 
         public static float3 eval(MaterialParams params, BSDFContext ctx, SurfaceInteraction si, float3 wo)
@@ -249,12 +255,12 @@ public struct Principle : IMaterial
             float pBRDF = 0.0, pDiffuse = 0.0, pClearcoat = 0.0, pSpecTrans = 0.0;
             calcLobePdfs(params, pBRDF, pDiffuse, pClearcoat, pSpecTrans);
 
+            let diffuseWeight = (1.0 - params.metallic) * (1.0 - params.specTrans);
+            let transWeight   = (1.0 - params.metallic) * params.specTrans;
+
             // calculate all of the anisotropic params
             float ax, ay;
             pbr::calcAnisotropic(params.roughness, params.anisotropic, ax, ay);
-
-            let diffuseWeight = (1.0 - params.metallic) * (1.0 - params.specTrans);
-            let transWeight   = (1.0 - params.metallic) * params.specTrans;
 
             // clearcoat
             bool upperHemisphere = dotNL > 0.0 && dotNV > 0.0;
@@ -267,13 +273,17 @@ public struct Principle : IMaterial
             }
 
             // diffuse
-            if(diffuseWeight > 0.0) 
+            if (diffuseWeight > 0.0) 
             {
-                let diffuse = Lambert.BSDF.eval(params, ctx, si, wo);
+                //let diffuse = Lambert.BSDF.eval(params, ctx, si, wo);
+                params.roughness = 1.0;//
+                params.metallic = 1.0;
+                let diffuse = Conductor.BSDF.eval(params, ctx, si, wo);
                 //let diffuse = evaluateDisneyDiffuse(params.albedo, params.flatness, params.roughness, si.wi, wm, wo);
-                let sheen = evaluateSheen(params.albedo, params.sheen, params.sheenTint, si.wi, wm, wo);
+                //let sheen = evaluateSheen(params.albedo, params.sheen, params.sheenTint, si.wi, wm, wo);
 
-                reflectance += diffuseWeight * (diffuse * params.albedo + sheen);
+                //reflectance += diffuseWeight * (diffuse * params.albedo + sheen);
+                reflectance += diffuseWeight * diffuse;
             }
 
             // transmission
@@ -284,10 +294,10 @@ public struct Principle : IMaterial
             }
 
             // specular
-            if(upperHemisphere) 
+            if(upperHemisphere && pBRDF > 0.0) 
             {
                 let specular = Conductor.BSDF.eval(params, ctx, si, wo);
-                reflectance += specular;
+                reflectance += pBRDF * specular;
             }
 
             return reflectance;

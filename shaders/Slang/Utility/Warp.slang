@@ -30,7 +30,7 @@ public namespace Warp
     {
         let a = u.x * 2. * k::pi;
         let z = u.y * 2. - 1.;
-        let r = sqrt(1 - z * z);
+        let r = sqrt(1. - z * z);
         return float3(r * cos(a), r * sin(a), z);
     }
 
@@ -85,5 +85,32 @@ public namespace Warp
         let d = toUniformDiskConcentric(u);
         let z = sqrt(max(1 - (d.x * d.x) - (d.y * d.y), 0.));
         return float3(d.x, d.y, z);
+    }
+
+    [ForceInline]
+    public float heuristic<let beta : uint>(const float target, const float values[])
+    {
+        var denom = 0.0;
+        var t     = target;
+
+        [unroll]
+        for (int i = 0; i < values.getCount(); ++i)
+        {
+            var p = values[i];
+            [unroll]
+            for (int j = 1; j < beta; ++j)
+            {
+                p *= values[i];
+            }
+            denom += p;
+        }
+
+        [unroll]
+        for (int j = 1; j < beta; ++j)
+        {
+            t *= target;
+        }
+
+        return t / denom;
     }
 }

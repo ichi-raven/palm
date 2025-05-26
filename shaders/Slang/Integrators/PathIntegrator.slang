@@ -5,6 +5,7 @@ import "../Material/Material";
 import "../Emitter/Emitter";
 import "../Utility/SurfaceInteraction";
 import "../Utility/Frame";
+import "../Utility/Warp";
 import "../Utility/Constants";
 
 struct SceneParams
@@ -118,15 +119,15 @@ bool occluded(const float3 pos, const EmitterSample es)
     // trace shadow ray
     RayDesc shadowRay;
     shadowRay.Origin               = pos;
-    shadowRay.Direction            = normalize(es.to);
+    shadowRay.Direction            = es.to;
     shadowRay.TMin                 = k::eps;  
     shadowRay.TMax                 = es.distance - k::eps;// WARN: adhoc
 
-    // payload, true if hit other object
-    bool ret = true;
-    TraceRay(sceneBVH, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, ~0, 0, 0, 1, shadowRay, ret);
+    // payload, true if occluded(hit other object)
+    bool occluded = true;
+    TraceRay(sceneBVH, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, ~0, 0, 0, 1, shadowRay, occluded);
 
-    return ret;
+    return occluded;
 }
 
 float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
@@ -169,36 +170,34 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
 
         if (enableMIS)
         {
-            // NEE (direct light sampling)
-            if (!bs.isSpecular()) 
+            // NEE (direct light sampling, point or direction)
+            if (!bs.isSpecular())
             {
                 if (!occluded(si.pos, es)) // Slang (HLSL) does not support short circuit
                 {
-                    MaterialParams params = MaterialParams::loadWithTextures(materialParams[si.instanceIndex], textures, texSampler, si.uv);
-
-                    // add emitter directional contribution to L
-                    let wo     = si.frame.toLocal(normalize(es.to));
-                    let cosine = abs(dot(si.normal, normalize(es.to)));
-                    let lightCos = abs(dot(normalize(es.to), es.normal));
-
-                    // if infinite emitter, G term's denom will be infinite (and cancelled)
-                    float G = lightCos;
-                    if (!es.isInfinite)
-                    {
-                        G /= (es.distance * es.distance);
-                    }
-
+                    let cosine   = abs(dot(si.normal, es.to));
+                    let lightCos = abs(dot(es.normal, -es.to));
+                    
+                    // if infinite emitter, sampling space is direction (not point) -> jacobian is just 1.0
+                    let jacobian = select(es.isInfinite, 1.0, lightCos / (es.distance * es.distance));
+                    
+                    // if infinite emitter, G term's denom will be infinite (and cancelled with pdf)
+                    let G = jacobian * cosine;
+                    
                     // calculate BSDF contribution
-                    let f         = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
-                    let pathpdf   = G * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
-                    // balance heuristic
-                    let MISWeight = es.pdf / (es.pdf + pathpdf);
+                    let params = MaterialParams::loadWithTextures(materialParams[si.instanceIndex], textures, texSampler, si.uv);
+                    let wo         = si.frame.toLocal(es.to);
+                    let f          = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
+                    let pathpdf    = jacobian * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
+                    let MISWeight  = 1.0;//Warp::heuristic<k::MISHeuristicBeta>(es.pdf, { es.pdf, pathpdf });
 
-                    L += MISWeight * beta * f * G * cosine * es.emissive / es.pdf;
-                }                                                                                                                                                    
+                    // add contribution to L
+                    L += MISWeight * beta * f * G * es.emissive / es.pdf;
+                }
             }
 
-            // BSDF sampling
+            // BSDF sampling (directional sampling)
+            if (false)
             {
                 Payload bsdfPayload = Payload(payload.sampler, true);
 
@@ -212,27 +211,19 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                 if (let emissive = bsdfPayload.emissive)
                 {
                     // add BSDF directional contribution to L
-                    float emitterpdf = 0.0;
-
-                    if (let bsdfSi = bsdfPayload.si)
+                    uint emitterNum = 0, stride = 0;
+                    emitterParams.GetDimensions(emitterNum, stride);
+                    if (let faceNum = bsdfPayload.hitSurfaceFaceNum)
                     {
-                        if (!bs.isSpecular())
-                        {
-                            uint size   = sceneParams.areaEmitterNum;
-                            uint stride = 0;
-                            emitterParams.GetDimensions(size, stride);
-                            if (let faceNum = bsdfPayload.hitSurfaceFaceNum)
-                            {
-                                size *= faceNum;
-                            }
-
-                            emitterpdf = EmitterSampler.pdf(si, bsdfSi, size);
-                        }
+                        emitterNum *= faceNum;
                     }
+                    
+                    let emitterpdf = select(bs.isSpecular(), 0., EmitterSampler.pdf(si, bsdfPayload.si, emitterNum));
 
                     let cosine    = abs(dot(si.normal, si.frame.toWorld(bs.wo)));
-                    // balance heuristic
-                    let MISWeight = bs.pdf / (emitterpdf + bs.pdf);
+                    let MISWeight = Warp::heuristic<k::MISHeuristicBeta>(bs.pdf, { emitterpdf, bs.pdf });
+
+                    // add contribution to L
                     L += MISWeight * beta * bs.f * cosine * emissive / bs.pdf;
                 }
 
@@ -244,9 +235,9 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
         // update parameters
         beta *= bs.f * abs(dot(si.normal, si.frame.toWorld(bs.wo))) / bs.pdf;
 
-        ray.Origin      = si.pos;
+        ray.Origin      = si.pos + k::eps * si.normal;
         ray.Direction   = si.frame.toWorld(bs.wo);
-        ray.TMin        = k::eps;
+        ray.TMin        = 0;
         ray.TMax        = k::infty;
         payload.resetForNextBounce();
 
@@ -265,7 +256,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
 
     // reject invalid sample
     let invalid = any(isnan(L)) || any(isinf(L));
-    return invalid ? k::zeros.xyz : L;
+    return select(invalid, k::zeros.xyz, L);
 }
 
 // bindings
@@ -299,16 +290,16 @@ void rayGenShader()
 
     for (int sampleID = 0; sampleID < sceneParams.sppPerFrame; ++sampleID)
     {
-        L += sampleL<kEnableMIS>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
+        //L += sampleL<kEnableMIS>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
         // for MIS debug
-        // if (1. * threadIdx.x / DispatchRaysDimensions().x < 1. * threadIdx.y / DispatchRaysDimensions().y)
-        // {
-        //     L += sampleL<true>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
-        // }
-        // else
-        // {
-        //     L += sampleL<false>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
-        // }
+        if (1. * threadIdx.x / DispatchRaysDimensions().x < 1. * threadIdx.y / DispatchRaysDimensions().y)
+        {
+            L += sampleL<true>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
+        }
+        else
+        {
+            L += sampleL<false>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
+        }
     }
 
     let rate = float(sceneParams.sppPerFrame) / accumulatedSpp;
