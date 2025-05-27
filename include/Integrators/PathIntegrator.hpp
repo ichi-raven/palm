@@ -58,7 +58,7 @@ namespace palm
             glm::vec4 camPos;
 
             uint32_t sppPerFrame;
-            uint32_t areaEmitterNum;
+            uint32_t allEmitterNum;
             uint32_t padding[2];
         };
 
@@ -69,6 +69,7 @@ namespace palm
         };
 
         GUIParams mGUIParams;
+        uint32_t mEmitterNum;
 
         // TLAS
         UniqueHandle<vk2s::AccelerationStructure> mTLAS;

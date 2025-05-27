@@ -17,8 +17,8 @@ struct SceneParams
     float4 cameraPos;
 
     uint32_t sppPerFrame;
-    uint32_t areaEmitterNum;
-    float2 padding;
+    uint32_t allEmitterNum;
+    uint32_t2 padding;
 }
 
 struct InstanceParams : IInstance
@@ -137,12 +137,12 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
 
     let seed = tea(sampleID, pixelSeed);
     Payload payload    = Payload(IndependentSampler(seed));
-    
+
     // trace primary ray
     RayDesc ray = getCameraRay(DispatchRaysIndex().xy, payload.sampler.next2D());
     TraceRay(sceneBVH, RAY_FLAG_NONE, ~0, 0, 0, 0, ray, payload);
 
-    // required for MIS (for primal hit)
+    // required for MIS (only for primal hit)
     if (enableMIS)
     {
         if (let emissive = payload.emissive)
@@ -168,6 +168,9 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
         let bs = payload.bsdfSample.value;
         let es = payload.emitterSample.value;
 
+        Optional<float> debugNEEWeight;
+        Optional<float> debugBSDFWeight;
+
         if (enableMIS)
         {
             // NEE (direct light sampling, point or direction)
@@ -175,33 +178,31 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
             {
                 if (!occluded(si.pos, es)) // Slang (HLSL) does not support short circuit
                 {
-                    let cosine   = abs(dot(si.normal, es.to));
-                    let lightCos = abs(dot(es.normal, -es.to));
-                    
+                    let cosine   = abs(dot(normalize(si.normal), normalize(es.to)));
+                    let lightCos = abs(dot(normalize(es.normal), normalize(-es.to)));
+
                     // if infinite emitter, sampling space is direction (not point) -> jacobian is just 1.0
-                    let jacobian = select(es.isInfinite, 1.0, lightCos / (es.distance * es.distance));
-                    
-                    // if infinite emitter, G term's denom will be infinite (and cancelled with pdf)
-                    let G = jacobian * cosine;
+                    let G = select(es.isInfinite, 1.0, lightCos / (es.distance * es.distance));
                     
                     // calculate BSDF contribution
                     let params = MaterialParams::loadWithTextures(materialParams[si.instanceIndex], textures, texSampler, si.uv);
-                    let wo         = si.frame.toLocal(es.to);
+                    let wo         = si.frame.toLocal(normalize(es.to));
                     let f          = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
-                    let pathpdf    = jacobian * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
-                    let MISWeight  = Warp::heuristic<k::MISHeuristicBeta>(es.pdf, { es.pdf, pathpdf });
+                    let bsdfPdf    = G * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
+                    let MISWeight  = es.pdf / (es.pdf + bsdfPdf);  //Warp::heuristic<k::MISHeuristicBeta>(es.pdf, { es.pdf, bsdfPdf });
+                    debugNEEWeight = MISWeight;
                     // add contribution to L
-                    L += MISWeight * beta * f * G * es.emissive / es.pdf;
+                    L += MISWeight * beta * f * G * cosine * es.emissive / es.pdf;
                 }
             }
 
             // BSDF sampling (directional sampling)
-            {
+            { 
                 Payload bsdfPayload = Payload(payload.sampler, true);
 
                 RayDesc bsdfRay;
                 bsdfRay.Origin      = si.pos;
-                bsdfRay.Direction   = si.frame.toWorld(bs.wo);
+                bsdfRay.Direction   = si.frame.toWorld(normalize(bs.wo));
                 bsdfRay.TMin        = k::eps;
                 bsdfRay.TMax        = k::infty;
                 TraceRay(sceneBVH, RAY_FLAG_NONE, ~0, 0, 0, 0, bsdfRay, bsdfPayload);
@@ -210,24 +211,30 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                 {
                     uint emitterNum = 0, stride = 0;
                     emitterParams.GetDimensions(emitterNum, stride);
-                    if (let faceNum = bsdfPayload.hitSurfaceFaceNum)
-                    {
-                        emitterNum *= faceNum;
-                    }
-                    
-                    let emitterpdf = select(bs.isSpecular(), 0., EmitterSampler.pdf(si, bsdfPayload.si, emitterNum));
+                    let emitterPdf = select(bs.isSpecular(), 0., EmitterSampler.pdf(si, bsdfPayload.si, emitterNum));
 
-                    let cosine    = abs(dot(si.normal, si.frame.toWorld(bs.wo)));
-                    let MISWeight = Warp::heuristic<k::MISHeuristicBeta>(bs.pdf, { emitterpdf, bs.pdf });
+                    let cosine    = abs(dot(normalize(si.normal), normalize(si.frame.toWorld(normalize(bs.wo)))));
+                    let MISWeight = bs.pdf / (emitterPdf + bs.pdf);  //Warp::heuristic<k::MISHeuristicBeta>(bs.pdf, { emitterpdf, bs.pdf });
+                    debugBSDFWeight = MISWeight;
                     // add contribution to L
                     L += MISWeight * beta * bs.f * cosine * emissive / bs.pdf;
                 }
-
+            
                 // reflects sampler transitions
                 payload.sampler = bsdfPayload.sampler;
             }
-        }
 
+            // if (debugNEEWeight.hasValue && debugBSDFWeight.hasValue)
+            // {
+            //     //return float3(debugNEEWeight.value, debugBSDFWeight.value, debugNEEWeight.value + debugBSDFWeight.value - 1.0);
+            //     return float3(abs(debugNEEWeight.value + debugBSDFWeight.value - 1.0), 0.0, 0.0);
+            // }
+            // else
+            // {
+            //     return k::blue;
+            // }
+        }
+        
         // update parameters
         beta *= bs.f * abs(dot(si.normal, si.frame.toWorld(bs.wo))) / bs.pdf;
 
@@ -304,9 +311,10 @@ void rayGenShader()
     poolImage[threadIdx.xy] = float4(finalRes, reinterpret<float>(accumulatedSpp));
 
     let gamma = 2.2;  // HACK: gamma correction
-    float3 gammaCorrected = pow(finalRes, 1. / gamma); 
-    
+    float3 gammaCorrected = pow(finalRes, 1. / gamma);
+
     resultImage[threadIdx.xy] = float4(gammaCorrected, 1.0);
+    //resultImage[threadIdx.xy] = float4(select(sceneParams.allEmitterNum == 960, k::red, k::blue), 1.0);
 }
 
 [shader("miss")]
@@ -354,13 +362,18 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
     let worldNormal = normalize(mul(instanceParams[instanceIndex].worldInvTrans, float4(vertex.normal, 0.)).xyz);
 
     // create SurfaceInteraction (world)
-    let area = area(vertices[instanceIndex][index.x].pos, vertices[instanceIndex][index.y].pos, vertices[instanceIndex][index.z].pos);
-    payload.si = SurfaceInteraction(worldPos, -worldRayDir, worldNormal, vertex.uv, area, instanceIndex, Frame(worldNormal));
+    {
+        let p0     = mul(instanceParams[instanceIndex].world, float4(vertices[instanceIndex][index.x].pos, 1.0)).xyz;
+        let p1     = mul(instanceParams[instanceIndex].world, float4(vertices[instanceIndex][index.y].pos, 1.0)).xyz;
+        let p2     = mul(instanceParams[instanceIndex].world, float4(vertices[instanceIndex][index.z].pos, 1.0)).xyz;
+        let area = area(p0, p1, p2);
+        payload.si = SurfaceInteraction(worldPos, -worldRayDir, worldNormal, vertex.uv, area, instanceIndex, Frame(worldNormal));
+    }
 
     // sample BSDF and emitter
     MaterialParams params = MaterialParams::loadWithTextures(materialParams[instanceIndex], textures, texSampler, payload.si.value.uv);
 
-    if (any(params.emissive > 0.))
+    if (any(params.emissive > k::eps))
     {
         uint size = 0, stride = 0;
         indices[instanceIndex].GetDimensions(size, stride);

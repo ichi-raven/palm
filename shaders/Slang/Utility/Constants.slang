@@ -21,10 +21,10 @@ public namespace k
     public const static float4 zeros = float4(0.0);
     public const static float4 ones  = float4(1.0);
 
-    public const static float3 red    = float3(0.8, 0.1, 0.1);
-    public const static float3 green  = float3(0.1, 0.8, 0.1);
-    public const static float3 blue   = float3(0.1, 0.1, 0.8);
-    public const static float3 yellow = float3(0.8, 0.8, 0.1);
+    public const static float3 red    = float3(0.8, 0., 0.);
+    public const static float3 green  = float3(0., 0.8, 0.);
+    public const static float3 blue   = float3(0., 0., 0.8);
+    public const static float3 yellow = float3(0.8, 0.8, 0.);
     public const static float3 black  = float3(0.0);
     public const static float3 white  = float3(1.0);
 

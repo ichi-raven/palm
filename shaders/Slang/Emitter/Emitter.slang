@@ -29,9 +29,10 @@ public struct EmitterParams
     public float3 pos   = k::zeros.xyz;
     public int32_t type = EmitterType::Point;
 
-    public uint32_t faceNum  = 0;
+    public int32_t faceNum = 0; // for area emitter, the number of faces
     public int32_t meshIndex = -1;
-    public float2 padding = k::zeros.xy;
+    public int32_t primitiveIndex = -1;  // for area emitter, the primitive index of the face
+    public int32_t padding = 0;
 
     public float3 emissive = k::zeros.xyz;
     public int32_t texIndex = -1;
@@ -91,12 +92,11 @@ public class EmitterSampler
     {
         let sample1 = sampler.next1D();
         let sample2 = sampler.next2D();
-        let sample3 = sampler.next1D();
 
         // TODO: should be originally sampled based on distance and area
         uint emitterCount = 0, emitterStride = 0;
         params.GetDimensions(emitterCount, emitterStride);
-        let sampled   = params[uint32_t(emitterCount * sample1)];
+        let sampled   = params[uint(emitterCount * sample1)];
         let selectPdf = 1. / float(emitterCount); // apply after
 
         EmitterSample ret = EmitterSample();
@@ -104,7 +104,7 @@ public class EmitterSampler
         switch (sampled.type)
         {
         case EmitterType::Point:
-            ret.pdf      = 1.0;
+            ret.pdf      = selectPdf;
             ret.distance = distance(si.pos, sampled.pos);
             ret.emissive = sampled.emissive;
             ret.to       = (sampled.pos - si.pos) / ret.distance; // normalize
@@ -114,18 +114,18 @@ public class EmitterSampler
 
         case EmitterType::Area:
             // TODO: more effective sampling
-            let faceIndex = uint(sample3 * sampled.faceNum);
             let meshIndex = sampled.meshIndex;
+            let primitiveIndex = sampled.primitiveIndex;//uint(sample3 * sampled.faceNum);
 
-            let index = uint3(indices[meshIndex][faceIndex * 3 + 0], indices[meshIndex][faceIndex * 3 + 1], indices[meshIndex][faceIndex * 3 + 2]);
+            let index = uint3(indices[meshIndex][primitiveIndex * 3 + 0], indices[meshIndex][primitiveIndex * 3 + 1], indices[meshIndex][primitiveIndex * 3 + 2]);
             let face  = Face<V, I>(vertices[meshIndex][index.x], vertices[meshIndex][index.y], vertices[meshIndex][index.z], instances[meshIndex]);
 
             let v = face.sample(sample2);
 
-            ret.pdf = 1.0 / (sampled.faceNum * face.area);
+            ret.pdf = selectPdf / face.area;
             ret.distance = distance(si.pos, v.pos);
             ret.emissive = sampled.emissive;
-            ret.to       = (v.pos - si.pos) / ret.distance; // normalize
+            ret.to       = normalize(v.pos - si.pos);// / ret.distance; // normalize
             ret.normal     = v.normal;
             ret.isInfinite = false;
             break;
@@ -133,7 +133,7 @@ public class EmitterSampler
         case EmitterType::Infinite:
 
             // TODO: uniform 
-            ret.pdf      = k::inv4Pi;
+            ret.pdf      = selectPdf * k::inv4Pi;// WARN: directional pdf
             ret.distance = k::infty;
             ret.to       = si.frame.toWorld(Warp::toUniformSphere(sample2));
             ret.normal     = -ret.to;
@@ -157,16 +157,14 @@ public class EmitterSampler
 
         default: // invalid
             ret.emissive = k::black; // DEBUG:
-            ret.pdf = 0.0;
+            ret.pdf = 1.0;
             break;
         }
-
-        // apply emitter selecting pdf
-        ret.pdf *= selectPdf;
 
         return ret;
     }
 
+    // directional pdf
     public static float pdf(const SurfaceInteraction si, const Optional<SurfaceInteraction> bsdfSi, const uint32_t emitterNum)
     {
         if (emitterNum == 0)
@@ -174,19 +172,19 @@ public class EmitterSampler
             return 0.;
         }
 
-        if (let bs = bsdfSi)
+        if (let bsi = bsdfSi)
         {
-            let to     = bs.pos - si.pos;
-            let distSq = dot(to, to);
+            let to     = bsi.pos - si.pos;
+            let distSq = length(to) * length(to);
 
-            let lightCos = abs(dot(-normalize(to), bs.normal));
+            let lightCos = abs(dot(normalize(-to), bsi.normal));
 
-            let invJacobian = distSq / lightCos; // from point sampling to directional sampling
-            return invJacobian / bs.area / emitterNum;
+            let invJacobian = distSq / lightCos;  // from point sampling to directional sampling
+            return invJacobian / bsi.area / float(emitterNum);
         }
 
         // infinite emitter
         // TODO: uniform
-        return k::inv4Pi / emitterNum;
+        return k::inv4Pi / float(emitterNum);
     }
 }

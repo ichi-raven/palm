@@ -42,12 +42,11 @@ namespace palm
             //! Emitter type
             int32_t type     = static_cast<std::underlying_type_t<Type>>(Type::ePoint);
 
-            //! Number of faces for pdf calculation (only for area emitter)
-            uint32_t faceNum = 0;
             //! Index of the Entity's mesh with this Emitter (only for area emitter)
+            int32_t faceNum        = 0;
             int32_t meshIndex = -1;
-            //! Padding
-            float padding[2]  = { 0.f };
+            int32_t primitiveIndex = -1;
+            int32_t padding     = 0;
 
             //! The luminous component of this Emitter
             glm::vec3 emissive = glm::vec3(0.);

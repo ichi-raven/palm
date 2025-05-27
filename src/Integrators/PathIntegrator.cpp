@@ -21,6 +21,7 @@ namespace palm
 
     PathIntegrator::PathIntegrator(vk2s::Device& device, ec2s::Registry& scene, Handle<vk2s::Image> output)
         : Integrator(device, scene, output)
+        , mEmitterNum(0)
     {
         const auto extent = mOutputImage->getVkExtent();
 
@@ -41,25 +42,32 @@ namespace palm
                         camPos = camera.getPos();
                     });
 
-                uint32_t areaEmitterNum = 0;
                 mScene.each<Emitter>(
                     [&](const Emitter& emitter)
                     {
-                        if (emitter.params.type == static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::eArea))
+                        switch (emitter.params.type)
                         {
-                            ++areaEmitterNum;
+                        case static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::ePoint):
+                            ++mEmitterNum;
+                            break;
+                        case static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::eArea):
+                            mEmitterNum += emitter.params.faceNum;
+                            break;
+                        case static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::eInfinite):
+                            ++mEmitterNum;
+                            break;
                         }
                     });
 
                 SceneParams params{
-                    .view           = view,
-                    .proj           = proj,
-                    .viewInv        = glm::inverse(view),
-                    .projInv        = glm::inverse(proj),
-                    .camPos         = glm::vec4(camPos, 1.0f),
-                    .sppPerFrame    = 4,
-                    .areaEmitterNum = areaEmitterNum,
-                    .padding        = { 0 },
+                    .view          = view,
+                    .proj          = proj,
+                    .viewInv       = glm::inverse(view),
+                    .projInv       = glm::inverse(proj),
+                    .camPos        = glm::vec4(camPos, 1.0f),
+                    .sppPerFrame   = 1,
+                    .allEmitterNum = mEmitterNum,
+                    .padding       = { 0 },
                 };
 
                 mSceneBuffer->write(&params, sizeof(SceneParams));
@@ -144,7 +152,7 @@ namespace palm
                 mScene.each<Emitter>(
                     [&](const ec2s::Entity entity, Emitter& emitter)
                     {
-                        if (emitter.params.type != static_cast<int32_t>(Emitter::Type::eInfinite))
+                        if (emitter.params.type != static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::eInfinite))
                         {
                             return;
                         }
@@ -164,7 +172,14 @@ namespace palm
                 mScene.each<Emitter, Transform>(
                     [&](const ec2s::Entity entity, Emitter& emitter, Transform& transform)
                     {
-                        if (emitter.attachedEntity)
+                        if (emitter.params.type == static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::eInfinite))
+                        {
+                            return;
+                        }
+
+                        emitter.params.pos = transform.pos;
+
+                        if (scene.contains<Mesh>(entity))
                         {
                             int32_t idx = 0;
                             scene.each<Mesh>(
@@ -176,20 +191,18 @@ namespace palm
                                     }
                                     ++idx;
                                 });
-                        }
 
-                        if (emitter.params.type == static_cast<int32_t>(Emitter::Type::eInfinite))
-                        {
-                            // register envmap texture
-                            if (emitter.emissiveTex)
+                            Mesh& mesh = scene.get<Mesh>(entity);
+                            for (int primitive = 0; primitive < mesh.hostMesh.indices.size() / 3; ++primitive)
                             {
-                                emitter.params.texIndex = mTextures.size();
-                                mTextures.emplace_back(emitter.emissiveTex);
+                                emitter.params.primitiveIndex = primitive;
+                                params.emplace_back(emitter.params);
                             }
                         }
-
-                        emitter.params.pos = transform.pos;
-                        params.emplace_back(emitter.params);
+                        else
+                        {
+                            params.emplace_back(emitter.params);
+                        }
                     });
 
                 const auto size = sizeof(Emitter::Params) * params.size();
@@ -372,6 +385,7 @@ namespace palm
             .projInv     = glm::inverse(proj),
             .camPos      = glm::vec4(camPos, 1.0f),
             .sppPerFrame = static_cast<uint32_t>(mGUIParams.spp),
+            .allEmitterNum = mEmitterNum,
             .padding     = { 0 },
         };
 
