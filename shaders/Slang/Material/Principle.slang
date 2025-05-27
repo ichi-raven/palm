@@ -105,7 +105,7 @@ public struct Principle : IMaterial
             let specularWeight     = 1. - params.specTrans * (1. - params.metallic);
             let transmissionWeight = params.specTrans * (1. - params.metallic);
             let diffuseWeight      = (1. - params.metallic) * (1. - params.specTrans);
-            let clearcoatWeight    = saturate(params.clearcoat);
+            let clearcoatWeight    = 0;//saturate(params.clearcoat);
 
             let norm = 1.0 / (specularWeight + transmissionWeight + diffuseWeight + clearcoatWeight);
 
@@ -137,7 +137,8 @@ public struct Principle : IMaterial
             }
             else if (lobeSample > pSpecular && lobeSample <= (pSpecular + pClearcoat)) // clearcoat
             {
-                MaterialParams clearcoatParams = params; // only for clearcoat
+                MaterialParams clearcoatParams    = params;  // only for clearcoat
+                clearcoatParams.metallic          = 1.0;//
                 clearcoatParams.roughness         = lerp(0.1, 0.001, params.clearcoatGloss);
                 clearcoatParams.metalnessTexIndex = k::invalidTexIndex;
                 clearcoatParams.albedo            = k::white;
@@ -180,16 +181,14 @@ public struct Principle : IMaterial
             let dotNL = pbr::cosTheta(wo);
             let upperHemisphere = dotNL > 0.0 && dotNV > 0.0;
 
-            float pBRDF = 0.0, pDiffuse = 0.0, pClearcoat = 0.0, pSpecTrans = 0.0;
             float specularWeight = 0.0, diffuseWeight = 0.0, clearcoatWeight = 0.0, transmissionWeight = 0.0;
             calcLobePdfs(params, specularWeight, diffuseWeight, clearcoatWeight, transmissionWeight);
-
-            // whole pdf
-            float pdf = 0.0;
+            
+            float pBRDF = 0.0, pDiffuse = 0.0, pClearcoat = 0.0, pSpecTrans = 0.0;
 
             // clearcoat
             {
-                MaterialParams clearcoatParams    = params;  // only for clearcoat
+                MaterialParams clearcoatParams    = {};  // only for clearcoat
                 clearcoatParams.roughness         = lerp(0.1, 0.001, params.clearcoatGloss);
                 clearcoatParams.metalnessTexIndex = k::invalidTexIndex;
                 clearcoatParams.albedo            = k::white;
@@ -225,11 +224,11 @@ public struct Principle : IMaterial
 
             // weights for each lobe
             float specularWeight = 1.0, diffuseWeight = 1.0, clearcoatWeight = 1.0, transmissionWeight = 1.0;
-            //calcLobePdfs(params, specularWeight, diffuseWeight, clearcoatWeight, transmissionWeight);
+            calcLobePdfs(params, specularWeight, diffuseWeight, clearcoatWeight, transmissionWeight);
 
             // clearcoat
             {
-                MaterialParams clearcoatParams    = params;  // only for clearcoat
+                MaterialParams clearcoatParams    = {};  // only for clearcoat
                 clearcoatParams.roughness         = lerp(0.1, 0.001, params.clearcoatGloss);
                 clearcoatParams.metalnessTexIndex = k::invalidTexIndex;
                 clearcoatParams.albedo            = k::white;

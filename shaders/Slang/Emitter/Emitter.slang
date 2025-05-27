@@ -125,7 +125,7 @@ public class EmitterSampler
             ret.pdf = selectPdf / face.area;
             ret.distance = distance(si.pos, v.pos);
             ret.emissive = sampled.emissive;
-            ret.to       = normalize(v.pos - si.pos);// / ret.distance; // normalize
+            ret.to       = (v.pos - si.pos) / ret.distance; // normalize
             ret.normal     = v.normal;
             ret.isInfinite = false;
             break;
@@ -175,7 +175,7 @@ public class EmitterSampler
         if (let bsi = bsdfSi)
         {
             let to     = bsi.pos - si.pos;
-            let distSq = length(to) * length(to);
+            let distSq = dot(to, to);
 
             let lightCos = abs(dot(normalize(-to), bsi.normal));
 

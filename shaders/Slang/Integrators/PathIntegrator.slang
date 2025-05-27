@@ -41,7 +41,6 @@ struct Payload //<Sampler: ISampler> TODO: selecting sampler
     Optional<BSDFSample> bsdfSample;
     Optional<EmitterSample> emitterSample;
     Optional<float3> emissive;
-    Optional<uint> hitSurfaceFaceNum;
     
     BSDFContext ctx;
     IndependentSampler sampler;
@@ -64,7 +63,6 @@ struct Payload //<Sampler: ISampler> TODO: selecting sampler
         bsdfSample      = none;
         emitterSample   = none;
         emissive        = none;
-        hitSurfaceFaceNum = none;
     }
 }
 
@@ -168,9 +166,6 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
         let bs = payload.bsdfSample.value;
         let es = payload.emitterSample.value;
 
-        Optional<float> debugNEEWeight;
-        Optional<float> debugBSDFWeight;
-
         if (enableMIS)
         {
             // NEE (direct light sampling, point or direction)
@@ -178,21 +173,22 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
             {
                 if (!occluded(si.pos, es)) // Slang (HLSL) does not support short circuit
                 {
-                    let cosine   = abs(dot(normalize(si.normal), normalize(es.to)));
-                    let lightCos = abs(dot(normalize(es.normal), normalize(-es.to)));
+                    let cosine   = abs(dot(si.normal, es.to));
+                    let lightCos = abs(dot(es.normal, -es.to));
 
                     // if infinite emitter, sampling space is direction (not point) -> jacobian is just 1.0
-                    let G = select(es.isInfinite, 1.0, lightCos / (es.distance * es.distance));
-                    
+                    let jacobian = select(es.isInfinite, 1.0, lightCos / (es.distance * es.distance));
+                    let G        = cosine * jacobian; // geometric term
+
                     // calculate BSDF contribution
                     let params = MaterialParams::loadWithTextures(materialParams[si.instanceIndex], textures, texSampler, si.uv);
-                    let wo         = si.frame.toLocal(normalize(es.to));
+                    let wo         = si.frame.toLocal(es.to);
                     let f          = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
-                    let bsdfPdf    = G * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
-                    let MISWeight  = es.pdf / (es.pdf + bsdfPdf);  //Warp::heuristic<k::MISHeuristicBeta>(es.pdf, { es.pdf, bsdfPdf });
-                    debugNEEWeight = MISWeight;
+                    let bsdfPdf    = jacobian * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
+                    let MISWeight  = Warp::heuristic<k::MISHeuristicBeta>(es.pdf, { es.pdf, bsdfPdf });
+                    
                     // add contribution to L
-                    L += MISWeight * beta * f * G * cosine * es.emissive / es.pdf;
+                    L += MISWeight * beta * f * G * es.emissive / es.pdf;
                 }
             }
 
@@ -213,9 +209,9 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                     emitterParams.GetDimensions(emitterNum, stride);
                     let emitterPdf = select(bs.isSpecular(), 0., EmitterSampler.pdf(si, bsdfPayload.si, emitterNum));
 
-                    let cosine    = abs(dot(normalize(si.normal), normalize(si.frame.toWorld(normalize(bs.wo)))));
-                    let MISWeight = bs.pdf / (emitterPdf + bs.pdf);  //Warp::heuristic<k::MISHeuristicBeta>(bs.pdf, { emitterpdf, bs.pdf });
-                    debugBSDFWeight = MISWeight;
+                    let cosine      = abs(dot(si.normal, si.frame.toWorld(bs.wo)));
+                    let MISWeight   = Warp::heuristic<k::MISHeuristicBeta>(bs.pdf, { emitterPdf, bs.pdf });
+                    
                     // add contribution to L
                     L += MISWeight * beta * bs.f * cosine * emissive / bs.pdf;
                 }
@@ -223,16 +219,6 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                 // reflects sampler transitions
                 payload.sampler = bsdfPayload.sampler;
             }
-
-            // if (debugNEEWeight.hasValue && debugBSDFWeight.hasValue)
-            // {
-            //     //return float3(debugNEEWeight.value, debugBSDFWeight.value, debugNEEWeight.value + debugBSDFWeight.value - 1.0);
-            //     return float3(abs(debugNEEWeight.value + debugBSDFWeight.value - 1.0), 0.0, 0.0);
-            // }
-            // else
-            // {
-            //     return k::blue;
-            // }
         }
         
         // update parameters
@@ -375,11 +361,7 @@ void closestHitShader(inout Payload payload : SV_RayPayload,
 
     if (any(params.emissive > k::eps))
     {
-        uint size = 0, stride = 0;
-        indices[instanceIndex].GetDimensions(size, stride);
-        
         payload.emissive          = params.emissive;
-        payload.hitSurfaceFaceNum = size / 3; // number of faces in this instance
     }
 
     if (payload.skipSampling())
