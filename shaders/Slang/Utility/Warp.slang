@@ -93,23 +93,23 @@ public namespace Warp
         var denom = 0.0;
         var t     = target;
 
-        //[unroll]
+        [unroll]
         for (int i = 0; i < values.getCount(); ++i)
         {
             var p = values[i];
-            // [unroll]
-            // for (int j = 1; j < beta; ++j)
-            // {
-            //     p *= values[i];
-            // }
+            [unroll]
+            for (int j = 1; j < beta; ++j)
+            {
+                p *= values[i];
+            }
             denom += p;
         }
 
-        // [unroll]
-        // for (int j = 1; j < beta; ++j)
-        // {
-        //     t *= target;
-        // }
+        [unroll]
+        for (int j = 1; j < beta; ++j)
+        {
+            t *= target;
+        }
 
         return t / denom;
     }

@@ -102,10 +102,12 @@ public struct Principle : IMaterial
         static void calcLobePdfs(const MaterialParams params,
                               out float pSpecular, out float pDiffuse, out float pClearcoat, out float pSpecTrans)
         {
-            let specularWeight     = 1. - params.specTrans * (1. - params.metallic);
-            let transmissionWeight = params.specTrans * (1. - params.metallic);
-            let diffuseWeight      = (1. - params.metallic) * (1. - params.specTrans);
-            let clearcoatWeight    = 0;//saturate(params.clearcoat);
+            let specTrans = params.specTrans * (1.0 - params.metallic);
+
+            let specularWeight      = (1.0 - specTrans);
+            let transmissionWeight  = specTrans;
+            let diffuseWeight       = (1.0 - params.metallic) * (1.0 - params.specTrans);
+            let clearcoatWeight     = saturate(params.clearcoat);
 
             let norm = 1.0 / (specularWeight + transmissionWeight + diffuseWeight + clearcoatWeight);
 
@@ -130,8 +132,8 @@ public struct Principle : IMaterial
                 if (let res = Conductor.BSDF.sample(params, ctx, si, sampler)) 
                 {
                     var ret = res;
-                    ret.f = Principle.BSDF.eval(params, ctx, si, ret.wo);
-                    ret.pdf = Principle.BSDF.pdf(params, ctx, si, ret.wo);
+                    //ret.f = Principle.BSDF.eval(params, ctx, si, ret.wo);
+                    //ret.pdf = Principle.BSDF.pdf(params, ctx, si, ret.wo);
                     return ret;
                 }
             }
@@ -145,8 +147,8 @@ public struct Principle : IMaterial
                 if (let res = Conductor.BSDF.sample(clearcoatParams, ctx, si, sampler))
                 {
                     var ret = res;
-                    ret.f   = Principle.BSDF.eval(clearcoatParams, ctx, si, ret.wo);
-                    ret.pdf = Principle.BSDF.pdf(clearcoatParams, ctx, si, ret.wo);
+                    //ret.f   = Principle.BSDF.eval(clearcoatParams, ctx, si, ret.wo);
+                    //ret.pdf = Principle.BSDF.pdf(clearcoatParams, ctx, si, ret.wo);
                     return ret;
                 }
             }
@@ -155,8 +157,8 @@ public struct Principle : IMaterial
                 if (let res = Lambert.BSDF.sample(params, ctx, si, sampler))
                 {
                     var ret = res;
-                    ret.f   = Principle.BSDF.eval(params, ctx, si, ret.wo);
-                    ret.pdf = Principle.BSDF.pdf(params, ctx, si, ret.wo);
+                    //ret.f   = Principle.BSDF.eval(params, ctx, si, ret.wo);
+                    //ret.pdf = Principle.BSDF.pdf(params, ctx, si, ret.wo);
                     return ret;                
                 }
             }
@@ -165,8 +167,8 @@ public struct Principle : IMaterial
                 if (let res = Dielectric.BSDF.sample(params, ctx, si, sampler))
                 {
                     var ret = res;
-                    ret.f   = Principle.BSDF.eval(params, ctx, si, ret.wo);
-                    ret.pdf = Principle.BSDF.pdf(params, ctx, si, ret.wo);
+                    //ret.f   = Principle.BSDF.eval(params, ctx, si, ret.wo);
+                    //ret.pdf = Principle.BSDF.pdf(params, ctx, si, ret.wo);
                     return ret;
                 }
             }
@@ -187,6 +189,7 @@ public struct Principle : IMaterial
             float pBRDF = 0.0, pDiffuse = 0.0, pClearcoat = 0.0, pSpecTrans = 0.0;
 
             // clearcoat
+            if (upperHemisphere)
             {
                 MaterialParams clearcoatParams    = {};  // only for clearcoat
                 clearcoatParams.roughness         = lerp(0.1, 0.001, params.clearcoatGloss);
@@ -206,6 +209,7 @@ public struct Principle : IMaterial
             }
 
             // specular
+            if (upperHemisphere)
             {
                 pBRDF = Conductor.BSDF.pdf(params, ctx, si, wo);
             }
@@ -227,6 +231,7 @@ public struct Principle : IMaterial
             calcLobePdfs(params, specularWeight, diffuseWeight, clearcoatWeight, transmissionWeight);
 
             // clearcoat
+            if (upperHemisphere)
             {
                 MaterialParams clearcoatParams    = {};  // only for clearcoat
                 clearcoatParams.roughness         = lerp(0.1, 0.001, params.clearcoatGloss);
@@ -237,6 +242,7 @@ public struct Principle : IMaterial
             }
 
             // diffuse
+            if (upperHemisphere)
             {
                 let diffuse = Lambert.BSDF.eval(params, ctx, si, wo);
                 reflectance += diffuseWeight * diffuse;

@@ -118,7 +118,7 @@ bool occluded(const float3 pos, const EmitterSample es)
     RayDesc shadowRay;
     shadowRay.Origin               = pos;
     shadowRay.Direction            = es.to;
-    shadowRay.TMin                 = k::eps;  
+    shadowRay.TMin                 = 0;  
     shadowRay.TMax                 = es.distance - k::eps;// WARN: adhoc
 
     // payload, true if occluded(hit other object)
@@ -171,7 +171,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
             // NEE (direct light sampling, point or direction)
             if (!bs.isSpecular())
             {
-                if (!occluded(si.pos, es)) // Slang (HLSL) does not support short circuit
+                if (!occluded(si.pos + k::eps * si.normal, es)) // Slang (HLSL) does not support short circuit
                 {
                     let cosine   = abs(dot(si.normal, es.to));
                     let lightCos = abs(dot(es.normal, -es.to));
@@ -197,9 +197,9 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                 Payload bsdfPayload = Payload(payload.sampler, true);
 
                 RayDesc bsdfRay;
-                bsdfRay.Origin      = si.pos;
+                bsdfRay.Origin      = si.pos + k::eps * si.normal;
                 bsdfRay.Direction   = si.frame.toWorld(normalize(bs.wo));
-                bsdfRay.TMin        = k::eps;
+                bsdfRay.TMin        = 0;
                 bsdfRay.TMax        = k::infty;
                 TraceRay(sceneBVH, RAY_FLAG_NONE, ~0, 0, 0, 0, bsdfRay, bsdfPayload);
 
@@ -224,9 +224,9 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
         // update parameters
         beta *= bs.f * abs(dot(si.normal, si.frame.toWorld(bs.wo))) / bs.pdf;
 
-        ray.Origin      = si.pos;
+        ray.Origin      = si.pos + k::eps * si.normal;
         ray.Direction   = si.frame.toWorld(bs.wo);
-        ray.TMin        = k::eps;
+        ray.TMin        = 0;
         ray.TMax        = k::infty;
         payload.resetForNextBounce();
 
@@ -264,7 +264,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
 [shader("raygeneration")]
 void rayGenShader()
 {
-    const static bool kEnableMIS = true; // enable MIS
+    const static bool kEnableMIS = true;
 
     uint2 threadIdx = DispatchRaysIndex().xy;
     if (threadIdx.x >= DispatchRaysDimensions().x) return;
@@ -279,16 +279,16 @@ void rayGenShader()
 
     for (int sampleID = 0; sampleID < sceneParams.sppPerFrame; ++sampleID)
     {
-        //L += sampleL<kEnableMIS>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
+        L += sampleL<kEnableMIS>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
         // for MIS debug
-        if (1. * threadIdx.x / DispatchRaysDimensions().x < 1. * threadIdx.y / DispatchRaysDimensions().y)
-        {
-            L += sampleL<true>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
-        }
-        else
-        {
-            L += sampleL<false>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
-        }
+        // if (1. * threadIdx.x / DispatchRaysDimensions().x < 1. * threadIdx.y / DispatchRaysDimensions().y)
+        // {
+        //     L += sampleL<true>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
+        // }
+        // else
+        // {
+        //     L += sampleL<false>(sampleID, pixelSeed) / float(sceneParams.sppPerFrame);
+        // }
     }
 
     let rate = float(sceneParams.sppPerFrame) / accumulatedSpp;
@@ -300,7 +300,6 @@ void rayGenShader()
     float3 gammaCorrected = pow(finalRes, 1. / gamma);
 
     resultImage[threadIdx.xy] = float4(gammaCorrected, 1.0);
-    //resultImage[threadIdx.xy] = float4(select(sceneParams.allEmitterNum == 960, k::red, k::blue), 1.0);
 }
 
 [shader("miss")]
