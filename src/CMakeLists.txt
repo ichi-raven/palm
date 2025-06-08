@@ -46,6 +46,7 @@ States/Renderer.cpp
 
 Integrators/Integrator.cpp
 Integrators/PathIntegrator.cpp
+Integrators/ReSTIRIntegrator.cpp
 ${IMGUI_SOURCE_FILES}
 ${IMGUIZMO_SOURCE_FILES}
 )
@@ -55,6 +56,7 @@ set (EXEC_HEADERS
 
 ../include/Integrators/Integrator.hpp
 ../include/Integrators/PathIntegrator.hpp
+../include/Integrators/ReSTIRIntegrator.hpp
 
 ../include/Mesh.hpp
 ../include/Material.hpp

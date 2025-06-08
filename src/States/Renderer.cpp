@@ -8,6 +8,7 @@
 #include "../include/States/Renderer.hpp"
 
 #include "../include/Integrators/PathIntegrator.hpp"
+#include "../include/Integrators/ReSTIRIntegrator.hpp"
 
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
@@ -281,6 +282,11 @@ namespace palm
         {
             // set integrator
             mIntegrator = std::make_unique<PathIntegrator>(device, scene, mOutputImage);
+        }
+        if (ImGui::Selectable("ReSTIR"))
+        {
+            // set integrator
+            mIntegrator = std::make_unique<ReSTIRIntegrator>(device, scene, mOutputImage);
         }
 
         if (mIntegrator)
