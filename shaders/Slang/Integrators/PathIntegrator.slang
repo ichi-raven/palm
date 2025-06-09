@@ -118,7 +118,7 @@ bool occluded(const float3 pos, const EmitterSample es)
     RayDesc shadowRay;
     shadowRay.Origin               = pos;
     shadowRay.Direction            = es.to;
-    shadowRay.TMin                 = 0;  
+    shadowRay.TMin                 = k::eps;  
     shadowRay.TMax                 = es.distance - k::eps;// WARN: adhoc
 
     // payload, true if occluded(hit other object)
@@ -145,7 +145,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
     {
         if (let emissive = payload.emissive)
         {
-            L += beta * emissive;
+            L += emissive;
         }
     }
 
@@ -171,7 +171,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
             // NEE (direct light sampling, point or direction)
             if (!bs.isSpecular())
             {
-                if (!occluded(si.pos + k::eps * si.normal, es)) // Slang (HLSL) does not support short circuit
+                if (!occluded(si.pos, es)) // Slang (HLSL) does not support short circuit
                 {
                     let cosine   = abs(dot(si.normal, es.to));
                     let lightCos = abs(dot(es.normal, -es.to));
@@ -197,9 +197,9 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
                 Payload bsdfPayload = Payload(payload.sampler, true);
 
                 RayDesc bsdfRay;
-                bsdfRay.Origin      = si.pos + k::eps * si.normal;
+                bsdfRay.Origin      = si.pos;
                 bsdfRay.Direction   = si.frame.toWorld(normalize(bs.wo));
-                bsdfRay.TMin        = 0;
+                bsdfRay.TMin        = k::eps;
                 bsdfRay.TMax        = k::infty;
                 TraceRay(sceneBVH, RAY_FLAG_NONE, ~0, 0, 0, 0, bsdfRay, bsdfPayload);
 
@@ -224,9 +224,9 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
         // update parameters
         beta *= bs.f * abs(dot(si.normal, si.frame.toWorld(bs.wo))) / bs.pdf;
 
-        ray.Origin      = si.pos + k::eps * si.normal;
+        ray.Origin      = si.pos;
         ray.Direction   = si.frame.toWorld(bs.wo);
-        ray.TMin        = 0;
+        ray.TMin        = k::eps;
         ray.TMax        = k::infty;
         payload.resetForNextBounce();
 

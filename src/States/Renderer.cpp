@@ -252,7 +252,9 @@ namespace palm
             {
                 if (ImGui::MenuItem("Save Rendered Image", nullptr))
                 {
-                    saveImage(std::filesystem::path("rendered.png"));
+                    std::time_t now = std::time(nullptr);
+                    std::string fileName = "rendered_" + std::string(std::ctime(&now)) + ".png";
+                    saveImage(std::filesystem::path(fileName));
                 }
 
                 if (ImGui::MenuItem("Save As", nullptr))

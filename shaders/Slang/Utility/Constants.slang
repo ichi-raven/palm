@@ -12,7 +12,7 @@ public namespace k
 
     public const static float eps      = 1e-3;
     public const static float infty    = 1e6;
-    public const static uint maxDepth  = 16;
+    public const static uint maxDepth  = 8;
 
     public const static int invalidTexIndex     = -1;
     public const static uint MISHeuristicBeta   = 1;

@@ -1,6 +1,6 @@
 module Reservoir;
 
-import Sampler;
+import "../Sampler/Sampler";
 
 public struct Reservoir<SampleType>
 {
@@ -53,6 +53,7 @@ public struct Reservoir<SampleType>
     float wSum;
     float p;
     uint streamLength;
+    uint padding; // for alignment
 }
 
 // float streamingRIS(uint candidateNum, inout IndependentSampler sampler)

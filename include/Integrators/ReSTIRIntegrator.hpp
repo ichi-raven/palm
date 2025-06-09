@@ -1,4 +1,4 @@
-/*****************************************************************//**
+/*****************************************************************/ /**
  * \file   ReSTIRIntegrator.hpp
  * \brief  header file of ReSTIRIntegrator class
  * 
@@ -9,6 +9,7 @@
 #define PALM_INCLUDE_RESTIRINTEGRATOR_HPP_
 
 #include "Integrator.hpp"
+#include "Emitter.hpp"
 
 #include <vk2s/Device.hpp>
 #include <vk2s/Camera.hpp>
@@ -25,6 +26,7 @@ namespace palm
         {
             int spp            = 1;
             int accumulatedSpp = 0;
+            int reservoirSize = 32;  // maximum size of reservoir
         };
 
     public:
@@ -41,7 +43,6 @@ namespace palm
         GUIParams& getGUIParamsRef();
 
     private:
-
         // shader groups
         constexpr static int kIndexRaygen     = 0;
         constexpr static int kIndexMiss       = 1;
@@ -59,13 +60,33 @@ namespace palm
 
             uint32_t sppPerFrame;
             uint32_t allEmitterNum;
-            uint32_t padding[2];
+            uint32_t reservoirSize;
+            uint32_t padding;
         };
 
         struct InstanceParams
         {
             glm::mat4 world;
             glm::mat4 worldInvTrans;
+        };
+
+        struct EmitterReservoir
+        {
+            glm::vec3 pos;
+            int32_t type = static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::ePoint);
+
+            int32_t faceNum        = 0;  // for area emitter, the number of faces
+            int32_t meshIndex      = -1;
+            int32_t primitiveIndex = -1;  // for area emitter, the primitive index of the face
+            int32_t padding        = 0;
+
+            glm::vec3 emissive;
+            int32_t texIndex = -1;
+
+            float wSum;
+            float p;
+            uint32_t streamLength;
+            uint32_t padding1;
         };
 
         GUIParams mGUIParams;
@@ -82,7 +103,10 @@ namespace palm
         UniqueHandle<vk2s::Buffer> mMaterialBuffer;
         UniqueHandle<vk2s::Buffer> mSampleBuffer;
         UniqueHandle<vk2s::Buffer> mEmittersBuffer;
+        UniqueHandle<vk2s::Buffer> mReservoirBuffer;
         UniqueHandle<vk2s::Image> mPoolImage;
+        UniqueHandle<vk2s::Image> mDIImage;
+        UniqueHandle<vk2s::Image> mGIImage;
         UniqueHandle<vk2s::Sampler> mSampler;
 
         // WARN: VB, IB and textures have no ownership

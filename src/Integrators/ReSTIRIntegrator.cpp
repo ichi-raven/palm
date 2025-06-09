@@ -1,4 +1,4 @@
-/*****************************************************************//**
+/*****************************************************************/ /**
  * \file   ReSTIRIntegrator.cpp
  * \brief  source file of ReSTIRIntegrator class
  * 
@@ -210,12 +210,18 @@ namespace palm
                 mEmittersBuffer->write(params.data(), size);
             }
 
+            // create emitter reservoir
+            {
+                const auto size  = sizeof(EmitterReservoir) * extent.width * extent.height;
+                mReservoirBuffer = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eStorageBuffer), vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+            }
+
             // create sampler
             {
                 mSampler = device.create<vk2s::Sampler>(vk::SamplerCreateInfo({}, vk::Filter::eLinear, vk::Filter::eLinear));
             }
 
-            //create pool image
+            //create pool, DI, GI result image
             {
                 const auto format   = vk::Format::eR32G32B32A32Sfloat;
                 const uint32_t size = extent.width * extent.height * vk2s::Compiler::getSizeOfFormat(format);
@@ -229,12 +235,15 @@ namespace palm
                 ci.usage         = vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eStorage;
                 ci.initialLayout = vk::ImageLayout::eUndefined;
 
-                // change format to pooling
                 mPoolImage = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+                mDIImage   = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
+                mGIImage   = device.create<vk2s::Image>(ci, vk::MemoryPropertyFlagBits::eDeviceLocal, size, vk::ImageAspectFlagBits::eColor);
 
                 UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
                 cmd->begin(true);
                 cmd->transitionImageLayout(mPoolImage.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
+                cmd->transitionImageLayout(mDIImage.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
+                cmd->transitionImageLayout(mGIImage.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
                 cmd->end();
                 cmd->execute();
             }
@@ -276,7 +285,7 @@ namespace palm
                 vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eAccelerationStructureKHR, 1, vk::ShaderStageFlagBits::eAll),
                 // 1: result image
                 vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eAll),
-                // 2: result image
+                // 2: pool image
                 vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eAll),
                 // 3: scene parameters
                 vk::DescriptorSetLayoutBinding(3, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAll),
@@ -294,6 +303,12 @@ namespace palm
                 vk::DescriptorSetLayoutBinding(9, vk::DescriptorType::eSampledImage, std::max((size_t)1, mTextures.size()), vk::ShaderStageFlagBits::eAll),
                 // 10: sampler
                 vk::DescriptorSetLayoutBinding(10, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eAll),
+                // 11: emitter reservoir buffer
+                vk::DescriptorSetLayoutBinding(11, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAll),
+                // 12: DI image
+                vk::DescriptorSetLayoutBinding(12, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eAll),
+                // 13: GI image
+                vk::DescriptorSetLayoutBinding(13, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eAll),
             };
 
             mBindLayout = device.create<vk2s::BindLayout>(bindings);
@@ -340,6 +355,9 @@ namespace palm
                 mBindGroup->bind(8, vk::DescriptorType::eStorageBuffer, mEmittersBuffer.get());
                 mBindGroup->bind(9, vk::DescriptorType::eSampledImage, mTextures);
                 mBindGroup->bind(10, mSampler.get());
+                mBindGroup->bind(11, vk::DescriptorType::eStorageBuffer, mReservoirBuffer.get());
+                mBindGroup->bind(12, vk::DescriptorType::eStorageImage, mDIImage);
+                mBindGroup->bind(13, vk::DescriptorType::eStorageImage, mGIImage);
             }
         }
         catch (std::exception& e)
@@ -361,6 +379,7 @@ namespace palm
     {
         ImGui::InputInt("spp", &mGUIParams.spp);
         ImGui::Text("total spp: %d", mGUIParams.accumulatedSpp);
+        ImGui::InputInt("reservoir size", &mGUIParams.reservoirSize);
     }
 
     void ReSTIRIntegrator::updateShaderResources()
@@ -379,14 +398,15 @@ namespace palm
             });
 
         SceneParams params{
-            .view        = view,
-            .proj        = proj,
-            .viewInv     = glm::inverse(view),
-            .projInv     = glm::inverse(proj),
-            .camPos      = glm::vec4(camPos, 1.0f),
-            .sppPerFrame = static_cast<uint32_t>(mGUIParams.spp),
+            .view          = view,
+            .proj          = proj,
+            .viewInv       = glm::inverse(view),
+            .projInv       = glm::inverse(proj),
+            .camPos        = glm::vec4(camPos, 1.0f),
+            .sppPerFrame   = static_cast<uint32_t>(mGUIParams.spp),
             .allEmitterNum = mEmitterNum,
-            .padding     = { 0 },
+            .reservoirSize = static_cast<uint32_t>(mGUIParams.reservoirSize),
+            .padding       = 0,
         };
 
         mSceneBuffer->write(&params, sizeof(SceneParams));
