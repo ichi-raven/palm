@@ -145,24 +145,14 @@ Payload samplePrimalHit(in int sampleID, in int pixelSeed)
     return payload;
 }
 
-float3 sampleDI(inout Payload payload, const EmitterSample es)
+Tuple<float3, float3> sampleDI(inout Payload payload, const EmitterSample es)
 {
     float3 L    = select(payload.emissive.hasValue, payload.emissive.value, float3(0.0));
     float3 beta = float3(1.0);// WARN: does not take into account the initial weight(e.g. sensor sampling)
 
     if (!payload.continue())
     {
-        return k::zeros.xyz;  // terminate path
-    }
-
-    // russian roulette
-    {
-        let prr = max(max(beta.x, beta.y), beta.z);
-        if (payload.sampler.next1D() >= prr)
-        {
-            return k::zeros.xyz; // terminate path
-        }
-        beta /= prr;
+        return makeTuple(k::zeros.xyz, k::zeros.xyz);  // terminate path
     }
     
     let si = payload.si.value;
@@ -226,23 +216,19 @@ float3 sampleDI(inout Payload payload, const EmitterSample es)
 
     // reject invalid sample
     let invalid = any(isnan(L)) || any(isinf(L));
-    return select(invalid, k::zeros.xyz, L);
+    return makeTuple(select(invalid, k::zeros.xyz, L), beta);
 }
 
-float3 sampleGI(in int sampleID, in int pixelSeed, in Payload payload)
+float3 sampleGI(in int sampleID, in int pixelSeed, in Payload payload_, in float3 beta_)
 {
     float3 L    = float3(0.0);
-    float3 beta = float3(1.0);
+    float3 beta = beta_;
 
-    let seed        = tea(sampleID, pixelSeed);
-    Payload payload = Payload(IndependentSampler(seed));
-
-    // trace primary ray
-    RayDesc ray = getCameraRay(DispatchRaysIndex().xy, payload.sampler.next2D());
-    TraceRay(sceneBVH, RAY_FLAG_NONE, ~0, 0, 0, 0, ray, payload);
+    RayDesc ray     = {};
+    Payload payload = payload_;
 
     // trace ray recursively
-    for (int depth = 2; depth < k::maxDepth && payload.continue(); ++depth)
+    for (int depth = 3; depth < k::maxDepth && payload.continue(); ++depth)
     {
         // russian roulette
         {
@@ -355,20 +341,20 @@ Reservoir<EmitterSample> sampleReservoirs(const uint2 threadIdx, const uint seed
         let f            = toGray(bs.f * es.emissive * G); // BSDF contribution
 
         // update reservoir
-        r.update(es, f, es.pdf, u);
+        r.update(es, f / es.pdf, es.pdf, u);
     }
 
     return reservoirs[threadIdx.x + threadIdx.y * DispatchRaysDimensions().x] = r;
 }
 
-float3 shadeGI(const uint2 threadIdx, const uint pixelSeed, const Payload payload)
+float3 shadeGI(const uint2 threadIdx, const uint pixelSeed, const Payload payload, const float3 beta)
 {
     float3 L = float3(0.);
 
     [unroll]
     for (int sampleID = 0; sampleID < sceneParams.sppPerFrame; ++sampleID)
     {
-        L += sampleGI(sampleID, pixelSeed, payload) / float(sceneParams.sppPerFrame);
+        L += sampleGI(sampleID, pixelSeed, payload, beta) / float(sceneParams.sppPerFrame);
     }
 
     return L;
@@ -404,12 +390,12 @@ void rayGenShader()
 
     let pixelSeed = tea(accumulatedSpp, tea(threadIdx.x, threadIdx.y));
 
-    // create G-Buffer (si)
+    // create G-Buffer
     Payload payload = samplePrimalHit(accumulatedSpp, pixelSeed);
     
     if (!payload.continue())
     {
-        // if no valid hit, just return black
+        // if no valid hit, just return
         let envmap                = select(payload.emissive.hasValue, payload.emissive.value, k::black);
         poolImage[threadIdx.xy]   = float4(envmap, reinterpret<float>(accumulatedSpp));
         resultImage[threadIdx.xy] = float4(linearToGamma(envmap, kGamma), 1.0);
@@ -418,6 +404,7 @@ void rayGenShader()
 
     // save G-buffer for denoising
 
+    // DEBUG
     // resultImage[threadIdx.xy] = float4(payload.bsdfSample.value.f, 1.0);  // write position to result image
     // return;
 
@@ -429,13 +416,14 @@ void rayGenShader()
     var candidate       = mergedReservoir.candidate;
     //candidate.emissive *= mergedReservoir.weight();
 
-    let DI = sampleDI(payload, candidate);
-    let GI = shadeGI(threadIdx, pixelSeed, payload);
+    let sampledDI = sampleDI(payload, candidate);
+    let DI        = sampledDI._0;
+    let GI        = shadeGI(threadIdx, pixelSeed, payload, sampledDI._1);
 
     let rate = float(sceneParams.sppPerFrame) / accumulatedSpp;
 
     {
-        let finalDI           = lerp(DIImage[threadIdx.xy].xyz, DI, 1.0);
+        let finalDI           = lerp(DIImage[threadIdx.xy].xyz, DI, rate);
         let finalGI           = lerp(GIImage[threadIdx.xy].xyz, GI, rate);
         DIImage[threadIdx.xy] = float4(finalDI, 1.0);
         GIImage[threadIdx.xy] = float4(finalGI, 1.0);
