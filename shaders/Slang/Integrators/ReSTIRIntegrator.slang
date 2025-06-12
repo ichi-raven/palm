@@ -122,7 +122,7 @@ bool occluded(const float3 pos, const EmitterSample es)
     // trace shadow ray
     RayDesc shadowRay;
     shadowRay.Origin               = pos;
-    shadowRay.Direction            = es.to;
+    shadowRay.Direction            = normalize(es.to);
     shadowRay.TMin                 = k::eps;  
     shadowRay.TMax                 = es.distance - k::eps;// WARN: adhoc
 
@@ -315,11 +315,9 @@ float3 sampleGI(in int sampleID, in int pixelSeed, in Payload payload_, in float
     return select(invalid, k::zeros.xyz, L);
 }
 
-Reservoir<EmitterSample> sampleReservoirs(const uint2 threadIdx, const uint seed, const Payload payload, const uint M)
+Reservoir<EmitterSample> sampleReservoirs<S : ISampler>(const uint2 threadIdx, const uint seed, const Payload payload, const uint M, inout S sampler)
 {
     var r = reservoirs[threadIdx.x + threadIdx.y * DispatchRaysDimensions().x];
-
-    var sampler = IndependentSampler(seed);
 
     let si = payload.si.value;
     let bs = payload.bsdfSample.value;
@@ -338,23 +336,26 @@ Reservoir<EmitterSample> sampleReservoirs(const uint2 threadIdx, const uint seed
         let jacobian     = select(es.isInfinite, 1.0, lightCos / (es.distance * es.distance));
         let G            = cosine * jacobian;  // geometric term
         let u            = sampler.next1D();
-        let f            = toGray(bs.f * es.emissive * G); // BSDF contribution
+        let target       = toGray(bs.f * es.emissive * G); // BSDF contribution
 
         // update reservoir
-        r.update(es, f / es.pdf, es.pdf, u);
+        r.update(es, target / es.pdf, es.pdf, u);
     }
+
+    sizeof(Reservoir<EmitterSample>);
 
     return reservoirs[threadIdx.x + threadIdx.y * DispatchRaysDimensions().x] = r;
 }
 
 float3 shadeGI(const uint2 threadIdx, const uint pixelSeed, const Payload payload, const float3 beta)
 {
-    float3 L = float3(0.);
+    float3 L   = float3(0.);
+    let invSpp = 1. / float(sceneParams.sppPerFrame);
 
     [unroll]
     for (int sampleID = 0; sampleID < sceneParams.sppPerFrame; ++sampleID)
     {
-        L += sampleGI(sampleID, pixelSeed, payload, beta) / float(sceneParams.sppPerFrame);
+        L += invSpp * sampleGI(sampleID, pixelSeed, payload, beta);
     }
 
     return L;
@@ -405,38 +406,38 @@ void rayGenShader()
     // save G-buffer for denoising
 
     // DEBUG
-    // resultImage[threadIdx.xy] = float4(payload.bsdfSample.value.f, 1.0);  // write position to result image
-    // return;
+    //resultImage[threadIdx.xy] = float4(payload.bsdfSample.value.f, 1.0);  // write position to result image
+    //resultImage[threadIdx.xy] = select(sizeof(Reservoir<EmitterSample>) == 64, float4(k::red, 1.0), float4(k::blue, 1.0)); // write green if reservoir is empty
+    //return;
 
-    sampleReservoirs(threadIdx, pixelSeed, payload, sceneParams.M);
+    sampleReservoirs(threadIdx, pixelSeed, payload, sceneParams.M, payload.sampler);
 
     // TODO: spatio-temporal reuse
 
     let mergedReservoir = reservoirs[threadIdx.x + threadIdx.y * DispatchRaysDimensions().x];
     var candidate       = mergedReservoir.candidate;
-    //candidate.emissive *= mergedReservoir.weight();
+    candidate.emissive *= mergedReservoir.weight();
 
     let sampledDI = sampleDI(payload, candidate);
     let DI        = sampledDI._0;
     let GI        = shadeGI(threadIdx, pixelSeed, payload, sampledDI._1);
 
-    let rate = float(sceneParams.sppPerFrame) / accumulatedSpp;
+    let accumulatedDI = reinterpret<float>(DIImage[threadIdx.xy].w) + 1.;
+    let DIRate        = 1. / accumulatedDI;
+    let finalDI       = DI;//lerp(DIImage[threadIdx.xy].xyz, DI, DIRate);
+    DIImage[threadIdx.xy]   = float4(finalDI, reinterpret<float>(accumulatedDI));
 
-    {
-        let finalDI           = lerp(DIImage[threadIdx.xy].xyz, DI, rate);
-        let finalGI           = lerp(GIImage[threadIdx.xy].xyz, GI, rate);
-        DIImage[threadIdx.xy] = float4(finalDI, 1.0);
-        GIImage[threadIdx.xy] = float4(finalGI, 1.0);
-    }
-
+    
     // TODO: denoise DI and GI in secondary pass -> write final result
-    let L    = DI + GI;
-    let pool = poolImage[threadIdx.xy].xyz;
-    let finalRes            = lerp(pool, L, rate);
+    let rate                = float(sceneParams.sppPerFrame) / accumulatedSpp;
+    let finalGI             = lerp(GIImage[threadIdx.xy].xyz, GI, rate);
+    let L                   = finalDI + finalGI;
+    //let pool                = poolImage[threadIdx.xy].xyz;
 
-    poolImage[threadIdx.xy] = float4(finalRes, reinterpret<float>(accumulatedSpp));
+    GIImage[threadIdx.xy]   = float4(finalGI, reinterpret<float>(accumulatedSpp));
+    poolImage[threadIdx.xy] = float4(L, reinterpret<float>(accumulatedSpp));
 
-    resultImage[threadIdx.xy] = float4(linearToGamma(finalRes, kGamma), 1.0);
+    resultImage[threadIdx.xy] = float4(linearToGamma(L, kGamma), 1.0);
 }
 
 [shader("miss")]

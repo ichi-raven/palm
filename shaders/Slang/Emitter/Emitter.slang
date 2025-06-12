@@ -7,8 +7,8 @@ import "../Sampler/Sampler";
 
 public struct EmitterSample
 {
-    public float pdf        = 1.0;
     public float3 emissive  = k::black;
+    public float pdf        = 1.0;
     public float3 to        = k::zeros.xyz;
     public float distance   = 0.0;
     public float3 normal    = float3(0., 0., 1.);

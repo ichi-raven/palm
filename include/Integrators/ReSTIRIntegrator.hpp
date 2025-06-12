@@ -26,7 +26,7 @@ namespace palm
         {
             int spp            = 1;
             int accumulatedSpp = 0;
-            int reservoirSize = 32;  // maximum size of reservoir
+            int reservoirSize  = 32;  // maximum size of reservoir
         };
 
     public:
@@ -72,16 +72,12 @@ namespace palm
 
         struct EmitterReservoir
         {
-            glm::vec3 pos;
-            int32_t type = static_cast<std::underlying_type_t<Emitter::Type>>(Emitter::Type::ePoint);
-
-            int32_t faceNum        = 0;  // for area emitter, the number of faces
-            int32_t meshIndex      = -1;
-            int32_t primitiveIndex = -1;  // for area emitter, the primitive index of the face
-            int32_t padding        = 0;
-
-            glm::vec3 emissive;
-            int32_t texIndex = -1;
+            glm::vec3 emissive  = {};
+            float pdf           = 1.0;
+            glm::vec3 to        = {};
+            float distance      = 0.0;
+            glm::vec3 normal    = {};
+            bool isInfinite     = false;
 
             float wSum;
             float p;
