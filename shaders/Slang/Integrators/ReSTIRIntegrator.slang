@@ -145,7 +145,7 @@ Payload samplePrimalHit(in int sampleID, in int pixelSeed)
     return payload;
 }
 
-Tuple<float3, float3> sampleDI(inout Payload payload, const EmitterSample es)
+Tuple<float3, float3> sampleDI(inout Payload payload, const Reservoir<EmitterSample> r)
 {
     float3 L    = select(payload.emissive.hasValue, payload.emissive.value, float3(0.0));
     float3 beta = float3(1.0);// WARN: does not take into account the initial weight(e.g. sensor sampling)
@@ -157,6 +157,7 @@ Tuple<float3, float3> sampleDI(inout Payload payload, const EmitterSample es)
     
     let si = payload.si.value;
     let bs = payload.bsdfSample.value;
+    let es = r.candidate;
 
     // NEE (direct light sampling, point or direction)
     if (!bs.isSpecular())
@@ -174,15 +175,14 @@ Tuple<float3, float3> sampleDI(inout Payload payload, const EmitterSample es)
             let params = MaterialParams::loadWithTextures(materialParams[si.instanceIndex], textures, texSampler, si.uv);
             let wo         = si.frame.toLocal(es.to);
             let f          = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
-            let bsdfPdf    = jacobian * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
-            let MISWeight  = Warp::heuristic<k::MISHeuristicBeta>(es.pdf, { es.pdf, bsdfPdf });
+            //let bsdfPdf    = jacobian * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
+            let MISWeight = 1.0;//Warp::heuristic<k::MISHeuristicBeta>(es.pdf, { es.pdf, bsdfPdf });
             
             // add contribution to L
-            L += MISWeight * beta * f * G * es.emissive / es.pdf;
+            L += MISWeight * beta * f * G * es.emissive / es.pdf * r.weight();
         }
     }
-
-    // BSDF sampling (directional sampling)
+    else
     { 
         Payload bsdfPayload = Payload(payload.sampler, true);
 
@@ -195,24 +195,35 @@ Tuple<float3, float3> sampleDI(inout Payload payload, const EmitterSample es)
 
         if (let emissive = bsdfPayload.emissive)
         {
-            uint emitterNum = 0, stride = 0;
-            emitterParams.GetDimensions(emitterNum, stride);
-            let emitterPdf = select(bs.isSpecular(), 0., EmitterSampler.pdf(si, bsdfPayload.si, emitterNum));
+            L += beta * emissive * bs.f * abs(dot(si.normal, si.frame.toWorld(bs.wo))) / bs.pdf;
+            // uint emitterNum = 0, stride = 0;
+            // emitterParams.GetDimensions(emitterNum, stride);
+            // let emitterPdf = select(bs.isSpecular(), 0., EmitterSampler.pdf(si, bsdfPayload.si, emitterNum));
 
-            let cosine      = abs(dot(si.normal, si.frame.toWorld(bs.wo)));
-            let MISWeight   = Warp::heuristic<k::MISHeuristicBeta>(bs.pdf, { emitterPdf, bs.pdf });
+            // let cosine      = abs(dot(si.normal, si.frame.toWorld(bs.wo)));
+            // let MISWeight   = Warp::heuristic<k::MISHeuristicBeta>(bs.pdf, { emitterPdf, bs.pdf });
             
-            // add contribution to L
-            L += MISWeight * beta * bs.f * cosine * emissive / bs.pdf;
+            // // add contribution to L
+            // L += MISWeight * beta * bs.f * cosine * emissive / bs.pdf;
         }
     
         // reflects sampler transitions
         payload.sampler = bsdfPayload.sampler;
     }
-    
-    
+
+
     // update parameters
     beta *= bs.f * abs(dot(si.normal, si.frame.toWorld(bs.wo))) / bs.pdf;
+
+    RayDesc ray;
+    ray.Origin    = si.pos;
+    ray.Direction = si.frame.toWorld(bs.wo);
+    ray.TMin      = k::eps;
+    ray.TMax      = k::infty;
+    payload.resetForNextBounce();
+
+    // trace next ray
+    TraceRay(sceneBVH, RAY_FLAG_NONE, ~0, 0, 0, 0, ray, payload);
 
     // reject invalid sample
     let invalid = any(isnan(L)) || any(isinf(L));
@@ -315,9 +326,10 @@ float3 sampleGI(in int sampleID, in int pixelSeed, in Payload payload_, in float
     return select(invalid, k::zeros.xyz, L);
 }
 
-Reservoir<EmitterSample> sampleReservoirs<S : ISampler>(const uint2 threadIdx, const uint seed, const Payload payload, const uint M, inout S sampler)
+Reservoir<EmitterSample> streamingRIS<S : ISampler>(const uint2 threadIdx, const uint seed, Payload payload, const uint M, inout S sampler)
 {
-    var r = reservoirs[threadIdx.x + threadIdx.y * DispatchRaysDimensions().x];
+    //var r = reservoirs[threadIdx.x + threadIdx.y * DispatchRaysDimensions().x];
+    Reservoir<EmitterSample> r;
 
     let si = payload.si.value;
     let bs = payload.bsdfSample.value;
@@ -331,20 +343,24 @@ Reservoir<EmitterSample> sampleReservoirs<S : ISampler>(const uint2 threadIdx, c
             continue; // skip if occluded
         }
 
+        let u            = sampler.next1D();
+        
         let cosine       = abs(dot(si.normal, es.to));
         let lightCos     = abs(dot(es.normal, -es.to));
         let jacobian     = select(es.isInfinite, 1.0, lightCos / (es.distance * es.distance));
         let G            = cosine * jacobian;  // geometric term
-        let u            = sampler.next1D();
-        let target       = toGray(bs.f * es.emissive * G); // BSDF contribution
+        let params       = MaterialParams::loadWithTextures(materialParams[si.instanceIndex], textures, texSampler, si.uv);
+        let wo           = si.frame.toLocal(es.to);
+        let f            = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
+        let target       = toGray(f * es.emissive * G); // BSDF contribution
 
         // update reservoir
         r.update(es, target / es.pdf, es.pdf, u);
     }
 
-    sizeof(Reservoir<EmitterSample>);
+    reservoirs[threadIdx.x + threadIdx.y * DispatchRaysDimensions().x] = r;
 
-    return reservoirs[threadIdx.x + threadIdx.y * DispatchRaysDimensions().x] = r;
+    return r;
 }
 
 float3 shadeGI(const uint2 threadIdx, const uint pixelSeed, const Payload payload, const float3 beta)
@@ -407,24 +423,23 @@ void rayGenShader()
 
     // DEBUG
     //resultImage[threadIdx.xy] = float4(payload.bsdfSample.value.f, 1.0);  // write position to result image
-    //resultImage[threadIdx.xy] = select(sizeof(Reservoir<EmitterSample>) == 64, float4(k::red, 1.0), float4(k::blue, 1.0)); // write green if reservoir is empty
+    //resultImage[threadIdx.xy] = select(sizeof(Reservoir<EmitterSample>) == 64, float4(k::red, 1.0), float4(k::blue, 1.0)); 
     //return;
 
-    sampleReservoirs(threadIdx, pixelSeed, payload, sceneParams.M, payload.sampler);
+    streamingRIS(threadIdx, pixelSeed, payload, sceneParams.M, payload.sampler);
 
     // TODO: spatio-temporal reuse
 
-    let mergedReservoir = reservoirs[threadIdx.x + threadIdx.y * DispatchRaysDimensions().x];
-    var candidate       = mergedReservoir.candidate;
-    candidate.emissive *= mergedReservoir.weight();
+    //let mergedReservoir = reservoirs[threadIdx.x + threadIdx.y * DispatchRaysDimensions().x];
+    let mergedReservoir = streamingRIS(threadIdx, pixelSeed, payload, sceneParams.M, payload.sampler);
 
-    let sampledDI = sampleDI(payload, candidate);
+    let sampledDI = sampleDI(payload, mergedReservoir);
     let DI        = sampledDI._0;
     let GI        = shadeGI(threadIdx, pixelSeed, payload, sampledDI._1);
 
     let accumulatedDI = reinterpret<float>(DIImage[threadIdx.xy].w) + 1.;
-    let DIRate        = 1. / accumulatedDI;
-    let finalDI       = DI;//lerp(DIImage[threadIdx.xy].xyz, DI, DIRate);
+    let DIRate              = 1. / accumulatedDI;
+    let finalDI             = DI;//lerp(DIImage[threadIdx.xy].xyz, DI, DIRate);
     DIImage[threadIdx.xy]   = float4(finalDI, reinterpret<float>(accumulatedDI));
 
     
