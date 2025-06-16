@@ -59,9 +59,9 @@ namespace palm
             glm::vec4 camPos;
 
             uint32_t sppPerFrame;
+            uint32_t accumulatedSpp;
             uint32_t allEmitterNum;
             uint32_t reservoirSize;
-            uint32_t padding;
         };
 
         struct InstanceParams

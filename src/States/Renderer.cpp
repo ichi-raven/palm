@@ -33,8 +33,8 @@ namespace palm
 
     void Renderer::update()
     {
-        constexpr auto colorClearValue   = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 1.0f });
-        constexpr auto depthClearValue   = vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0));
+        constexpr auto colorClearValue = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 1.0f });
+        constexpr auto depthClearValue = vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0));
 
         auto& device = common()->device;
         auto& window = common()->window;
@@ -54,6 +54,13 @@ namespace palm
         const double currentTime = glfwGetTime();
         const float deltaTime    = static_cast<float>(currentTime - mLastTime);
         mLastTime                = currentTime;
+
+        // update camera
+        scene.each<vk2s::Camera>([&](vk2s::Camera& camera) {
+            const double speed = kCameraMoveSpeed * deltaTime; 
+            const double mouseSpeed = kCameraViewpointSpeed * deltaTime;
+                camera.update(window->getpGLFWWindow(), speed, mouseSpeed);
+            });
 
         // wait and reset fence
         mFences[mNow]->wait();
@@ -78,8 +85,8 @@ namespace palm
         auto& command = mCommands[mNow];
         // start writing command
         command->begin();
-        
-        {// clear output image
+
+        {  // clear output image
             const vk::ImageSubresourceRange range(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1);
             command->clearImage(mOutputImage.get(), vk::ImageLayout::eGeneral, colorClearValue, range);
         }
@@ -90,7 +97,7 @@ namespace palm
             mIntegrator->sample(command);
         }
 
-        {// copy output image
+        {  // copy output image
 
             const auto region = vk::ImageCopy()
                                     .setExtent({ windowWidth, windowHeight, 1 })
@@ -252,7 +259,7 @@ namespace palm
             {
                 if (ImGui::MenuItem("Save Rendered Image", nullptr))
                 {
-                    std::time_t now = std::time(nullptr);
+                    std::time_t now      = std::time(nullptr);
                     std::string fileName = "rendered_" + std::string(std::ctime(&now)) + ".png";
                     saveImage(std::filesystem::path(fileName));
                 }

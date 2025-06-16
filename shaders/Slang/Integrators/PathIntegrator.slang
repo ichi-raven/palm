@@ -17,8 +17,9 @@ struct SceneParams
     float4 cameraPos;
 
     uint32_t sppPerFrame;
+    uint32_t accumulatedSpp;
     uint32_t allEmitterNum;
-    uint32_t2 padding;
+    uint32_t maxBounces;
 }
 
 struct InstanceParams : IInstance
@@ -150,7 +151,7 @@ float3 sampleL<let enableMIS : bool>(in int sampleID, in int pixelSeed)
     }
 
     // trace ray recursively
-    for (int depth = 1; depth < k::maxDepth && payload.continue(); ++depth)
+    for (int depth = 1; depth < min(sceneParams.maxBounces, k::maxDepth) && payload.continue(); ++depth)
     {
         // russian roulette
         {
@@ -271,7 +272,7 @@ void rayGenShader()
     if (threadIdx.y >= DispatchRaysDimensions().y) return;
 
     let pool = poolImage[threadIdx.xy].xyz;
-    let accumulatedSpp = reinterpret<uint>(poolImage[threadIdx.xy].w) + sceneParams.sppPerFrame;
+    let accumulatedSpp = sceneParams.accumulatedSpp + sceneParams.sppPerFrame;
 
     let pixelSeed = tea(accumulatedSpp, tea(threadIdx.x, threadIdx.y));
 

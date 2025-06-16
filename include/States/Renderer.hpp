@@ -37,6 +37,12 @@ namespace palm
         GEN_STATE(Renderer, palm::AppState, palm::CommonRegion);
 
     private:
+        //! Camera movement speed
+        constexpr static double kCameraMoveSpeed = 2.0;
+        //! Camera viewpoint movement speed
+        constexpr static double kCameraViewpointSpeed = 0.7;
+
+    private:
         /**
          * @brief  Parameters shared across the Scene (passed to the GPU)
          */

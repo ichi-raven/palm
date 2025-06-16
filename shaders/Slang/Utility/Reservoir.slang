@@ -45,12 +45,14 @@ public struct Reservoir<SampleType>
 
     public float weight()
     {
-        return (1. / p) * (wSum / float(streamLength));
+        let w = (1. / p) * (wSum / float(streamLength));
+        return select(isinf(w) || isnan(w), 0.0, w);
     }
 
     public property SampleType candidate
     {
         get { return x; }
+        set { x = newValue; }
     }
 
     public property uint M

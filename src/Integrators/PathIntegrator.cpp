@@ -60,14 +60,15 @@ namespace palm
                     });
 
                 SceneParams params{
-                    .view          = view,
-                    .proj          = proj,
-                    .viewInv       = glm::inverse(view),
-                    .projInv       = glm::inverse(proj),
-                    .camPos        = glm::vec4(camPos, 1.0f),
-                    .sppPerFrame   = 1,
-                    .allEmitterNum = mEmitterNum,
-                    .padding       = { 0 },
+                    .view           = view,
+                    .proj           = proj,
+                    .viewInv        = glm::inverse(view),
+                    .projInv        = glm::inverse(proj),
+                    .camPos         = glm::vec4(camPos, 1.0f),
+                    .sppPerFrame    = 1,
+                    .accumulatedSpp = 0,
+                    .allEmitterNum  = mEmitterNum,
+                    .maxBounces     = 16,
                 };
 
                 mSceneBuffer->write(&params, sizeof(SceneParams));
@@ -359,34 +360,47 @@ namespace palm
 
     void PathIntegrator::showConfigImGui()
     {
+        if (ImGui::InputInt("max bounces", &mGUIParams.maxBounces))
+        {
+           mGUIParams.accumulatedSpp = 0;
+        }
         ImGui::InputInt("spp", &mGUIParams.spp);
         ImGui::Text("total spp: %d", mGUIParams.accumulatedSpp);
     }
 
     void PathIntegrator::updateShaderResources()
     {
-        mGUIParams.accumulatedSpp = std::min(mGUIParams.accumulatedSpp + mGUIParams.spp, std::numeric_limits<int>::max());
 
+        bool cameraMoved = false;
         glm::mat4 view{}, proj{};
         glm::vec3 camPos = glm::vec3(0.0);
 
         mScene.each<vk2s::Camera>(
-            [&](const vk2s::Camera& camera)
+            [&](vk2s::Camera& camera)
             {
+                cameraMoved = camera.moved();
+
                 view   = camera.getViewMatrix();
                 proj   = camera.getProjectionMatrix();
                 camPos = camera.getPos();
             });
+        
+        mGUIParams.accumulatedSpp = std::min(mGUIParams.accumulatedSpp + mGUIParams.spp, std::numeric_limits<int>::max());
+        if (cameraMoved)
+        {
+            mGUIParams.accumulatedSpp = 0;
+        }
 
         SceneParams params{
-            .view        = view,
-            .proj        = proj,
-            .viewInv     = glm::inverse(view),
-            .projInv     = glm::inverse(proj),
-            .camPos      = glm::vec4(camPos, 1.0f),
-            .sppPerFrame = static_cast<uint32_t>(mGUIParams.spp),
-            .allEmitterNum = mEmitterNum,
-            .padding     = { 0 },
+            .view           = view,
+            .proj           = proj,
+            .viewInv        = glm::inverse(view),
+            .projInv        = glm::inverse(proj),
+            .camPos         = glm::vec4(camPos, 1.0f),
+            .sppPerFrame    = static_cast<uint32_t>(mGUIParams.spp),
+            .accumulatedSpp = static_cast<uint32_t>(mGUIParams.accumulatedSpp),
+            .allEmitterNum  = mEmitterNum,
+            .maxBounces     = static_cast<uint32_t>(mGUIParams.maxBounces),
         };
 
         mSceneBuffer->write(&params, sizeof(SceneParams));
