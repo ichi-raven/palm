@@ -77,12 +77,12 @@ namespace palm
             glm::vec3 to        = {};
             float distance      = 0.0;
             glm::vec3 normal    = {};
-            bool isInfinite     = false;
+            uint32_t isInfinite = 0;
 
             float wSum;
             float p;
             uint32_t streamLength;
-            uint32_t padding1;
+            uint32_t padding;
         };
 
         GUIParams mGUIParams;

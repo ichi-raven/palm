@@ -274,7 +274,7 @@ void rayGenShader()
     let pool = poolImage[threadIdx.xy].xyz;
     let accumulatedSpp = sceneParams.accumulatedSpp + sceneParams.sppPerFrame;
 
-    let pixelSeed = tea(accumulatedSpp, tea(threadIdx.x, threadIdx.y));
+    let pixelSeed = tea(sceneParams.accumulatedSpp, tea(threadIdx.x, threadIdx.y));
 
     float3 L = float3(0.);
 

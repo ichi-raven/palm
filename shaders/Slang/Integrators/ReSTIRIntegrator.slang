@@ -203,7 +203,7 @@ Tuple<float3, float3> sampleL(in int sampleID, in int pixelSeed, in Payload payl
                 // add contribution to L
                 if (isDI)
                 {
-                    DI += MISWeight * beta * f * G * es.emissive / es.pdf * reservoir.weight();
+                    DI += MISWeight * beta * f * G * es.emissive * reservoir.weight();
                 }
                 else
                 {
@@ -269,8 +269,8 @@ Tuple<float3, float3> sampleL(in int sampleID, in int pixelSeed, in Payload payl
 
 Reservoir<EmitterSample> streamingRIS<S : ISampler>(const uint2 threadIdx, const uint seed, Payload payload, const uint M, inout S sampler)
 {
-    //var r = reservoirs[threadIdx.x + threadIdx.y * DispatchRaysDimensions().x];
-    Reservoir<EmitterSample> r;
+    var r = reservoirs[threadIdx.x + threadIdx.y * DispatchRaysDimensions().x];
+    //Reservoir<EmitterSample> r = Reservoir<EmitterSample>();
 
     let si = payload.si.value;
     let bs = payload.bsdfSample.value;
@@ -281,10 +281,10 @@ Reservoir<EmitterSample> streamingRIS<S : ISampler>(const uint2 threadIdx, const
         // uniform sample
         EmitterSample es = EmitterSampler.sample(emitterParams, vertices, indices, instanceParams, textures, texSampler, si, sampler);
 
-        if (occluded(si.pos, es))
-        {
-            continue; // skip if occluded
-        }
+        // if (occluded(si.pos, es))
+        // {
+        //     continue; // skip if occluded
+        // }
 
         let u            = sampler.next1D();
         
@@ -296,11 +296,11 @@ Reservoir<EmitterSample> streamingRIS<S : ISampler>(const uint2 threadIdx, const
         let wo           = si.frame.toLocal(es.to);
         let f            = DynamicMaterial.BSDF.eval(params, payload.ctx, si.toLocal(), wo);
         let bsdfPdf      = jacobian * DynamicMaterial.BSDF.pdf(params, payload.ctx, si.toLocal(), wo);
-        let MISWeight    = Warp::heuristic<k::MISHeuristicBeta>(es.pdf, { es.pdf, bsdfPdf });
+        let MISWeight    = 1.0;//Warp::heuristic<k::MISHeuristicBeta>(es.pdf, { es.pdf, bsdfPdf });
 
         // update reservoir
-        let target = toGray(MISWeight * f * G * es.emissive);  // BSDF contribution
-        r.update(es, target / es.pdf, es.pdf, u);
+        let target = toGray(MISWeight * f * G * es.emissive);
+        r.update(es, target / es.pdf, target, u);
     }
 
     reservoirs[threadIdx.x + threadIdx.y * DispatchRaysDimensions().x] = r;
@@ -379,11 +379,10 @@ void rayGenShader()
     let finalDI             = lerp(DIImage[threadIdx.xy].xyz, DI, rate);
     let finalGI             = lerp(GIImage[threadIdx.xy].xyz, GI, rate);
     let L                   = finalDI + finalGI;
-    //let pool                = poolImage[threadIdx.xy].xyz;
 
     DIImage[threadIdx.xy]   = float4(finalDI, reinterpret<float>(accumulatedSpp));
     GIImage[threadIdx.xy]   = float4(finalGI, reinterpret<float>(accumulatedSpp));
-    poolImage[threadIdx.xy] = float4(L, reinterpret<float>(accumulatedSpp));
+    //poolImage[threadIdx.xy] = float4(L, reinterpret<float>(accumulatedSpp));
 
     resultImage[threadIdx.xy] = float4(linearToGamma(L, kGamma), 1.0);
 }

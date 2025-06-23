@@ -7,12 +7,28 @@ import "../Sampler/Sampler";
 
 public struct EmitterSample
 {
+    public __init()
+    {
+        emissive  = k::black;
+        pdf        = 1.0;
+        to         = k::zeros.xyz;
+        distance   = 0.0;
+        normal     = float3(0., 0., 1.);
+        isInfiniteFlag = 0; // false
+    }
+
     public float3 emissive  = k::black;
     public float pdf        = 1.0;
     public float3 to        = k::zeros.xyz;
     public float distance   = 0.0;
     public float3 normal    = float3(0., 0., 1.);
-    public bool isInfinite  = false;
+    public uint32_t isInfiniteFlag  = 0; // 0: false, otherwise: true
+
+    public property bool isInfinite
+    {
+        get { return isInfiniteFlag != 0; }
+        set { isInfiniteFlag = select(newValue, 1u, 0u); }
+    }
 }
 
 // **always synchronize with CPU side**

@@ -1,6 +1,7 @@
 module Reservoir;
 
 import "../Sampler/Sampler";
+import "../Emitter/Emitter";
 
 public struct Reservoir<SampleType>
 {
@@ -31,7 +32,7 @@ public struct Reservoir<SampleType>
     public bool update(SampleType xi, const float wi, const float pi, const float u)
     {
         wSum += wi;
-        ++streamLength;
+        streamLength += 1;
 
         if (u < (wi / wSum))
         {
