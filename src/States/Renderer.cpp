@@ -33,8 +33,8 @@ namespace palm
 
     void Renderer::update()
     {
-        constexpr auto colorClearValue   = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 1.0f });
-        constexpr auto depthClearValue   = vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0));
+        constexpr auto colorClearValue = vk::ClearValue(std::array{ 0.2f, 0.2f, 0.2f, 1.0f });
+        constexpr auto depthClearValue = vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0));
 
         auto& device = common()->device;
         auto& window = common()->window;
@@ -78,8 +78,8 @@ namespace palm
         auto& command = mCommands[mNow];
         // start writing command
         command->begin();
-        
-        {// clear output image
+
+        {  // clear output image
             const vk::ImageSubresourceRange range(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1);
             command->clearImage(mOutputImage.get(), vk::ImageLayout::eGeneral, colorClearValue, range);
         }
@@ -90,7 +90,7 @@ namespace palm
             mIntegrator->sample(command);
         }
 
-        {// copy output image
+        {  // copy output image
 
             const auto region = vk::ImageCopy()
                                     .setExtent({ windowWidth, windowHeight, 1 })
@@ -252,7 +252,7 @@ namespace palm
             {
                 if (ImGui::MenuItem("Save Rendered Image", nullptr))
                 {
-                    std::time_t now = std::time(nullptr);
+                    std::time_t now      = std::time(nullptr);
                     std::string fileName = "rendered_" + std::string(std::ctime(&now)) + ".png";
                     saveImage(std::filesystem::path(fileName));
                 }
@@ -339,13 +339,12 @@ namespace palm
         const uint32_t channelSize        = vk2s::Compiler::getSizeOfFormat(outputFormat);
         const uint32_t size               = extent.width * extent.height * channelSize;
 
-        const auto region =
-            vk::ImageCopy().setExtent(extent).setSrcSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 }).setSrcOffset({ 0, 0, 0 }).setDstSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 }).setDstOffset({ 0, 0, 0 });
+        const auto copyRegion = vk::BufferImageCopy().setBufferOffset(0).setBufferRowLength(0).setBufferImageHeight(0).setImageSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 }).setImageOffset({ 0, 0, 0 }).setImageExtent(extent);
 
         UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
         cmd->begin(true);
         cmd->transitionImageLayout(mOutputImage.get(), vk::ImageLayout::eGeneral, vk::ImageLayout::eTransferSrcOptimal);
-        cmd->copyImageToBuffer(mOutputImage.get(), mStagingBuffer.get(), extent.width, extent.height);
+        cmd->copyImageToBuffer(mOutputImage.get(), mStagingBuffer.get(), copyRegion);
         cmd->transitionImageLayout(mOutputImage.get(), vk::ImageLayout::eTransferSrcOptimal, vk::ImageLayout::eGeneral);
         cmd->end();
         cmd->execute();

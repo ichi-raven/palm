@@ -27,6 +27,7 @@ namespace palm
             int accumulatedSpp = 0;
         };
 
+
     public:
         PathIntegrator(vk2s::Device& device, ec2s::Registry& scene, Handle<vk2s::Image> output);
 

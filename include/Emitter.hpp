@@ -74,8 +74,8 @@ namespace palm
             const uint32_t channelSize = vk2s::Compiler::getSizeOfFormat(format);
             const uint32_t size        = extent.width * extent.height * channelSize;
 
-            const auto region =
-                vk::ImageCopy().setExtent(extent).setSrcSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 }).setSrcOffset({ 0, 0, 0 }).setDstSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 }).setDstOffset({ 0, 0, 0 });
+            vk::BufferImageCopy copyRegion =
+                vk::BufferImageCopy().setBufferOffset(0).setBufferRowLength(0).setBufferImageHeight(0).setImageSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 }).setImageOffset({ 0, 0, 0 }).setImageExtent(extent);
 
             // create staging buffer
             UniqueHandle<vk2s::Buffer> stagingBuffer = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eTransferDst), vk::MemoryPropertyFlagBits::eHostVisible);
@@ -85,7 +85,7 @@ namespace palm
             UniqueHandle<vk2s::Command> cmd = device.create<vk2s::Command>();
             cmd->begin(true);
             cmd->transitionImageLayout(emissiveTex.get(), vk::ImageLayout::eGeneral, vk::ImageLayout::eTransferSrcOptimal);
-            cmd->copyImageToBuffer(emissiveTex.get(), stagingBuffer.get(), extent.width, extent.height);
+            cmd->copyImageToBuffer(emissiveTex.get(), stagingBuffer.get(), copyRegion);
             cmd->end();
             cmd->execute(fence);
 
