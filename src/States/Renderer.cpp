@@ -55,6 +55,13 @@ namespace palm
         const float deltaTime    = static_cast<float>(currentTime - mLastTime);
         mLastTime                = currentTime;
 
+        // update camera
+        scene.each<vk2s::Camera>([&](vk2s::Camera& camera) {
+            const double speed = kCameraMoveSpeed * deltaTime; 
+            const double mouseSpeed = kCameraViewpointSpeed * deltaTime;
+                camera.update(window->getpGLFWWindow(), speed, mouseSpeed);
+            });
+
         // wait and reset fence
         mFences[mNow]->wait();
 

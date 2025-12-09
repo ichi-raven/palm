@@ -25,6 +25,7 @@ namespace palm
         {
             int spp            = 1;
             int accumulatedSpp = 0;
+            int maxBounces     = 16;  // max bounces for path tracing
         };
 
 
@@ -59,8 +60,9 @@ namespace palm
             glm::vec4 camPos;
 
             uint32_t sppPerFrame;
+            uint32_t accumulatedSpp;
             uint32_t allEmitterNum;
-            uint32_t padding[2];
+            uint32_t maxBounces;
         };
 
         struct InstanceParams

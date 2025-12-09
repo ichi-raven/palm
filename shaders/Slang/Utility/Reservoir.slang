@@ -1,9 +1,19 @@
 module Reservoir;
 
 import "../Sampler/Sampler";
+import "../Emitter/Emitter";
 
 public struct Reservoir<SampleType>
 {
+    public __init()
+    {
+        x               = {};
+        wSum            = 0.0;
+        p               = 1.0; // default probability
+        streamLength    = 0;
+        padding         = 0; // for alignment
+    }
+
     public static Reservoir<SampleType> combine<S : ISampler, PDF : IFunc<float, SampleType>>(Reservoir<SampleType> rs[], PDF pdf, inout S sampler)
     {
         Reservoir<SampleType> s;
@@ -22,7 +32,7 @@ public struct Reservoir<SampleType>
     public bool update(SampleType xi, const float wi, const float pi, const float u)
     {
         wSum += wi;
-        ++streamLength;
+        streamLength += 1;
 
         if (u < (wi / wSum))
         {
@@ -36,12 +46,14 @@ public struct Reservoir<SampleType>
 
     public float weight()
     {
-        return (1. / p) * (wSum / streamLength);
+        let w = (1. / p) * (wSum / float(streamLength));
+        return select(isinf(w) || isnan(w), 0.0, w);
     }
 
     public property SampleType candidate
     {
         get { return x; }
+        set { x = newValue; }
     }
 
     public property uint M

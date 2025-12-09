@@ -27,8 +27,8 @@ namespace palm
          */
         enum class Type : int32_t
         {
-            ePoint = 0,
-            eArea = 1,
+            ePoint    = 0,
+            eArea     = 1,
             eInfinite = 2,
         };
 
@@ -40,13 +40,13 @@ namespace palm
             //! Position
             glm::vec3 pos = glm::vec3(0.);
             //! Emitter type
-            int32_t type     = static_cast<std::underlying_type_t<Type>>(Type::ePoint);
+            int32_t type = static_cast<std::underlying_type_t<Type>>(Type::ePoint);
 
             //! Index of the Entity's mesh with this Emitter (only for area emitter)
             int32_t faceNum        = 0;
-            int32_t meshIndex = -1;
+            int32_t meshIndex      = -1;
             int32_t primitiveIndex = -1;
-            int32_t padding     = 0;
+            int32_t padding        = 0;
 
             //! The luminous component of this Emitter
             glm::vec3 emissive = glm::vec3(0.);
@@ -54,7 +54,7 @@ namespace palm
             int32_t texIndex = -1;
         };
 
-         template <typename T>
+        template <typename T>
         inline T toGray(T r, T g, T b)
         {
             // ITU-R
@@ -74,8 +74,7 @@ namespace palm
             const uint32_t channelSize = vk2s::Compiler::getSizeOfFormat(format);
             const uint32_t size        = extent.width * extent.height * channelSize;
 
-            vk::BufferImageCopy copyRegion =
-                vk::BufferImageCopy().setBufferOffset(0).setBufferRowLength(0).setBufferImageHeight(0).setImageSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 }).setImageOffset({ 0, 0, 0 }).setImageExtent(extent);
+            const auto copyRegion = vk::BufferImageCopy().setBufferOffset(0).setBufferRowLength(0).setBufferImageHeight(0).setImageSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 }).setImageOffset({ 0, 0, 0 }).setImageExtent(extent);
 
             // create staging buffer
             UniqueHandle<vk2s::Buffer> stagingBuffer = device.create<vk2s::Buffer>(vk::BufferCreateInfo({}, size, vk::BufferUsageFlagBits::eTransferDst), vk::MemoryPropertyFlagBits::eHostVisible);
@@ -86,7 +85,6 @@ namespace palm
             cmd->begin(true);
             cmd->transitionImageLayout(emissiveTex.get(), vk::ImageLayout::eGeneral, vk::ImageLayout::eTransferSrcOptimal);
             cmd->copyImageToBuffer(emissiveTex.get(), stagingBuffer.get(), copyRegion);
-            cmd->end();
             cmd->execute(fence);
 
             fence->wait();
